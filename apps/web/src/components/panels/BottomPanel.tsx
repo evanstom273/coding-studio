@@ -125,9 +125,9 @@ export function BottomPanel() {
   ];
   return (
     <div className="flex h-full min-h-0 flex-col bg-panel">
-      <div className="flex shrink-0 items-center border-b border-border" role="tablist">
+      <div className="flex shrink-0 items-center overflow-x-auto border-b border-border [scrollbar-width:none]" role="tablist">
         {tabs.map(([id, label, icon, count]) => (
-          <button key={id} role="tab" aria-selected={bottomTab === id && bottomOpen} data-testid={`bottom-tab-${id}`} onClick={() => set({ bottomTab: id, bottomOpen: true })} className={cx('flex items-center gap-1.5 px-3 py-1.5 text-[12px]', bottomTab === id && bottomOpen ? 'border-b-2 border-accent text-text' : 'text-muted hover:text-text')}>
+          <button key={id} role="tab" aria-selected={bottomTab === id && bottomOpen} data-testid={`bottom-tab-${id}`} onClick={() => set({ bottomTab: id, bottomOpen: true })} className={cx('flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-[12px]', bottomTab === id && bottomOpen ? 'border-b-2 border-accent text-text' : 'text-muted hover:text-text')}>
             {icon} {label}
             {!!count && <span className={cx('rounded px-1 text-[10.5px]', id === 'errors' ? 'bg-red-500/20 text-red-300' : 'bg-amber-400/15 text-amber-200')}>{count}</span>}
           </button>

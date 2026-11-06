@@ -89,3 +89,20 @@ textarea:focus-visible,
   border-color: var(--color-accent);
   outline: none;
 }
+
+/* Touch screens: bigger pins and inline fields so fingers can hit them. */
+@media (pointer: coarse) {
+  .react-flow {
+    --pin-size: 18px;
+    --pin-exec-w: 17px;
+    --pin-exec-h: 20px;
+  }
+  .bp-input {
+    height: 26px;
+    font-size: 13px;
+  }
+  .react-flow__controls-button {
+    width: 32px;
+    height: 32px;
+  }
+}

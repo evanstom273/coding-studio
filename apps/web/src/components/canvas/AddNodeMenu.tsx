@@ -111,12 +111,13 @@ export function AddNodeMenu({ screen, flow, pending, onClose }: { screen: { x: n
     onClose();
   };
 
-  const left = Math.min(screen.x, window.innerWidth - 340);
-  const top = Math.min(screen.y, window.innerHeight - 440);
+  const width = Math.min(320, window.innerWidth - 16);
+  const left = Math.max(8, Math.min(screen.x, window.innerWidth - width - 8));
+  const top = Math.max(8, Math.min(screen.y, window.innerHeight - 440));
   let lastCat = '';
   return (
     <div className="fixed inset-0 z-40" onMouseDown={onClose} onContextMenu={(e) => e.preventDefault()}>
-      <div className="absolute flex w-[320px] flex-col rounded-md border border-border bg-panel shadow-2xl" style={{ left, top, maxHeight: 420 }} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Add node">
+      <div className="absolute flex flex-col rounded-md border border-border bg-panel shadow-2xl" style={{ left, top, width, maxHeight: Math.min(420, window.innerHeight - top - 8) }} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Add node">
         <div className="border-b border-border p-2">
           <input
             ref={inputRef}
@@ -155,7 +156,7 @@ export function AddNodeMenu({ screen, flow, pending, onClose }: { screen: { x: n
                   data-testid="add-node-item"
                   onMouseEnter={() => setActive(i)}
                   onClick={() => choose(e)}
-                  className={`flex w-full items-center gap-2 px-3 py-1 text-left text-[12px] ${i === active ? 'bg-accent/20' : ''}`}
+                  className={`flex w-full items-center gap-2 px-3 py-1 text-left text-[12px] [@media(pointer:coarse)]:py-2.5 [@media(pointer:coarse)]:text-[13px] ${i === active ? 'bg-accent/20' : ''}`}
                   title={e.description}
                 >
                   <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: headerColor({ node: { id: '', type: e.type, position: { x: 0, y: 0 }, props: {}, inputs: {} }, def: e.def, ports: [], title: '' }) }} />

@@ -11,8 +11,8 @@ function Pin({ port, connected, side }: { port: PortSpec; connected: boolean; si
   const color = portColor(port.kind, port.type);
   const style =
     port.kind === 'exec'
-      ? { width: 11, height: 13, borderRadius: 0, background: connected ? color : '#1a1e26', border: 'none', clipPath: 'polygon(0 0, 55% 0, 100% 50%, 55% 100%, 0 100%)', boxShadow: connected ? undefined : `inset 0 0 0 2px ${color}` }
-      : { width: 11, height: 11, borderRadius: 999, background: connected ? color : '#1a1e26', border: `2px solid ${color}` };
+      ? { width: 'var(--pin-exec-w, 11px)', height: 'var(--pin-exec-h, 13px)', borderRadius: 0, background: connected ? color : '#1a1e26', border: 'none', clipPath: 'polygon(0 0, 55% 0, 100% 50%, 55% 100%, 0 100%)', boxShadow: connected ? undefined : `inset 0 0 0 2px ${color}` }
+      : { width: 'var(--pin-size, 11px)', height: 'var(--pin-size, 11px)', borderRadius: 999, background: connected ? color : '#1a1e26', border: `2px solid ${color}` };
   return <Handle type={side === 'in' ? 'target' : 'source'} position={side === 'in' ? Position.Left : Position.Right} id={port.id} style={{ ...style, [side === 'in' ? 'left' : 'right']: -6 }} title={port.type ? `${port.name || port.id}: ${port.kind === 'exec' ? 'exec' : JSON.stringify(port.type.kind === 'named' ? port.type.name : port.type.kind)}${port.description ? ` — ${port.description}` : ''}` : port.name} data-testid={`pin-${side}-${port.id}`} />;
 }
 

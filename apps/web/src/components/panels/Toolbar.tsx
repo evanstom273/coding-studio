@@ -1,9 +1,10 @@
-import { ArrowLeft, CheckCircle2, Cloud, CloudOff, Code2, Command, Download, FolderOpen, History, Keyboard, Loader2, Plus, Redo2, Save, Settings, ShieldCheck, Undo2, FilePlus2 } from 'lucide-react';
+import { PanelLeft, PanelRight, ArrowLeft, CheckCircle2, Cloud, CloudOff, Code2, Command, Download, FolderOpen, History, Keyboard, Loader2, Plus, Redo2, Save, Settings, ShieldCheck, Undo2, FilePlus2 } from 'lucide-react';
 import { useEditor } from '@web/store/editor';
 import { useUI } from '@web/store/ui';
 import { navigate } from '@web/lib/router';
 import * as cmd from '@web/lib/commands';
 import { McpIndicator } from './McpIndicator';
+import { useCompact } from '@web/hooks/useLayout';
 import { IconButton } from '../ui/primitives';
 
 function SaveIndicator() {
@@ -30,6 +31,8 @@ export function Toolbar() {
   const undoLabel = useEditor((s) => s.history.past[s.history.past.length - 1]?.label);
   const redoLabel = useEditor((s) => s.history.future[0]?.label);
   const setUI = useUI((s) => s.set);
+  const drawer = useUI((s) => s.drawer);
+  const compact = useCompact();
   const activeScriptId = useEditor((x) => x.activeScriptId);
   const activeFunctionId = useEditor((x) => x.activeFunctionId);
   const script = project.scripts.find((s) => s.id === activeScriptId);
@@ -39,7 +42,14 @@ export function Toolbar() {
       <IconButton label="Back to projects" onClick={() => navigate({ name: 'dashboard' })}>
         <ArrowLeft size={16} />
       </IconButton>
-      <div className="mr-2 flex min-w-0 flex-col leading-tight">
+      {compact && (
+        <IconButton label="Project and nodes" active={drawer === 'left'} onClick={() => setUI({ drawer: drawer === 'left' ? null : 'left' })} data-testid="open-left-drawer">
+          <PanelLeft size={16} />
+        </IconButton>
+      )}
+      {/* Middle section scrolls sideways on narrow screens; navigation and drawers stay pinned. */}
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none]">
+      <div className={`mr-2 flex min-w-0 flex-col leading-tight ${compact ? 'min-w-[96px] max-w-[38vw] shrink' : ''}`}>
         <span className="truncate text-[13px] font-semibold" data-testid="project-title">
           {project.name}
         </span>
@@ -48,7 +58,8 @@ export function Toolbar() {
         </span>
       </div>
       <SaveIndicator />
-      <div className="mx-2 h-5 w-px bg-border" />
+      <div className="mx-2 h-5 w-px shrink-0 bg-border" />
+      {!compact && (<>
       <IconButton label="New project" onClick={() => {
           navigate({ name: 'dashboard' });
           setUI({ dialog: 'new-project' });
@@ -58,6 +69,7 @@ export function Toolbar() {
       <IconButton label="Open project" onClick={() => navigate({ name: 'dashboard' })}>
         <FolderOpen size={15} />
       </IconButton>
+      </>)}
       <IconButton label="Save (Ctrl+S)" onClick={() => void cmd.save()} data-testid="save">
         <Save size={15} />
       </IconButton>
@@ -80,20 +92,30 @@ export function Toolbar() {
       <IconButton label="Export" onClick={() => setUI({ dialog: 'export' })} data-testid="export">
         <Download size={15} /> <span className="hidden text-[12px] lg:inline">Export</span>
       </IconButton>
-      <div className="flex-1" />
-      <IconButton label="Command palette (Ctrl+K)" onClick={() => setUI({ commandPalette: true })}>
-        <Command size={15} />
-      </IconButton>
+      <div className="min-w-2 flex-1" />
+      {!compact && (
+        <IconButton label="Command palette (Ctrl+K)" onClick={() => setUI({ commandPalette: true })}>
+          <Command size={15} />
+        </IconButton>
+      )}
       <IconButton label="Backups" onClick={() => setUI({ dialog: 'backups' })} data-testid="backups">
         <History size={15} />
       </IconButton>
-      <IconButton label="Keyboard shortcuts" onClick={() => setUI({ dialog: 'shortcuts' })}>
-        <Keyboard size={15} />
-      </IconButton>
+      {!compact && (
+        <IconButton label="Keyboard shortcuts" onClick={() => setUI({ dialog: 'shortcuts' })}>
+          <Keyboard size={15} />
+        </IconButton>
+      )}
       <IconButton label="Settings" onClick={() => setUI({ dialog: 'settings' })}>
         <Settings size={15} />
       </IconButton>
-      <McpIndicator />
+      </div>
+      <McpIndicator compact={compact} />
+      {compact && (
+        <IconButton label="Inspector" active={drawer === 'right'} onClick={() => setUI({ drawer: drawer === 'right' ? null : 'right' })} data-testid="open-right-drawer">
+          <PanelRight size={16} />
+        </IconButton>
+      )}
     </header>
   );
 }

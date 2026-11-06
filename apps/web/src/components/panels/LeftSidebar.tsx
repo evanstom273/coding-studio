@@ -8,6 +8,7 @@ import { toolchainFor } from '@web/lib/toolchain';
 import { useEditor } from '@web/store/editor';
 import { useUI } from '@web/store/ui';
 import { useCompile } from '@web/compile/store';
+import { useCompact, useTouch } from '@web/hooks/useLayout';
 import { paletteEntries, type MenuEntry } from '../canvas/AddNodeMenu';
 import { headerColor } from '../canvas/model';
 import { confirmDialog, cx, IconButton } from '../ui/primitives';
@@ -36,7 +37,11 @@ function NodeLibrary() {
     for (const e of filtered) (m.get(e.category) ?? m.set(e.category, []).get(e.category)!).push(e);
     return [...m].sort(([a], [b]) => (a.startsWith('Godot') === b.startsWith('Godot') ? a.localeCompare(b) : a.startsWith('Godot') ? 1 : -1));
   }, [filtered]);
-  const add = (e: MenuEntry) => window.dispatchEvent(new CustomEvent('cs:add-node-type', { detail: e }));
+  const touch = useTouch();
+  const add = (e: MenuEntry) => {
+    window.dispatchEvent(new CustomEvent('cs:add-node-type', { detail: e }));
+    useUI.getState().set({ drawer: null });
+  };
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="relative p-2">
@@ -68,7 +73,8 @@ function NodeLibrary() {
                     draggable
                     onDragStart={(ev) => dragStart(ev, { type: e.type, props: e.props })}
                     onDoubleClick={() => add(e)}
-                    title={`${e.description}\n\nDrag onto the canvas, or double-click to add.`}
+                    onClick={() => touch && add(e)}
+                    title={`${e.description}\n\n${touch ? 'Tap to add it to the canvas.' : 'Drag onto the canvas, or double-click to add.'}`}
                     data-testid="library-item"
                     className="mx-1 flex cursor-grab items-center gap-2 rounded px-2 py-[3px] text-[12px] hover:bg-panel-2 active:cursor-grabbing"
                   >
@@ -145,9 +151,15 @@ function ProjectExplorer() {
   const activeFunctionId = useEditor((s) => s.activeFunctionId);
   const inspect = useUI((s) => s.inspect);
   const setUI = useUI((s) => s.set);
+  const compact = useCompact();
   const show = (inspect: { kind: 'script' | 'function' | 'variable' | 'signal' | 'enum'; id: string }) => {
     useEditor.getState().select([]);
-    setUI({ inspect });
+    // Narrow screens: details live in the inspector drawer.
+    setUI({ inspect, ...(compact && inspect.kind !== 'function' && inspect.kind !== 'script' ? { drawer: 'right' as const } : {}) });
+  };
+  const openGraph = (scriptId: string, fnId: string) => {
+    useEditor.getState().setActive(scriptId, fnId);
+    if (compact) setUI({ drawer: null });
   };
   const diagnostics = useCompile((s) => s.diagnostics);
   const script = project.scripts.find((s) => s.id === activeScriptId);
@@ -222,7 +234,7 @@ function ProjectExplorer() {
             {script.functions
               .filter((f) => f.kind === 'event')
               .map((f) => (
-                <Row key={f.id} testId="function-row" active={f.id === activeFunctionId} errors={errorsIn(f.id)} icon={<Zap size={13} className="text-red-300" />} label={f.name} onClick={() => useEditor.getState().setActive(script.id, f.id)} onDelete={() => void del(`event ${f.name}`, [{ op: 'delete_function', function: f.id }])} />
+                <Row key={f.id} testId="function-row" active={f.id === activeFunctionId} errors={errorsIn(f.id)} icon={<Zap size={13} className="text-red-300" />} label={f.name} onClick={() => openGraph(script.id, f.id)} onDelete={() => void del(`event ${f.name}`, [{ op: 'delete_function', function: f.id }])} />
               ))}
           </Section>
           <Section
@@ -250,8 +262,8 @@ function ProjectExplorer() {
                   sub={`(${f.params.map((p) => p.name).join(', ')})`}
                   draggablePayload={{ type: 'core.call_function', props: { function: f.id } }}
                   onClick={() => {
-                    useEditor.getState().setActive(script.id, f.id);
                     show({ kind: 'function', id: f.id });
+                    openGraph(script.id, f.id);
                   }}
                   onDelete={() => void del(`function ${f.name}`, [{ op: 'delete_function', function: f.id }])}
                 />

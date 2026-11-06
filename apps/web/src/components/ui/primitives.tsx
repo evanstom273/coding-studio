@@ -31,7 +31,7 @@ export function IconButton({ label, children, active, className, ...p }: ButtonH
       aria-label={label}
       title={label}
       {...p}
-      className={cx('inline-flex items-center justify-center rounded h-7 min-w-7 px-1.5 gap-1 text-muted hover:text-text hover:bg-panel-2 disabled:opacity-35 disabled:pointer-events-none', active && 'text-text bg-panel-2', className)}
+      className={cx('inline-flex shrink-0 items-center justify-center rounded h-7 min-w-7 px-1.5 gap-1 text-muted hover:text-text hover:bg-panel-2 disabled:opacity-35 disabled:pointer-events-none', active && 'text-text bg-panel-2', className)}
     >
       {children}
     </button>

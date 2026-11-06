@@ -33,6 +33,8 @@ import { AddNodeMenu, type PendingConnection } from './AddNodeMenu';
 import { portColor, type BPNodeData } from './model';
 import { NodeContextMenu } from './NodeContextMenu';
 import { DND_MIME, type DragNodePayload } from '@web/lib/dnd';
+import { useCompact, useTouch } from '@web/hooks/useLayout';
+import { Plus } from 'lucide-react';
 
 const nodeTypes: NodeTypes = { bp: BlueprintNode, frame: FrameNode, reroute: RerouteNode };
 
@@ -104,6 +106,8 @@ function Canvas() {
   const focusRequest = useEditor((s) => s.focusRequest);
   const diagnostics = useCompile((s) => s.diagnostics);
   const { snapToGrid, showMinimap } = useUI();
+  const touch = useTouch();
+  const compact = useCompact();
   const rf = useReactFlow();
   const script = project.scripts.find((s) => s.id === activeScriptId);
   const fn = script?.functions.find((f) => f.id === activeFunctionId);
@@ -290,6 +294,8 @@ function Canvas() {
           const node = fn.graph.nodes.find((x) => x.id === n.id);
           const target = node?.type === 'core.call_function' ? script.functions.find((f) => f.id === node.props.function) : undefined;
           if (target) useEditor.getState().setActive(script.id, target.id);
+          // Narrow screens: double-tap a node to see its properties.
+          else if (compact) useUI.getState().set({ drawer: 'right' });
         }}
         onMoveEnd={(_e, vp) => {
           if (vpTimer.current) clearTimeout(vpTimer.current);
@@ -298,14 +304,15 @@ function Canvas() {
         deleteKeyCode={null}
         selectionKeyCode="Shift"
         multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
-        panOnDrag={[1, 2]}
-        selectionOnDrag
+        // Touch: one finger pans, pinch zooms. Mouse: drag box-selects, middle/right-drag pans.
+        panOnDrag={touch ? true : [1, 2]}
+        selectionOnDrag={!touch}
         panActivationKeyCode="Space"
         snapToGrid={snapToGrid}
         snapGrid={[16, 16]}
         minZoom={0.1}
         maxZoom={2.5}
-        connectionRadius={24}
+        connectionRadius={touch ? 44 : 24}
         defaultEdgeOptions={{ type: 'default' }}
         connectionLineStyle={{ stroke: '#cbd5e1', strokeWidth: 2 }}
         proOptions={{ hideAttribution: false }}
@@ -315,11 +322,24 @@ function Canvas() {
         <Background variant={BackgroundVariant.Lines} gap={16} color="#1b2029" />
         <Background id="major" variant={BackgroundVariant.Lines} gap={128} color="#232a35" />
         <Controls showInteractive={false} position="bottom-left" />
-        {showMinimap && <MiniMap pannable zoomable position="bottom-right" nodeColor="#3b4352" maskColor="rgba(10,12,16,0.7)" />}
+        {(touch || compact) && (
+          <button
+            aria-label="Add node"
+            data-testid="fab-add-node"
+            className="absolute bottom-8 right-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white shadow-xl active:bg-accent-2"
+            onClick={() => {
+              const r = document.querySelector('.react-flow')?.getBoundingClientRect();
+              if (r) openMenuAt(Math.max(8, r.left + r.width / 2 - 160), r.top + 24);
+            }}
+          >
+            <Plus size={22} />
+          </button>
+        )}
+        {showMinimap && !compact && <MiniMap pannable zoomable position="bottom-right" nodeColor="#3b4352" maskColor="rgba(10,12,16,0.7)" />}
       </ReactFlow>
       {fn.graph.nodes.length <= 1 && (
-        <div className="pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 rounded-md border border-border bg-panel/90 px-3 py-2 text-[12px] text-muted">
-          Right-click the canvas (or press Tab) to add a node, then drag from the Entry's ▶ pin to connect it.
+        <div className="pointer-events-none absolute left-1/2 top-6 w-max max-w-[calc(100%-32px)] -translate-x-1/2 rounded-md border border-border bg-panel/90 px-3 py-2 text-center text-[12px] text-muted">
+          {touch ? 'Tap + to add a node, then drag from the Entry’s ▶ pin to connect it.' : 'Right-click the canvas (or press Tab) to add a node, then drag from the Entry’s ▶ pin to connect it.'}
         </div>
       )}
       {menu && <AddNodeMenu {...menu} onClose={() => setMenu(null)} />}

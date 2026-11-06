@@ -17,6 +17,8 @@ interface UIState {
   dialog: DialogId;
   commandPalette: boolean;
   /** What the inspector shows when no node is selected. */
+  /** Compact layout: which side drawer is open (not persisted). */
+  drawer: null | 'left' | 'right';
   inspect: { kind: 'project' | 'script' | 'function' | 'variable' | 'signal' | 'enum'; id?: string } | null;
   set(p: Partial<Omit<UIState, 'set'>>): void;
 }
@@ -44,6 +46,7 @@ export const useUI = create<UIState>()((set, get) => ({
   dialog: null,
   commandPalette: false,
   inspect: null,
+  drawer: null,
   ...load(),
   set(p) {
     set(p);
