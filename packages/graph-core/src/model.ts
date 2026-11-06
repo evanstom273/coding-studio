@@ -108,6 +108,15 @@ export interface EnumDecl {
   members: { name: string; value?: number }[];
 }
 
+/** A named object shape (TypeScript `interface`): rows of a database table, component props… */
+export interface InterfaceDecl {
+  id: string;
+  name: string;
+  description?: string;
+  exported?: boolean;
+  fields: { name: string; type: string; optional?: boolean; description?: string }[];
+}
+
 export interface ScriptDoc {
   id: string;
   /** Display / identifier name, e.g. "Player". */
@@ -121,6 +130,8 @@ export interface ScriptDoc {
   functions: FunctionDecl[];
   signals: SignalDecl[];
   enums: EnumDecl[];
+  /** Type declarations (languages with interfaces). */
+  interfaces?: InterfaceDecl[];
 }
 
 export type Severity = 'error' | 'warning' | 'info';

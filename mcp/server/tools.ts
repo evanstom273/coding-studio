@@ -57,6 +57,9 @@ const OP_NAMES = [
   'duplicate_nodes',
   'paste_nodes',
   'set_viewport',
+  'add_interface',
+  'update_interface',
+  'delete_interface',
 ] as const;
 
 const BATCH_DOC = `Apply several edit operations atomically: either all succeed or the project is unchanged. The whole batch is ONE undo step for the user.
@@ -73,6 +76,7 @@ Operations (fields in brackets are optional; script/graph default to the active 
 - add_signal {name, [params]} · update_signal · delete_signal · add_enum {name, members[]} · update_enum · delete_enum
 - add_script {name, [path], [template], [settings {extends, class_name, tool}]} · update_script {script, …} · delete_script {script}
 - update_project {[name], [languageVersion], [compilerSettings]}
+- add_interface {name, fields [{name, type, optional?}], [exported], [description], [ref]} · update_interface {interface, …} · delete_interface {interface}  (TypeScript type declarations; use the name as a type anywhere)
 Node props that reference variables/functions/signals/enums accept their id or name.
 TypeScript nodes: ts.call {module (npm package) | scriptPath (another script of the project) | neither (globals like fetch, JSON.parse), name, argNames[], argTypes[], returnType, await} · ts.call_method {name, argTypes[], returnType, await, optional} · ts.await {type} · ts.try (exec outs try/catch/finally/then, data out error) · ts.throw · ts.template {template "Hi {name}"} · ts.object {keys[]} · ts.get_field / ts.set_field {name, optional} · ts.function_ref {function} · ts.default_value (??) · ts.closure {function} (an inline arrow function). Imports are written automatically.
 Inline functions (closures, TypeScript): add_function {kind:"lambda", owner:<function>, name, params, returnType, [async], ref} creates a function whose graph can read/write the owner's params and locals (get_var/set_var by name); put a ts.closure {function:"$ref"} node in the owner's graph to use it as a value (callbacks, handlers, array.map…). Deleting the owner deletes its inline functions.

@@ -7,7 +7,7 @@
  * - Objects created in a batch can be referenced later in the same batch as "$ref".
  * - Scripts, functions, variables, signals and enums can also be referenced by unique name.
  */
-import { newId, type Edge, type EnumDecl, type FunctionDecl, type Graph, type GraphNode, type JsonValue, type ParamDecl, type ScriptDoc, type SignalDecl, type VariableDecl } from '@cs/graph-core';
+import { newId, type Edge, type EnumDecl, type FunctionDecl, type InterfaceDecl, type Graph, type GraphNode, type JsonValue, type ParamDecl, type ScriptDoc, type SignalDecl, type VariableDecl } from '@cs/graph-core';
 import { checkConnection, literalFits, makeNodeContext, nodeInfo, resolveType, type Toolchain } from '@cs/compiler-core';
 import { defaultProps, NodeRegistry, type PropSchema } from '@cs/node-registry';
 import { createEventFunction, createFunction, createScript, type Project } from './project';
@@ -51,6 +51,9 @@ export type EditOp =
   | { op: 'add_enum'; ref?: string; script?: string; name: string; members: (string | { name: string; value?: number })[] }
   | { op: 'update_enum'; enum: string; script?: string; name?: string; members?: (string | { name: string; value?: number })[] }
   | { op: 'delete_enum'; enum: string; script?: string }
+  | { op: 'add_interface'; ref?: string; script?: string; name: string; fields?: InterfaceField[]; exported?: boolean; description?: string }
+  | { op: 'update_interface'; interface: string; script?: string; name?: string; fields?: InterfaceField[]; exported?: boolean; description?: string }
+  | { op: 'delete_interface'; interface: string; script?: string }
   | { op: 'add_node'; ref?: string; script?: string; graph?: string; type: string; position?: { x: number; y: number }; props?: Record<string, JsonValue>; inputs?: Record<string, JsonValue> }
   | { op: 'update_node'; node: string; script?: string; graph?: string; props?: Record<string, JsonValue>; inputs?: Record<string, JsonValue | null>; position?: { x: number; y: number }; collapsed?: boolean; size?: { width: number; height: number } }
   | { op: 'delete_nodes'; nodes: string[]; script?: string; graph?: string }
@@ -246,7 +249,7 @@ function checkIdent(ctx: OpContext, name: unknown, what: string): string {
 }
 
 function memberNames(s: ScriptDoc, except?: string): Set<string> {
-  return new Set([...s.variables, ...s.functions, ...s.signals, ...s.enums].filter((x) => x.id !== except).map((x) => x.name));
+  return new Set([...s.variables, ...s.functions, ...s.signals, ...s.enums, ...(s.interfaces ?? [])].filter((x) => x.id !== except).map((x) => x.name));
 }
 
 function checkUniqueMember(s: ScriptDoc, name: string, except?: string) {
@@ -269,9 +272,28 @@ function checkType(ctx: OpContext, s: ScriptDoc, text: unknown, what: string, al
     }
   };
   walk(r.type);
-  for (const n of named) if (!ctx.tc.adapter.types.universe.isKnown(n) && !s.enums.some((e) => e.name === n)) throw new OpError(`${what}: unknown type "${n}"`, undefined, 'E_UNKNOWN_TYPE');
+  for (const n of named) if (!ctx.tc.adapter.types.openTypes && !ctx.tc.adapter.types.universe.isKnown(n) && !s.enums.some((e) => e.name === n) && !(s.interfaces ?? []).some((e) => e.name === n)) throw new OpError(`${what}: unknown type "${n}"`, undefined, 'E_UNKNOWN_TYPE');
   // Store the canonical spelling so documents stay language-neutral.
   return text.trim() === '' ? text : (ctx.tc.adapter.types.normalize?.(text.trim()) ?? text.trim());
+}
+
+export interface InterfaceField {
+  name: string;
+  type: string;
+  optional?: boolean;
+  description?: string;
+}
+
+function interfaceFields(ctx: OpContext, s: ScriptDoc, list: unknown, what: string): InterfaceDecl['fields'] {
+  if (!Array.isArray(list)) throw new OpError(`${what}: fields must be an array`);
+  const seen = new Set<string>();
+  return list.map((raw, i) => {
+    const f = raw as Partial<InterfaceField>;
+    if (!f || typeof f.name !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(f.name)) throw new OpError(`${what}: field ${i + 1} needs a valid name`);
+    if (seen.has(f.name)) throw new OpError(`${what}: field "${f.name}" appears twice`);
+    seen.add(f.name);
+    return { name: f.name, type: checkType(ctx, s, f.type ?? 'any', `${what}.${f.name}`), ...(f.optional ? { optional: true } : {}), ...(f.description ? { description: String(f.description) } : {}) };
+  });
 }
 
 function params(ctx: OpContext, s: ScriptDoc, list: unknown, what: string, existing: ParamDecl[] = []): ParamDecl[] {
@@ -765,6 +787,41 @@ function applyOne(ctx: OpContext, op: EditOp, warnings: string[]): [string | und
       const e = s.enums.find((x) => x.id === id || x.name === op.enum);
       if (!e) throw new OpError(`Enum "${op.enum}" not found`);
       s.enums = s.enums.filter((x) => x.id !== e.id);
+      return [];
+    }
+    case 'add_interface': {
+      const s = ctx.script(op.script);
+      if (!tc.adapter.capabilities.interfaces) throw new OpError(`${tc.adapter.name} has no interface types`, undefined, 'E_UNSUPPORTED_FEATURE');
+      const name = checkIdent(ctx, op.name, 'Type');
+      checkUniqueMember(s, name);
+      const t: InterfaceDecl = { id: newId('t'), name, fields: [], ...(op.exported ? { exported: true } : {}), ...(op.description ? { description: op.description } : {}) };
+      (s.interfaces ??= []).push(t);
+      t.fields = interfaceFields(ctx, s, op.fields ?? [], name);
+      return [[op.ref, t.id]];
+    }
+    case 'update_interface': {
+      const s = ctx.script(op.script);
+      const id = ctx.deref(op.interface);
+      const list = s.interfaces ?? [];
+      const i = list.findIndex((x) => x.id === id || x.name === op.interface);
+      if (i < 0) throw new OpError(`Type "${op.interface}" not found`);
+      const t = { ...list[i] };
+      if (op.name !== undefined) {
+        t.name = checkIdent(ctx, op.name, 'Type');
+        checkUniqueMember(s, t.name, t.id);
+      }
+      if (op.fields !== undefined) t.fields = interfaceFields(ctx, s, op.fields, t.name);
+      if (op.exported !== undefined) t.exported = op.exported === true;
+      if (op.description !== undefined) t.description = String(op.description);
+      s.interfaces = list.map((x, j) => (j === i ? t : x));
+      return [];
+    }
+    case 'delete_interface': {
+      const s = ctx.script(op.script);
+      const id = ctx.deref(op.interface);
+      const t = (s.interfaces ?? []).find((x) => x.id === id || x.name === op.interface);
+      if (!t) throw new OpError(`Type "${op.interface}" not found`);
+      s.interfaces = (s.interfaces ?? []).filter((x) => x.id !== t.id);
       return [];
     }
     case 'add_node': {

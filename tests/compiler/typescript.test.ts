@@ -256,3 +256,43 @@ describe('inline functions (closures)', () => {
     expect(del.scripts[0].functions).toEqual([]);
   });
 });
+
+describe('type declarations (interfaces)', () => {
+  it('declares interfaces, uses them in variables and parameters, passes tsc, and is erased in JS', () => {
+    const p = createProject(tc.adapter, 'Types', { template: 'empty', scriptName: 'Main' });
+    const r = applyOps(
+      p,
+      [
+        { op: 'add_interface', ref: 'todo', name: 'Todo', exported: true, description: 'One row of the todos table.', fields: [{ name: 'id', type: 'int' }, { name: 'title', type: 'string' }, { name: 'done', type: 'bool', optional: true }] },
+        { op: 'add_variable', name: 'todos', type: 'array<Todo>' },
+        { op: 'add_variable', name: 'db', type: 'Dexie?', description: 'A library type: accepted, checked by tsc in the real project.' },
+        { op: 'add_function', ref: 'f', name: 'titleOf', params: [{ name: 'todo', type: 'Todo' }], returnType: 'string', exported: true },
+        { op: 'add_node', ref: 'get', graph: '$f', type: 'ts.get_field', props: { name: 'title', type: 'string' } },
+        { op: 'add_node', ref: 'ret', graph: '$f', type: 'core.return' },
+        { op: 'connect', graph: '$f', from: { node: '$f.entry', port: 'todo' }, to: { node: '$get', port: 'object' } },
+        { op: 'connect', graph: '$f', from: { node: '$f.entry', port: 'then' }, to: { node: '$ret', port: 'exec' } },
+        { op: 'connect', graph: '$f', from: { node: '$get', port: 'value' }, to: { node: '$ret', port: 'value' } },
+      ],
+      tc,
+    ).project;
+    const c = compileProject(tc, r);
+    expect(c.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    const ts = c.files[0].content;
+    expect(ts).toContain('/** One row of the todos table. */\nexport interface Todo {\n\tid: number;\n\ttitle: string;\n\tdone?: boolean;\n}');
+    expect(ts).toContain('let todos: Todo[];');
+    expect(ts).toContain('export function titleOf(todo: Todo): string {');
+    // tsc --strict (without the library variable, which needs the real package installed)
+    const noLib = applyOps(r, [{ op: 'delete_variable', variable: 'db' }], tc).project;
+    const dir = mkdtempSync(join(tmpdir(), 'cs-types-'));
+    writeAll(dir, compileProject(tc, noLib).files);
+    writeFileSync(join(dir, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, target: 'es2022', module: 'esnext', moduleResolution: 'bundler', skipLibCheck: true }, include: ['**/*.ts'] }));
+    execFileSync(process.execPath, [require.resolve('typescript/bin/tsc'), '-p', dir], { encoding: 'utf8' });
+    const js = compileProject(tc, { ...r, scripts: r.scripts.map((s) => ({ ...s, settings: { output: 'js' } })) }).files[0].content;
+    expect(js).not.toContain('interface');
+    expect(js).toContain('// type Todo: { id, title, done? }');
+    // GDScript has no interfaces
+    const g = toolchainFor('gdscript');
+    const gp = createProject(g.adapter, 'G', { template: 'node' });
+    expect(() => applyOps(gp, [{ op: 'add_interface', name: 'X' }], g)).toThrow(/no interface types/);
+  });
+});

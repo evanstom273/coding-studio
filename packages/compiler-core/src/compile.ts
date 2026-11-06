@@ -41,6 +41,16 @@ export function compileScript(tc: Toolchain, script: ScriptDoc, opts: CompileOpt
 
   const members: IRMember[] = [];
   for (const e of script.enums) if (tc.adapter.capabilities.enums) members.push({ k: 'enum', name: e.name, members: e.members.map((m) => ({ ...m })), src: { scriptId: script.id } });
+  for (const t of script.interfaces ?? []) {
+    members.push({
+      k: 'interface',
+      name: t.name,
+      fields: t.fields.map((f) => ({ name: f.name, type: resolveType(tc.adapter, f.type).type ?? T.any, ...(f.optional ? { optional: true } : {}), ...(f.description ? { doc: f.description } : {}) })),
+      ...(t.exported ? { exported: true } : {}),
+      ...(t.description ? { doc: t.description } : {}),
+      src: { scriptId: script.id },
+    });
+  }
   for (const s of script.signals) {
     members.push({
       k: 'signal',
@@ -162,7 +172,7 @@ function validateDeclarations(tc: Toolchain, script: ScriptDoc, report: (d: Diag
       report({ severity: 'error', code: 'E_INVALID_TYPE', message: `${what}: invalid type "${text}" (${r.error}).`, ...extra });
       return undefined;
     }
-    const unknown = unknownNamed(r.type, (n) => adapter.types.universe.isKnown(n) || enumNames.has(n));
+    const unknown = adapter.types.openTypes ? undefined : unknownNamed(r.type, (n) => adapter.types.universe.isKnown(n) || enumNames.has(n));
     if (unknown) report({ severity: 'error', code: 'E_UNKNOWN_TYPE', message: `${what}: unknown type "${unknown}".`, suggestion: 'Check the spelling, or declare it as an enum in this script.', ...extra });
     if (r.type.kind === 'void' && !allowVoid) report({ severity: 'error', code: 'E_INVALID_TYPE', message: `${what}: void is only valid as a return type.`, ...extra });
     return r.type;
@@ -185,6 +195,18 @@ function validateDeclarations(tc: Toolchain, script: ScriptDoc, report: (d: Diag
       checkName(m.name, `Enum member ${e.name}.`);
       if (names.has(m.name)) report({ severity: 'error', code: 'E_DUPLICATE_IDENTIFIER', message: `Enum ${e.name} has "${m.name}" twice.` });
       names.add(m.name);
+    }
+  }
+  const interfaces = script.interfaces ?? [];
+  if (interfaces.length && !caps.interfaces) report({ severity: 'error', code: 'E_UNSUPPORTED_FEATURE', message: `${adapter.name} does not support interface types.` });
+  for (const t of interfaces) {
+    checkName(t.name, 'Type');
+    claim(t.name, 'a type', {});
+    const names = new Set<string>();
+    for (const f of t.fields) {
+      if (names.has(f.name)) report({ severity: 'error', code: 'E_DUPLICATE_IDENTIFIER', message: `Type ${t.name} has the field "${f.name}" twice.` });
+      names.add(f.name);
+      checkType(f.type, `Type ${t.name} field ${f.name}`);
     }
   }
   if (script.signals.length && !caps.signals) report({ severity: 'error', code: 'E_UNSUPPORTED_FEATURE', message: `${adapter.name} does not support signals.` });

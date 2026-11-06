@@ -411,6 +411,57 @@ function EnumEditor({ id, script }: { id: string; script: ScriptDoc }) {
   );
 }
 
+function InterfaceEditor({ id, script }: { id: string; script: ScriptDoc }) {
+  const t = (script.interfaces ?? []).find((x) => x.id === id);
+  if (!t) return null;
+  const upd = (patch: Record<string, unknown>, label: string) => d([{ op: 'update_interface', interface: t.id, ...patch } as EditOp], label);
+  const fields = t.fields;
+  const setField = (i: number, patch: Partial<(typeof fields)[number]>) => upd({ fields: fields.map((f, j) => (j === i ? { ...f, ...patch } : f)) }, 'Edit field');
+  return (
+    <div data-testid="interface-inspector">
+      <div className="mb-3 text-[14px] font-semibold">Type {t.name}</div>
+      <Row label="Name">
+        <CommitInput value={t.name} onCommit={(name) => upd({ name }, 'Rename type')} testId="type-name" />
+      </Row>
+      <label className="mb-2 flex items-center gap-1.5 text-[12px]">
+        <input type="checkbox" checked={!!t.exported} onChange={(e) => upd({ exported: e.target.checked }, 'Export type')} /> export
+      </label>
+      <Row label="Fields">
+        {fields.map((f, i) => (
+          <div key={`${f.name}-${i}`} className="mb-1 flex items-center gap-1">
+            <div className="w-[38%]">
+              <CommitInput value={f.name} onCommit={(name) => setField(i, { name })} mono />
+            </div>
+            <div className="flex-1">
+              <TypeInput value={f.type} onCommit={(type) => setField(i, { type })} />
+            </div>
+            <label className="flex items-center gap-0.5 text-[11px] text-muted" title="Optional field (may be missing)">
+              <input type="checkbox" checked={!!f.optional} onChange={(e) => setField(i, { optional: e.target.checked })} />?
+            </label>
+            <button className="px-1 text-muted hover:text-err" aria-label={`Remove ${f.name}`} onClick={() => upd({ fields: fields.filter((_, j) => j !== i) }, 'Remove field')}>
+              ×
+            </button>
+          </div>
+        ))}
+        <button
+          className="text-[12px] text-accent hover:underline"
+          data-testid="add-field"
+          onClick={() => {
+            let n = 'field';
+            for (let i = 2; fields.some((f) => f.name === n); i++) n = `field${i}`;
+            upd({ fields: [...fields, { name: n, type: 'string' }] }, 'Add field');
+          }}
+        >
+          + Add field
+        </button>
+      </Row>
+      <Row label="Description">
+        <CommitInput value={t.description ?? ''} onCommit={(description) => upd({ description }, 'Edit description')} />
+      </Row>
+    </div>
+  );
+}
+
 function ProjectEditor() {
   const project = useEditor((s) => s.project)!;
   const adapter = toolchainFor(project.language).adapter;
@@ -468,6 +519,7 @@ export function Inspector() {
   else if (script && inspect?.kind === 'variable' && script.variables.some((v) => v.id === inspect.id)) body = <VariableEditor v={script.variables.find((v) => v.id === inspect.id)!} script={script} />;
   else if (script && inspect?.kind === 'signal') body = <SignalEditor id={inspect.id!} script={script} />;
   else if (script && inspect?.kind === 'enum') body = <EnumEditor id={inspect.id!} script={script} />;
+  else if (script && inspect?.kind === 'interface') body = <InterfaceEditor id={inspect.id!} script={script} />;
   else if (script && inspect?.kind === 'script') body = <ScriptEditor script={script} />;
   else if (script && fn) body = <FunctionEditor fn={fn} script={script} />;
   else if (script) body = <ScriptEditor script={script} />;

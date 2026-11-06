@@ -407,6 +407,23 @@ export class TSPrinter {
         }
       }
     }
+    for (const m of members) {
+      if (m.k !== 'interface') continue;
+      body.blank();
+      if (this.mode === 'js') {
+        if (comments) body.line(`// type ${m.name}: { ${m.fields.map((f) => `${f.name}${f.optional ? '?' : ''}`).join(', ')} }`);
+        continue;
+      }
+      if (comments && m.doc) this.doc(body, m.doc);
+      body.line(`${m.exported ? 'export ' : ''}interface ${m.name} {`, m.src);
+      body.indent();
+      for (const f of m.fields) {
+        if (comments && f.doc) this.doc(body, f.doc);
+        body.line(`${IDENT.test(f.name) ? f.name : str(f.name)}${f.optional ? '?' : ''}: ${tsType(f.type)};`);
+      }
+      body.dedent();
+      body.line('}');
+    }
     const fields = members.filter((m) => m.k === 'field');
     if (fields.length) body.blank();
     for (const f of fields) {

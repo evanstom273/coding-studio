@@ -186,7 +186,16 @@ export interface IREnum {
   src?: SourceRef;
 }
 
-export type IRMember = IRFunction | IRField | IRSignal | IREnum;
+export interface IRInterface {
+  k: 'interface';
+  name: string;
+  fields: { name: string; type: TypeRef; optional?: boolean; doc?: string }[];
+  exported?: boolean;
+  doc?: string;
+  src?: SourceRef;
+}
+
+export type IRMember = IRFunction | IRField | IRSignal | IREnum | IRInterface;
 
 export interface IRModule {
   /** Script id in the project. */

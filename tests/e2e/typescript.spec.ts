@@ -37,3 +37,18 @@ test('inline functions: create from the palette, open by double-click, captured 
   await page.locator('[data-testid="graph-node"][data-node-type="ts.closure"]').dblclick();
   await expect(page.getByTestId('breadcrumb')).toContainText('callback');
 });
+
+test('types: add an interface in the Script panel, edit fields, see it in the TypeScript', async ({ page }) => {
+  await freshStart(page);
+  await page.getByTestId('new-project').click();
+  await page.getByTestId('project-name').fill('Typed');
+  await page.getByTestId('project-language').selectOption('typescript');
+  await page.getByTestId('create-project').click();
+  await expect(page.getByTestId('graph-node').first()).toBeVisible();
+  await page.getByTestId('left-tab-project').click();
+  await page.getByTestId('add-types').click();
+  await expect(page.getByTestId('interface-inspector')).toBeVisible();
+  await page.getByTestId('add-field').click();
+  await expect(await generatedCode(page)).toContainText('export interface Item {');
+  await expect(await generatedCode(page)).toContainText('field: string;');
+});

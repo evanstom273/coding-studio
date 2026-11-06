@@ -146,6 +146,21 @@ function sanitizeScript(raw: Doc, i: number, issues: string[]): ScriptDoc {
           .filter(isObj)
           .map((m, k) => ({ name: str(m.name, `VALUE_${k}`), ...(typeof m.value === 'number' ? { value: m.value } : {}) })),
       })),
+    ...(Array.isArray(raw.interfaces) && raw.interfaces.length
+      ? {
+          interfaces: arr(raw.interfaces)
+            .filter(isObj)
+            .map((t, j) => ({
+              id: str(t.id, `t_auto${j}`),
+              name: str(t.name, `Type${j}`),
+              ...(typeof t.description === 'string' ? { description: t.description } : {}),
+              ...(t.exported === true ? { exported: true } : {}),
+              fields: arr(t.fields)
+                .filter(isObj)
+                .map((f, k) => ({ name: str(f.name, `field${k}`), type: str(f.type, 'any'), ...(f.optional === true ? { optional: true } : {}), ...(typeof f.description === 'string' ? { description: f.description } : {}) })),
+            })),
+        }
+      : {}),
   };
 }
 

@@ -68,6 +68,7 @@ export function describeProject(p: Project, active: { scriptId?: string; functio
       variables: s.variables.map((v) => ({ id: v.id, name: v.name, type: v.type, default: v.default, exported: v.exported, constant: v.constant, attributes: v.attributes })),
       signals: s.signals.map((x) => ({ id: x.id, name: x.name, params: x.params })),
       enums: s.enums,
+      ...(s.interfaces?.length ? { types: s.interfaces } : {}),
       functions: s.functions.map((f) => ({ id: f.id, graphId: f.graph.id, name: f.name, kind: f.kind, params: f.params, returnType: f.returnType, locals: f.locals.map((l) => ({ id: l.id, name: l.name, type: l.type })), nodes: f.graph.nodes.length })),
     })),
   };

@@ -156,7 +156,7 @@ function ProjectExplorer() {
   const inspect = useUI((s) => s.inspect);
   const setUI = useUI((s) => s.set);
   const compact = useCompact();
-  const show = (inspect: { kind: 'script' | 'function' | 'variable' | 'signal' | 'enum'; id: string }) => {
+  const show = (inspect: { kind: 'script' | 'function' | 'variable' | 'signal' | 'enum' | 'interface'; id: string }) => {
     useEditor.getState().select([]);
     // Narrow screens: details live in the inspector drawer.
     setUI({ inspect, ...(compact && inspect.kind !== 'function' && inspect.kind !== 'script' ? { drawer: 'right' as const } : {}) });
@@ -170,7 +170,7 @@ function ProjectExplorer() {
   const tc = toolchainFor(project.language);
   const [eventMenu, setEventMenu] = useState(false);
   const d = (ops: EditOp[], label: string) => useEditor.getState().tryDispatch(ops, label);
-  const taken = (s: ScriptDoc) => new Set([...s.variables, ...s.functions, ...s.signals, ...s.enums].map((x) => x.name));
+  const taken = (s: ScriptDoc) => new Set([...s.variables, ...s.functions, ...s.signals, ...s.enums, ...(s.interfaces ?? [])].map((x) => x.name));
   const errorsIn = (fnId: string) => diagnostics.filter((x) => x.functionId === fnId && x.severity === 'error').length;
 
   const del = async (what: string, ops: EditOp[]) => {
@@ -327,6 +327,21 @@ function ProjectExplorer() {
             >
               {script.signals.map((s) => (
                 <Row key={s.id} active={inspect?.kind === 'signal' && inspect.id === s.id} icon={<Radio size={13} className="text-orange-300" />} label={s.name} sub={`(${s.params.map((p) => p.name).join(', ')})`} draggablePayload={{ type: 'godot.emit_signal', props: { signal: s.id } }} onClick={() => show({ kind: 'signal', id: s.id })} onDelete={() => void del(`signal ${s.name}`, [{ op: 'delete_signal', signal: s.id }])} />
+              ))}
+            </Section>
+          )}
+          {tc.adapter.capabilities.interfaces && (
+            <Section
+              title="Types"
+              icon={<Braces size={12} />}
+              count={(script.interfaces ?? []).length}
+              onAdd={() => {
+                const r = d([{ op: 'add_interface', ref: 't', name: uniqueName('Item', taken(script)), exported: true, fields: [{ name: 'id', type: 'int' }, { name: 'name', type: 'string' }] }], 'Add type');
+                if (r) show({ kind: 'interface', id: r.created.t });
+              }}
+            >
+              {(script.interfaces ?? []).map((t) => (
+                <Row key={t.id} testId="type-row" active={inspect?.kind === 'interface' && inspect.id === t.id} icon={<Braces size={13} className="text-teal-300" />} label={t.name} sub={`{ ${t.fields.map((f) => f.name).join(', ')} }`} onClick={() => show({ kind: 'interface', id: t.id })} onDelete={() => void del(`type ${t.name}`, [{ op: 'delete_interface', interface: t.id }])} />
               ))}
             </Section>
           )}

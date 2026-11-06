@@ -161,6 +161,7 @@ export function compatibility(from: TypeRef, to: TypeRef): Compatibility {
 
 export const typescriptTypes: LanguageTypes = {
   universe,
+  openTypes: true,
   normalize,
   format: tsType,
   compatibility,

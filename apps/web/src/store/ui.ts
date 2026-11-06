@@ -19,7 +19,7 @@ interface UIState {
   /** What the inspector shows when no node is selected. */
   /** Compact layout: which side drawer is open (not persisted). */
   drawer: null | 'left' | 'right';
-  inspect: { kind: 'project' | 'script' | 'function' | 'variable' | 'signal' | 'enum'; id?: string } | null;
+  inspect: { kind: 'project' | 'script' | 'function' | 'variable' | 'signal' | 'enum' | 'interface'; id?: string } | null;
   set(p: Partial<Omit<UIState, 'set'>>): void;
 }
 

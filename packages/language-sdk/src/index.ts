@@ -29,6 +29,11 @@ export interface LanguageTypes {
   structFields(name: string): { name: string; type: TypeRef }[] | undefined;
   /** Type names offered in pickers (canonical spellings). */
   pickerTypes(): string[];
+  /**
+   * Named types this adapter doesn't know (classes from libraries) are accepted rather than
+   * reported as unknown: the language's own compiler checks them.
+   */
+  openTypes?: boolean;
   /** Language-specific restrictions on a type (e.g. nullable primitives). Returns an error message. */
   check?(t: TypeRef): string | undefined;
 }
