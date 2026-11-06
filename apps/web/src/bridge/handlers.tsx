@@ -289,6 +289,22 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
     }
     case 'git_repos':
       return (await github().repos()).map((r) => ({ repository: r.full_name, private: r.private, default_branch: r.default_branch, updated: r.updated_at }));
+    case 'ci_status':
+    case 'ci_run':
+    case 'ci_run_details':
+    case 'ci_logs':
+    case 'ci_rerun': {
+      await ensureOpen(params.project);
+      const ws = useEditor.getState().workspace!;
+      return svc.ciCall(method, github(), svc.requireLinked(readState(ws)), params, (p) => ws.files.has(p));
+    }
+    case 'ci_add_workflow': {
+      await ensureOpen(params.project);
+      const ws = useEditor.getState().workspace!;
+      const f = svc.workflowTemplateFile(params.template, ws.files);
+      useEditor.getState().applyFiles([{ op: 'write_file', path: f.path, content: f.content, expectedHash: null }], `Claude: add workflow ${f.path}`, { source: 'mcp' });
+      return { added: f.path, content: f.content, note: 'Commit it with git_commit to turn it on.' };
+    }
     case 'confirm_overwrite': {
       const files = Array.isArray(params.files) ? (params.files as string[]) : [];
       const ok = await confirmDialog({

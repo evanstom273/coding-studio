@@ -38,7 +38,7 @@ const enc = (s: string) => s.split('/').map(encodeURIComponent).join('/');
 export class GitHub {
   constructor(private readonly f: Fetch) {}
 
-  private async req<T>(path: string, init?: { method?: string; body?: unknown }, ok = [200, 201]): Promise<T> {
+  private async req<T>(path: string, init?: { method?: string; body?: unknown }, ok = [200, 201, 202, 204]): Promise<T> {
     const r = await this.f(path, init);
     if (ok.includes(r.status)) return r.body as T;
     const msg = (r.body as { message?: string } | null)?.message ?? `HTTP ${r.status}`;
@@ -101,4 +101,65 @@ export class GitHub {
   pulls(owner: string, repo: string) {
     return this.req<{ number: number; title: string; html_url: string; head: { ref: string }; base: { ref: string }; user: { login: string } }[]>(`/repos/${enc(owner)}/${enc(repo)}/pulls?state=open&per_page=50`);
   }
+
+  // --- Actions ---------------------------------------------------------------------------------
+  workflows(owner: string, repo: string) {
+    return this.req<{ workflows: Workflow[] }>(`/repos/${enc(owner)}/${enc(repo)}/actions/workflows?per_page=100`).then((r) => r.workflows);
+  }
+  runs(owner: string, repo: string, opts: { branch?: string; sha?: string } = {}) {
+    const q = [`per_page=20`, opts.branch ? `branch=${encodeURIComponent(opts.branch)}` : '', opts.sha ? `head_sha=${opts.sha}` : ''].filter(Boolean).join('&');
+    return this.req<{ workflow_runs: WorkflowRun[] }>(`/repos/${enc(owner)}/${enc(repo)}/actions/runs?${q}`).then((r) => r.workflow_runs);
+  }
+  run(owner: string, repo: string, id: number) {
+    return this.req<WorkflowRun>(`/repos/${enc(owner)}/${enc(repo)}/actions/runs/${id}`);
+  }
+  jobs(owner: string, repo: string, runId: number) {
+    return this.req<{ jobs: Job[] }>(`/repos/${enc(owner)}/${enc(repo)}/actions/runs/${runId}/jobs?per_page=100`).then((r) => r.jobs);
+  }
+  async jobLog(owner: string, repo: string, jobId: number): Promise<string> {
+    const r = await this.req<{ text?: string } | string>(`/repos/${enc(owner)}/${enc(repo)}/actions/jobs/${jobId}/logs`);
+    return typeof r === 'string' ? r : (r?.text ?? '');
+  }
+  /** Start a workflow that has `on: workflow_dispatch`. */
+  dispatch(owner: string, repo: string, workflow: number | string, ref: string, inputs?: Record<string, string>) {
+    return this.req(`/repos/${enc(owner)}/${enc(repo)}/actions/workflows/${encodeURIComponent(String(workflow))}/dispatches`, { method: 'POST', body: { ref, ...(inputs ? { inputs } : {}) } });
+  }
+  rerun(owner: string, repo: string, runId: number, failedOnly = true) {
+    return this.req(`/repos/${enc(owner)}/${enc(repo)}/actions/runs/${runId}/${failedOnly ? 'rerun-failed-jobs' : 'rerun'}`, { method: 'POST', body: {} });
+  }
+  artifacts(owner: string, repo: string, runId: number) {
+    return this.req<{ artifacts: { id: number; name: string; size_in_bytes: number; expired: boolean }[] }>(`/repos/${enc(owner)}/${enc(repo)}/actions/runs/${runId}/artifacts`).then((r) => r.artifacts);
+  }
+}
+
+export interface Workflow {
+  id: number;
+  name: string;
+  path: string;
+  state: string;
+}
+
+export interface WorkflowRun {
+  id: number;
+  name: string;
+  run_number: number;
+  workflow_id: number;
+  head_branch: string;
+  head_sha: string;
+  event: string;
+  status: 'queued' | 'in_progress' | 'completed' | 'waiting' | 'requested' | 'pending';
+  conclusion: 'success' | 'failure' | 'cancelled' | 'skipped' | 'timed_out' | 'action_required' | 'neutral' | null;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  display_title?: string;
+}
+
+export interface Job {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  html_url?: string;
+  steps?: { name: string; status: string; conclusion: string | null; number: number }[];
 }

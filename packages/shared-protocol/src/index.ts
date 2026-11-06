@@ -48,6 +48,12 @@ export const BRIDGE_METHODS = [
   'git_create_pr',
   'git_clone',
   'git_repos',
+  'ci_status',
+  'ci_run',
+  'ci_run_details',
+  'ci_logs',
+  'ci_rerun',
+  'ci_add_workflow',
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 

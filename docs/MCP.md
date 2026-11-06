@@ -73,6 +73,7 @@ Projects are stored per address, so projects made on a hosted copy (e.g. Cloudfl
 | Compilation | `validate_graph`, `compile_script`, `compile_project`, `get_generated_code`, `export_script`, `export_project` |
 | Files | `read_tree`, `read_files`, `search_files`, `workspace_batch`, `write_file`, `move_path`, `delete_path` |
 | GitHub | `git_repos`, `git_clone`, `git_status`, `git_commit`, `git_pull`, `git_create_pr` |
+| CI (GitHub Actions) | `ci_status`, `ci_run`, `ci_run_details`, `ci_logs`, `ci_rerun`, `ci_add_workflow` |
 | History | `undo`, `redo`, `list_backups`, `restore_backup` |
 
 `batch_edit` is the workhorse: create nodes with `ref`, connect them with `"$ref"` in the same atomic batch (`add_function` also defines `"$<ref>.entry"`). Results contain created ids, the new revision, warnings and a diagnostics summary. Errors are structured: `{ "error": { "code", "message", "details" } }`, e.g. `E_REVISION_CONFLICT`, `E_TYPE_MISMATCH`, `E_UNKNOWN_NODE`, `E_NOT_CONNECTED`, `E_FILE_EXISTS`, `E_DECLINED`.
@@ -80,6 +81,8 @@ Projects are stored per address, so projects made on a hosted copy (e.g. Cloudfl
 **Files.** A project is a set of files (see [PROJECT_FORMAT.md](PROJECT_FORMAT.md)); visual scripts are `*.vgraph` files and graph tools accept their path as `script` (e.g. `"player/player.vgraph"`). `workspace_batch` changes many files *and* graphs in one atomic, undoable step: `write_file`, `create_dir`, `delete`, `move`, `copy`, `graph` (batch_edit operations, addressed by `script` path) and `config`. Every file read returns its git blob `hash`; pass it back as `expected_hash` and the write is refused (`E_REVISION_CONFLICT`, nothing applied) if the file changed meanwhile — e.g. because you were typing in it. `expected_revision` does the same for the whole workspace. Generated source (e.g. `main.gd`) shows up in `read_tree` under `generated` and can be read, but not written. Deletes and large batches take a backup first. All of this works the same through the local server, the served editor and the cloud connector.
 
 **GitHub.** Connect GitHub once in the editor (Git tab, or “Open from GitHub” on the projects page) with a fine-grained personal access token (Contents + Pull requests: read and write). The token is stored only in your own Durable Object — never in the browser, in project files or in any response — and the editor reaches GitHub through `/github/<key>/api/…` on your Worker. A project opened from GitHub keeps its sync state in `.codingstudio/git.json` (never committed). `git_commit` pushes only changed files and refuses if GitHub moved on (`E_NOT_FAST_FORWARD`: pull first); `git_pull` merges text files line by line (conflict markers where both sides touched the same lines) and reports graph/binary files changed on both sides, keeping the local version.
+
+**CI.** `ci_add_workflow` adds a ready-made workflow (`ci`: install + the typecheck/lint/test/build scripts in package.json; `cloudflare`: deploy with wrangler using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`) — commit it to turn it on. `ci_logs` returns the problems found in failed jobs, linked to project files and lines where possible. In the editor the same lives in Git → Actions. Pushing workflow files needs the token's **Workflows** permission.
 
 ## Safety model
 

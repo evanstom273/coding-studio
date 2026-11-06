@@ -42,4 +42,7 @@ export const isGenTab = (id: string) => id.startsWith(GEN_PREFIX);
 export const DIFF_PREFIX = 'diff:';
 export const isDiffTab = (id: string) => id.startsWith(DIFF_PREFIX);
 /** Tabs that aren't workspace files. */
-export const isVirtualTab = (id: string) => isGenTab(id) || isDiffTab(id);
+/** `log:<runId>:<jobId>`: a GitHub Actions job log. */
+export const LOG_PREFIX = 'log:';
+export const isLogTab = (id: string) => id.startsWith(LOG_PREFIX);
+export const isVirtualTab = (id: string) => isGenTab(id) || isDiffTab(id) || isLogTab(id);

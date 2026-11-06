@@ -300,3 +300,33 @@ describe('GitHub through the cloud connector', () => {
     expect(((await cloud.handle('read_files', { paths: ['docs/x.md'] })) as { files: { text: string }[] }).files[0].text).toBe('new');
   });
 });
+
+describe('CI through the cloud connector', () => {
+  it('add a workflow, commit, see a failing run, read the problems, re-run', async () => {
+    const { FakeGitHub } = await import('../fixtures/fake-github');
+    const { GitHubVault } = await import('../../worker/github');
+    const fake = new FakeGitHub();
+    fake.push('main', { 'package.json': '{"scripts":{"test":"vitest"}}', 'package-lock.json': '{}', 'src/app.ts': 'export const a = 1;\n' });
+    const store = kv();
+    const cloud = new CloudService(store, backend(), () => undefined, 'https://site', () => 0);
+    cloud.github = () => new GitHubVault(store, () => fake.fetch);
+    await cloud.github().set('github_pat_1234567890abcdefghij');
+    await cloud.handle('git_clone', { repository: 'lyra/game' });
+    const add = (await cloud.handle('ci_add_workflow', { template: 'ci' })) as { added: string; content: string };
+    expect(add.added).toBe('.github/workflows/ci.yml');
+    expect(add.content).toContain('npm ci');
+    await cloud.handle('git_commit', { message: 'Add CI' });
+    expect(fake.files('main')['.github/workflows/ci.yml']).toContain('run: npm run test');
+    fake.addRun('main', { conclusion: 'failure', log: '2026-01-01T00:00:00.0000000Z src/app.ts(1,14): error TS2322: nope\n##[error]Process completed with exit code 2.' });
+    const s = (await cloud.handle('ci_status', {})) as { workflows: { path: string }[]; runs: { id: number; state: string }[] };
+    expect(s.workflows.map((w) => w.path)).toEqual(['.github/workflows/ci.yml']);
+    expect(s.runs[0].state).toBe('failed');
+    const logs = (await cloud.handle('ci_logs', { run_id: s.runs[0].id })) as { jobs: { problems: { file?: string; line?: number }[]; tail: string }[] };
+    expect(logs.jobs[0].problems[0]).toMatchObject({ file: 'src/app.ts', line: 1 });
+    expect(logs.jobs[0].tail).not.toMatch(/^2026-/);
+    await cloud.handle('ci_rerun', { run_id: s.runs[0].id });
+    expect(((await cloud.handle('ci_status', {})) as { runs: { state: string }[] }).runs[0].state).toBe('running');
+    await cloud.handle('ci_run', {});
+    expect(fake.dispatches).toEqual([{ workflow: '.github/workflows/ci.yml', ref: 'main' }]);
+  });
+});

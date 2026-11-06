@@ -18,6 +18,8 @@ export function githubFetch(token: string): Fetch {
     });
     const text = await r.text();
     let body: unknown;
+    // Job logs are plain text (GitHub redirects to them; fetch follows). Keep the end: that's where failures are.
+    if (!(r.headers.get('content-type') ?? '').includes('json') && r.ok) return { status: r.status, body: { text: text.length > 3_000_000 ? text.slice(-3_000_000) : text } };
     try {
       body = text ? JSON.parse(text) : null;
     } catch {

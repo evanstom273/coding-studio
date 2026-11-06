@@ -309,6 +309,18 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     (a) => call('git_create_pr', a, 60_000),
   );
 
+  // --- CI (GitHub Actions) -------------------------------------------------------------------------
+  server.registerTool('ci_status', { title: 'CI status', description: 'Workflows of the linked repository and the latest runs on the current branch (state: running / passed / failed …).', inputSchema: { project, branch: z.string().optional() }, annotations: ro }, (a) => call('ci_status', a, 60_000));
+  server.registerTool('ci_run', { title: 'Run a workflow', description: 'Start a workflow (needs "on: workflow_dispatch") on the current branch or "ref".', inputSchema: { project, workflow: z.string().optional().describe('Workflow id, name or file (e.g. ci.yml); optional if there is only one'), ref: z.string().optional() } }, (a) => call('ci_run', a, 60_000));
+  server.registerTool('ci_run_details', { title: 'CI run details', description: 'Jobs of a run with their state and failed steps.', inputSchema: { project, run_id: z.number().int() }, annotations: ro }, (a) => call('ci_run_details', a, 60_000));
+  server.registerTool(
+    'ci_logs',
+    { title: 'CI logs', description: 'Logs of a run\'s failed jobs (or one job): the problems found (errors with project file and line, when they point at one) and the last lines of the log.', inputSchema: { project, run_id: z.number().int().optional(), job_id: z.number().int().optional(), tail: z.number().int().min(10).max(1000).optional() }, annotations: ro },
+    (a) => call('ci_logs', a, 120_000),
+  );
+  server.registerTool('ci_rerun', { title: 'Re-run CI', description: 'Re-run the failed jobs of a run (all=true re-runs everything).', inputSchema: { project, run_id: z.number().int(), all: z.boolean().optional() } }, (a) => call('ci_rerun', a, 60_000));
+  server.registerTool('ci_add_workflow', { title: 'Add a CI workflow', description: 'Add a workflow file from a template: "ci" (install + typecheck/lint/test/build scripts from package.json) or "cloudflare" (deploy with wrangler; needs repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID). Commit it with git_commit to turn it on.', inputSchema: { project, template: z.enum(['ci', 'cloudflare']) } }, (a) => call('ci_add_workflow', a));
+
   // --- history ------------------------------------------------------------------------------------
   server.registerTool('undo', { title: 'Undo', description: 'Undo the latest edit in the editor (each batch is one step).', inputSchema: { project } }, (a) => call('undo', a));
   server.registerTool('redo', { title: 'Redo', description: 'Redo the latest undone edit.', inputSchema: { project } }, (a) => call('redo', a));

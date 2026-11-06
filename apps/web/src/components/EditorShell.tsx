@@ -24,7 +24,8 @@ import { McpDialog } from './dialogs/McpDialog';
 import { NewProjectDialog } from './dialogs/NewProjectDialog';
 import { TabBar } from './files/TabBar';
 import { BinaryFileView, DiffFileView, GeneratedFileView, TextFileView } from './files/FileView';
-import { isDiffTab, isGenTab } from '@web/lib/fileTypes';
+import { isDiffTab, isGenTab, isLogTab } from '@web/lib/fileTypes';
+import { LogView } from './files/LogView';
 import { GRAPH_EXT } from '@cs/workspace';
 
 const GraphCanvas = lazy(() => import('./canvas/GraphCanvas'));
@@ -32,7 +33,7 @@ const GraphCanvas = lazy(() => import('./canvas/GraphCanvas'));
 export default function EditorShell({ projectId }: { projectId: string }) {
   const project = useEditor((s) => s.project);
   const activeTab = useEditor((s) => s.activeTab);
-  const activeKind = useEditor((s) => (!s.activeTab || s.activeTab.endsWith(GRAPH_EXT) ? 'graph' : isGenTab(s.activeTab) ? 'gen' : isDiffTab(s.activeTab) ? 'diff' : s.workspace?.files.get(s.activeTab)?.kind === 'binary' ? 'binary' : 'text'));
+  const activeKind = useEditor((s) => (!s.activeTab || s.activeTab.endsWith(GRAPH_EXT) ? 'graph' : isGenTab(s.activeTab) ? 'gen' : isDiffTab(s.activeTab) ? 'diff' : isLogTab(s.activeTab) ? 'log' : s.workspace?.files.get(s.activeTab)?.kind === 'binary' ? 'binary' : 'text'));
   const [error, setError] = useState<string | null>(null);
   const ui = useUI();
   const compact = useCompact();
@@ -111,7 +112,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
           </ErrorBoundary>
         ) : (
           <ErrorBoundary label="File" key={activeTab}>
-            {activeKind === 'gen' ? <GeneratedFileView id={activeTab!} /> : activeKind === 'diff' ? <DiffFileView id={activeTab!} /> : activeKind === 'binary' ? <BinaryFileView path={activeTab!} /> : <TextFileView key={activeTab} path={activeTab!} />}
+            {activeKind === 'gen' ? <GeneratedFileView id={activeTab!} /> : activeKind === 'diff' ? <DiffFileView id={activeTab!} /> : activeKind === 'log' ? <LogView id={activeTab!} /> : activeKind === 'binary' ? <BinaryFileView path={activeTab!} /> : <TextFileView key={activeTab} path={activeTab!} />}
           </ErrorBoundary>
         )}
       </div>

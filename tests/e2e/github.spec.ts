@@ -69,3 +69,43 @@ test('connect GitHub, open a repo, commit to a branch, open a PR, pull', async (
   await expect.poll(() => page.evaluate(() => (window as never as { codingStudio: { editor: { getState(): { workspace: { files: Map<string, { text?: string }> } } } } }).codingStudio.editor.getState().workspace.files.get('src/app.ts')?.text)).toBe('export const a = 2;\n');
   await expect(page.getByTestId('git-change')).toHaveCount(0);
 });
+
+test('Actions: add a workflow, commit, follow a failing run, jump from the log to the file, re-run', async ({ page }) => {
+  const fake = new FakeGitHub();
+  fake.push('main', { 'package.json': '{"scripts":{"test":"vitest","build":"vite build"}}', 'src/app.ts': 'export const a: number = 1;\nexport const b: number = "two";\n' });
+  await freshStart(page);
+  await serveGitHub(page, fake);
+  await page.getByTestId('open-github').click();
+  await page.getByTestId('github-token').fill('github_pat_1234567890abcdefghij');
+  await page.getByTestId('github-token-save').click();
+  await page.getByTestId('repo-row').first().click();
+  await page.getByTestId('clone-repo').click();
+  await expect(page.getByTestId('project-title')).toHaveText('game');
+
+  await page.getByTestId('left-tab-git').click();
+  await page.getByTestId('git-view-actions').click();
+  await page.getByTestId('add-workflow-ci').click();
+  await expect(page.locator('[data-testid="tab"][data-tab=".github/workflows/ci.yml"]')).toBeVisible();
+  await page.getByTestId('git-view-changes').click();
+  await page.getByTestId('commit-message').fill('Add CI');
+  await page.getByTestId('commit-push').click();
+  await expect(page.getByTestId('git-change')).toHaveCount(0);
+  expect(fake.files('main')['.github/workflows/ci.yml']).toContain('npm run build');
+
+  // GitHub runs it and it fails
+  fake.addRun('main', { conclusion: 'failure', log: ['2026-01-01T00:00:00.0000000Z > tsc --noEmit', '2026-01-01T00:00:01.0000000Z src/app.ts(2,14): error TS2322: Type string is not assignable to type number.', '2026-01-01T00:00:01.0000000Z ##[error]Process completed with exit code 2.'].join('\n') });
+  await page.getByTestId('git-view-actions').click();
+  await expect(page.getByTestId('workflow-row')).toHaveCount(1);
+  await expect(page.getByTestId('run-row').first()).toHaveAttribute('data-state', 'failed');
+  await page.getByTestId('run-row').first().click();
+  await page.getByTestId('open-log').click();
+  await expect(page.getByTestId('log-view')).toBeVisible();
+  await page.getByTestId('log-problem').filter({ hasText: 'src/app.ts:2' }).click();
+  await expect(page.locator('[data-testid="tab"][data-tab="src/app.ts"]')).toHaveAttribute('aria-selected', 'true');
+
+  // re-run failed jobs; run it by hand too
+  await page.getByTestId('rerun-failed').click();
+  await expect(page.getByTestId('run-row').first()).toHaveAttribute('data-state', 'running', { timeout: 10_000 });
+  await page.getByTestId('run-workflow').click();
+  await expect.poll(() => fake.dispatches.length).toBe(1);
+});

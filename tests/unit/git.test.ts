@@ -89,3 +89,52 @@ describe('GitHub sync', () => {
     expect(p.updates.has('main.vgraph')).toBe(false);
   });
 });
+
+describe('GitHub Actions', () => {
+  it('templates follow package.json scripts and lockfiles', async () => {
+    const { WORKFLOW_TEMPLATES } = await import('@cs/git');
+    const ci = WORKFLOW_TEMPLATES.find((t) => t.id === 'ci')!.build({ packageJson: '{"scripts":{"test":"vitest","build":"vite build"}}', hasLockfile: { npm: true, pnpm: false, yarn: false } });
+    expect(ci).toContain('npm ci');
+    expect(ci).toContain('run: npm run test');
+    expect(ci).toContain('workflow_dispatch');
+    expect(ci).not.toContain('typecheck');
+    const pn = WORKFLOW_TEMPLATES.find((t) => t.id === 'ci')!.build({ packageJson: '{"scripts":{"lint":"eslint ."}}', hasLockfile: { npm: false, pnpm: true, yarn: false } });
+    expect(pn).toContain('pnpm install --frozen-lockfile');
+    expect(pn).toContain('run: pnpm lint');
+  });
+
+  it('finds problems in logs and links them to workspace files', async () => {
+    const { parseLogProblems } = await import('@cs/git');
+    const log = [
+      '2026-01-01T10:00:00.1234567Z \u001b[36m> tsc --noEmit\u001b[0m',
+      '2026-01-01T10:00:01.0000000Z src/app.ts(12,5): error TS2322: Type string is not assignable to type number.',
+      '2026-01-01T10:00:02.0000000Z  FAIL  tests/app.test.ts > adds',
+      "2026-01-01T10:00:02.0000000Z AssertionError: expected 3 to be 4",
+      '2026-01-01T10:00:02.0000000Z  ❯ tests/app.test.ts:7:19',
+      '2026-01-01T10:00:03.0000000Z ##[error]Process completed with exit code 1.',
+      '2026-01-01T10:00:03.0000000Z node_modules/x/index.js:1:1 Error in dependency',
+    ].join('\n');
+    const has = (p: string) => ['src/app.ts', 'tests/app.test.ts'].includes(p);
+    const ps = parseLogProblems(log, has);
+    expect(ps[0]).toMatchObject({ file: 'src/app.ts', line: 12, column: 5, message: 'TS2322: Type string is not assignable to type number.' });
+    expect(ps.some((p) => p.file === 'tests/app.test.ts' && p.line === 7)).toBe(true);
+    expect(ps.some((p) => p.message === 'Process completed with exit code 1.' && !p.file)).toBe(true);
+    expect(ps.some((p) => p.file?.startsWith('node_modules'))).toBe(false);
+  });
+
+  it('lists workflows and runs, dispatches, reads jobs and logs, re-runs failed jobs', async () => {
+    const fake = new FakeGitHub();
+    fake.push('main', { '.github/workflows/ci.yml': 'name: CI' });
+    const gh = new GitHub(fake.fetch);
+    expect((await gh.workflows('lyra', 'game')).map((w) => w.path)).toEqual(['.github/workflows/ci.yml']);
+    await gh.dispatch('lyra', 'game', 100, 'main');
+    const [run] = await gh.runs('lyra', 'game', { branch: 'main' });
+    expect(run.status).toBe('in_progress');
+    fake.finish(run.id, 'failure', 'x\n##[error]boom');
+    const jobs = await gh.jobs('lyra', 'game', run.id);
+    expect(jobs[0].conclusion).toBe('failure');
+    expect(await gh.jobLog('lyra', 'game', jobs[0].id)).toContain('boom');
+    await gh.rerun('lyra', 'game', run.id);
+    expect((await gh.run('lyra', 'game', run.id)).status).toBe('in_progress');
+  });
+});

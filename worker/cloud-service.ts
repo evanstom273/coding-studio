@@ -436,6 +436,24 @@ export class CloudService {
       }
       case 'git_repos':
         return (await (await this.github().client()).repos()).map((r) => ({ repository: r.full_name, private: r.private, default_branch: r.default_branch, updated: r.updated_at }));
+      case 'ci_status':
+      case 'ci_run':
+      case 'ci_run_details':
+      case 'ci_logs':
+      case 'ci_rerun': {
+        const { project: p } = await this.resolve(params.project);
+        const st = svc.requireLinked(readState(this.store.read(p.id, (e) => e.path === '.codingstudio/git.json')!));
+        const paths = new Set(this.store.index(p.id).map((e) => e.path));
+        return svc.ciCall(method, await this.github().client(), st, params, (x) => paths.has(x));
+      }
+      case 'ci_add_workflow': {
+        const { project: p } = await this.resolve(params.project);
+        const before = this.store.read(p.id)!;
+        const f = svc.workflowTemplateFile(params.template, before.files);
+        const r = applyWorkspaceOps(before, [{ op: 'write_file', path: f.path, content: f.content, expectedHash: null }]);
+        await this.commit(before, r.workspace, 'claude', { label: `Claude: add workflow ${f.path}`, source: 'claude' });
+        return { added: f.path, content: f.content, note: 'Commit it with git_commit to turn it on.' };
+      }
       case 'confirm_overwrite':
         return { approved: false };
     }

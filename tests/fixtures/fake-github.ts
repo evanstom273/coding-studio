@@ -14,6 +14,8 @@ export class FakeGitHub {
   trees = new Map<string, Map<string, { sha: string; mode: string }>>();
   refs = new Map<string, string>();
   pullsList: { number: number; title: string; head: string; base: string }[] = [];
+  runsList: { id: number; name: string; run_number: number; workflow_id: number; head_branch: string; head_sha: string; event: string; status: string; conclusion: string | null; html_url: string; created_at: string; updated_at: string; jobs: { id: number; name: string; status: string; conclusion: string | null; steps: { name: string; status: string; conclusion: string | null; number: number }[]; log: string }[] }[] = [];
+  dispatches: { workflow: string; ref: string }[] = [];
   calls: string[] = [];
   private n = 0;
   constructor(
@@ -44,6 +46,33 @@ export class FakeGitHub {
     this.commits.set(csha, { tree, parents: parent ? [parent] : [], message });
     this.refs.set(branch, csha);
     return csha;
+  }
+
+  /** Workflows = files under .github/workflows on main. */
+  workflowList() {
+    const main = this.refs.get('main');
+    const tree = main ? this.commits.get(main)!.tree : new Map();
+    return [...tree.keys()].filter((p) => p.startsWith('.github/workflows/')).map((p, i) => ({ id: 100 + i, name: p.split('/').pop()!.replace(/\.ya?ml$/, ''), path: p, state: 'active' }));
+  }
+
+  addRun(branch: string, opts: { name?: string; conclusion?: string | null; log?: string; event?: string } = {}) {
+    const id = 5000 + this.runsList.length;
+    const done = opts.conclusion !== null;
+    const run = { id, name: opts.name ?? 'CI', run_number: this.runsList.length + 1, workflow_id: 100, head_branch: branch, head_sha: this.refs.get(branch) ?? '0', event: opts.event ?? 'push', status: done ? 'completed' : 'in_progress', conclusion: done ? (opts.conclusion ?? 'success') : null, html_url: `https://github.com/${this.owner}/${this.name}/actions/runs/${id}`, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), jobs: [{ id: id * 10, name: 'check', status: done ? 'completed' : 'in_progress', conclusion: done ? (opts.conclusion ?? 'success') : null, steps: [{ name: 'test', status: 'completed', conclusion: done ? (opts.conclusion ?? 'success') : null, number: 1 }], log: opts.log ?? '2026-01-01T00:00:00.0000000Z all good' }] };
+    this.runsList.unshift(run);
+    return run;
+  }
+
+  finish(id: number, conclusion: string, log?: string) {
+    const r = this.runsList.find((x) => x.id === id)!;
+    r.status = 'completed';
+    r.conclusion = conclusion;
+    for (const j of r.jobs) {
+      j.status = 'completed';
+      j.conclusion = conclusion;
+      j.steps.forEach((st) => (st.conclusion = conclusion));
+      if (log) j.log = log;
+    }
   }
 
   files(branch: string): Record<string, string> {
@@ -126,6 +155,38 @@ export class FakeGitHub {
       const pr = { number: this.pullsList.length + 1, title: String(body.title), head: String(body.head), base: String(body.base) };
       this.pullsList.push(pr);
       return ok({ number: pr.number, html_url: `https://github.com/${this.owner}/${this.name}/pull/${pr.number}` }, 201);
+    }
+    if (path.startsWith(`${base}/actions/workflows?`)) return ok({ workflows: this.workflowList() });
+    if ((m = new RegExp(`^${base}/actions/workflows/([^/]+)/dispatches$`).exec(path)) && method === 'POST') {
+      const wf = this.workflowList().find((w) => String(w.id) === decodeURIComponent(m![1]) || w.path.endsWith(decodeURIComponent(m![1])));
+      if (!wf) return { status: 404, body: { message: 'Workflow not found' } };
+      this.dispatches.push({ workflow: wf.path, ref: String(body.ref) });
+      this.addRun(String(body.ref), { name: wf.name, conclusion: null, event: 'workflow_dispatch' });
+      return { status: 204, body: null };
+    }
+    if (path.startsWith(`${base}/actions/runs?`)) {
+      const q = new URL(`http://x${path}`).searchParams;
+      const strip = ({ jobs: _j, ...r }: (typeof this.runsList)[number]) => (void _j, r);
+      return ok({ workflow_runs: this.runsList.filter((r) => (!q.get('branch') || r.head_branch === q.get('branch')) && (!q.get('head_sha') || r.head_sha === q.get('head_sha'))).map(strip) });
+    }
+    if ((m = new RegExp(`^${base}/actions/runs/(\\d+)/jobs`).exec(path))) {
+      const r = this.runsList.find((x) => x.id === +m![1]);
+      return r ? ok({ jobs: r.jobs.map(({ log: _l, ...j }) => (void _l, j)) }) : nf;
+    }
+    if ((m = new RegExp(`^${base}/actions/runs/(\\d+)/rerun-failed-jobs$`).exec(path)) && method === 'POST') {
+      const r = this.runsList.find((x) => x.id === +m![1]);
+      if (!r) return nf;
+      r.status = 'in_progress';
+      r.conclusion = null;
+      return ok({}, 201);
+    }
+    if ((m = new RegExp(`^${base}/actions/runs/(\\d+)$`).exec(path))) {
+      const r = this.runsList.find((x) => x.id === +m![1]);
+      return r ? ok({ ...r, jobs: undefined }) : nf;
+    }
+    if ((m = new RegExp(`^${base}/actions/jobs/(\\d+)/logs$`).exec(path))) {
+      const j = this.runsList.flatMap((r) => r.jobs).find((x) => x.id === +m![1]);
+      return j ? ok({ text: j.log }) : nf;
     }
     if (path.startsWith(`${base}/pulls`)) return ok(this.pullsList.map((p) => ({ number: p.number, title: p.title, html_url: '', head: { ref: p.head }, base: { ref: p.base }, user: { login: this.owner } })));
     return nf;
