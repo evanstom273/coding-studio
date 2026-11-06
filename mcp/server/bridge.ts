@@ -58,6 +58,11 @@ export class EditorBridge {
     readonly origins: string[],
   ) {}
 
+  /** Relay link to the copy that owns the port, when this copy couldn't bind it. */
+  private upstream: WebSocket | null = null;
+  private upstreamPending = new Map<string, Pending>();
+  private closed = false;
+
   start(): Promise<void> {
     return new Promise((done) => {
       const wss = new WebSocketServer({
@@ -65,7 +70,9 @@ export class EditorBridge {
         port: this.port,
         maxPayload: BRIDGE_MAX_PAYLOAD,
         verifyClient: (info: { origin: string }, cb: (ok: boolean, code?: number, msg?: string) => void) => {
-          if (isAllowedOrigin(info.origin, this.origins)) return cb(true);
+          // No Origin = a local non-browser process (another copy of this server). Browsers always
+          // send Origin, so web pages can't use this path; such connections may only relay requests.
+          if (!info.origin || isAllowedOrigin(info.origin, this.origins)) return cb(true);
           log(`rejected connection from origin ${info.origin || '(none)'} — add it to CODING_STUDIO_ORIGINS to allow it`);
           cb(false, 403, 'Origin not allowed');
         },
@@ -75,7 +82,15 @@ export class EditorBridge {
         done();
       });
       wss.on('error', (e: NodeJS.ErrnoException) => {
-        this.startError = e.code === 'EADDRINUSE' ? `Port ${this.port} is already in use (another Coding Studio MCP server is probably running). Stop it, or set CODING_STUDIO_PORT here and the same port in Coding Studio.` : `Bridge failed: ${e.message}`;
+        if (this.heartbeat) clearInterval(this.heartbeat);
+        this.heartbeat = null;
+        this.wss = null;
+        if (e.code === 'EADDRINUSE') {
+          // Another copy (e.g. the same app started this server twice) owns the port: relay through it.
+          void this.connectUpstream().then(done);
+          return;
+        }
+        this.startError = `Bridge failed: ${e.message}`;
         log(this.startError);
         done();
       });
@@ -98,6 +113,7 @@ export class EditorBridge {
     (ws as WebSocket & { alive?: boolean }).alive = true;
     ws.on('pong', () => ((ws as WebSocket & { alive?: boolean }).alive = true));
     let identified = false;
+    let isPeer = false;
     const helloTimer = setTimeout(() => !identified && ws.close(4002, 'No hello'), 5000);
     ws.on('message', (data) => {
       let msg: BridgeMessage;
@@ -106,7 +122,26 @@ export class EditorBridge {
       } catch {
         return;
       }
+      const peerMsg = msg as unknown as { type: string; id?: string; method?: BridgeMethod; params?: Record<string, unknown>; timeoutMs?: number };
+      if (!identified && peerMsg.type === 'peer-hello' && !origin) {
+        clearTimeout(helloTimer);
+        identified = true;
+        isPeer = true;
+        ws.send(JSON.stringify({ type: 'peer-welcome' }));
+        log('another copy of the MCP server is relaying through this one');
+        return;
+      }
+      if (isPeer) {
+        if (peerMsg.type !== 'peer-request' || !peerMsg.id || !peerMsg.method) return;
+        const id = peerMsg.id;
+        this.request(peerMsg.method, peerMsg.params ?? {}, Math.min(Number(peerMsg.timeoutMs) || 30_000, 600_000)).then(
+          (result) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'peer-response', id, ok: true, result })),
+          (e: unknown) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'peer-response', id, ok: false, error: errorPayload(e) })),
+        );
+        return;
+      }
       if (!identified) {
+        if (!origin) return ws.close(4003, 'Editor connections must come from a browser');
         if (msg.type !== 'hello' || msg.app !== 'coding-studio' || typeof msg.sessionId !== 'string') return ws.close(4003, 'Expected hello');
         clearTimeout(helloTimer);
         if (msg.protocol !== BRIDGE_PROTOCOL_VERSION) {
@@ -160,7 +195,69 @@ export class EditorBridge {
     }
   }
 
+  /** Connect to the copy that owns the port. If it isn't a Coding Studio server, report the port conflict. */
+  private connectUpstream(): Promise<void> {
+    return new Promise((done) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        if (!ok) {
+          this.startError = `Port ${this.port} is in use by another program. Set CODING_STUDIO_PORT to a free port here and the same port in Coding Studio.`;
+          log(this.startError);
+        }
+        done();
+      };
+      const timer = setTimeout(() => {
+        ws.terminate();
+        finish(false);
+      }, 3000);
+      ws.on('open', () => ws.send(JSON.stringify({ type: 'peer-hello', app: 'coding-studio-mcp', protocol: BRIDGE_PROTOCOL_VERSION })));
+      ws.on('message', (data) => {
+        let m: { type?: string; id?: string; ok?: boolean; result?: unknown; error?: { code: string; message: string; details?: unknown } };
+        try {
+          m = JSON.parse(String(data));
+        } catch {
+          return;
+        }
+        if (m.type === 'peer-welcome') {
+          clearTimeout(timer);
+          this.upstream = ws;
+          this.startError = null;
+          log(`port ${this.port} is owned by another copy of this server; relaying through it`);
+          finish(true);
+          return;
+        }
+        if (m.type !== 'peer-response' || !m.id) return;
+        const p = this.upstreamPending.get(m.id);
+        if (!p) return;
+        clearTimeout(p.timer);
+        this.upstreamPending.delete(m.id);
+        if (m.ok) p.resolve(m.result);
+        else p.reject(new BridgeRequestError(m.error?.code ?? 'E_INTERNAL', m.error?.message ?? 'Unknown error', m.error?.details));
+      });
+      ws.on('error', () => {
+        clearTimeout(timer);
+        finish(false);
+      });
+      ws.on('close', () => {
+        clearTimeout(timer);
+        if (this.upstream !== ws) return finish(false);
+        this.upstream = null;
+        for (const [id, p] of this.upstreamPending) {
+          clearTimeout(p.timer);
+          p.reject(new BridgeRequestError('E_DISCONNECTED', 'The other MCP server copy stopped while this request was running; check status.'));
+          this.upstreamPending.delete(id);
+        }
+        // The owner went away: try to take the port over (or relay through whoever has it now).
+        if (!this.closed) setTimeout(() => void this.start(), 500);
+      });
+    });
+  }
+
   get connected() {
+    if (this.upstream) return this.upstream.readyState === WebSocket.OPEN;
     return this.owner?.ws.readyState === WebSocket.OPEN;
   }
 
@@ -169,6 +266,18 @@ export class EditorBridge {
   }
 
   request(method: BridgeMethod, params: Record<string, unknown> = {}, timeoutMs = 30_000): Promise<unknown> {
+    const up = this.upstream;
+    if (up && up.readyState === WebSocket.OPEN) {
+      const id = `p${++this.seq}`;
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.upstreamPending.delete(id);
+          reject(new BridgeRequestError('E_TIMEOUT', `Coding Studio did not answer "${method}" within ${timeoutMs / 1000}s.`));
+        }, timeoutMs + 5000);
+        this.upstreamPending.set(id, { resolve, reject, timer });
+        up.send(JSON.stringify({ type: 'peer-request', id, method, params, timeoutMs }));
+      });
+    }
     if (this.startError) return Promise.reject(new BridgeRequestError('E_BRIDGE', this.startError));
     const owner = this.owner;
     if (!owner || owner.ws.readyState !== WebSocket.OPEN) {
@@ -193,8 +302,12 @@ export class EditorBridge {
   }
 
   close() {
+    this.closed = true;
+    this.upstream?.close();
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.failPending('Server shutting down');
+    // ws doesn't drop open connections on close(); do it so relaying copies notice and take over.
+    for (const c of this.wss?.clients ?? []) c.terminate();
     this.wss?.close();
   }
 }

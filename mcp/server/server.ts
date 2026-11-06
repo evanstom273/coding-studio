@@ -18,7 +18,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { BRIDGE_DEFAULT_PORT, type BridgeMethod } from '@cs/shared-protocol';
-import { EditorBridge, errorPayload, log, parseOrigins, SERVER_VERSION } from './bridge';
+import { BridgeRequestError, EditorBridge, errorPayload, log, parseOrigins, SERVER_VERSION } from './bridge';
 import { ExportError, parseRoots, planExport, writePlan } from './export';
 
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }] });
@@ -92,7 +92,6 @@ export function buildServer(bridge: EditorBridge, exportRoots: string[] = []): M
 
   // --- connection & projects ------------------------------------------------------------
   server.registerTool('status', { title: 'Status', description: 'Check the connection to Coding Studio and see the open project, its revision and the active script/graph. Call this first.', inputSchema: {}, annotations: ro }, async () => {
-    if (!bridge.connected) return fail({ code: 'E_NOT_CONNECTED', message: bridge.startError ?? 'Coding Studio is not connected yet. Ask the user to open Coding Studio, click the MCP indicator in the toolbar and enable "Allow Claude Code to control this editor".' });
     return call('status');
   });
   server.registerTool('list_projects', { title: 'List projects', description: 'Projects saved in the Coding Studio browser storage.', inputSchema: {}, annotations: ro }, () => call('list_projects'));
@@ -200,7 +199,7 @@ export function buildServer(bridge: EditorBridge, exportRoots: string[] = []): M
   server.registerTool('get_generated_code', { title: 'Get generated code', description: 'The generated source text of one script (plain text).', inputSchema: { project, script }, annotations: ro }, async (a) => {
     try {
       const r = (await bridge.request('compile_script', a)) as { ok: boolean; files: { path: string; content: string }[]; diagnostics: { severity: string; message: string }[] };
-      if (!r.ok) return fail({ code: 'E_COMPILE_ERRORS', message: 'The script has errors, so no code is generated.', details: r.diagnostics.filter((d) => d.severity === 'error') });
+      if (!r.ok) return fail(new BridgeRequestError('E_COMPILE_ERRORS', 'The script has errors, so no code is generated.', r.diagnostics.filter((d) => d.severity === 'error')));
       return text(r.files.map((f) => `# ===== ${f.path} =====\n${f.content}`).join('\n'));
     } catch (e) {
       return fail(e);

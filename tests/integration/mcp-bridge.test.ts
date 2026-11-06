@@ -107,3 +107,42 @@ describe('safe export', () => {
     expect(() => planExport(dir, { 'sub/link/b.gd': '' }, [])).toThrow(/symbolic link/);
   });
 });
+
+describe('several copies of the server (e.g. the desktop app starting it twice)', () => {
+  it('a second copy relays through the one that owns the port, and takes over when it exits', async () => {
+    const first = await start();
+    const second = new EditorBridge(port, []);
+    await second.start();
+    try {
+      expect(second.startError).toBeNull();
+      // nothing connected yet: a clear error, not "[object Object]" or "port in use"
+      await expect(second.request('status')).rejects.toMatchObject({ code: 'E_NOT_CONNECTED' });
+      const t = tab('http://localhost:5173', 'A');
+      await t.ready;
+      expect(await second.request('status')).toEqual({ echo: 'status', from: 'A' });
+      expect(await first.request('status')).toEqual({ echo: 'status', from: 'A' });
+      // the owner exits: the second copy takes the port; the editor reconnects to it
+      t.ws.close();
+      first.close();
+      bridge = null;
+      await new Promise((r) => setTimeout(r, 900));
+      const t2 = tab('http://localhost:5173', 'A');
+      await t2.ready;
+      expect(await second.request('status')).toEqual({ echo: 'status', from: 'A' });
+      t2.ws.close();
+    } finally {
+      second.close();
+    }
+  });
+
+  it('browser pages cannot pose as a relaying copy', async () => {
+    await start();
+    const ws = new WebSocket(`ws://127.0.0.1:${port}`, { origin: 'http://localhost:5173' });
+    const reply = await new Promise<string>((resolve) => {
+      ws.on('open', () => ws.send(JSON.stringify({ type: 'peer-hello' })));
+      ws.on('message', (d) => resolve(String(d)));
+      ws.on('close', () => resolve('closed'));
+    });
+    expect(reply).toBe('closed');
+  });
+});
