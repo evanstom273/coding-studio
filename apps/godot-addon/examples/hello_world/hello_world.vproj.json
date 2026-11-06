@@ -1,0 +1,87 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_3e30fccqvw",
+  "name": "Hello World",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_4i2xgpi9s8",
+      "name": "HelloWorld",
+      "path": "hello_world",
+      "settings": {
+        "extends": "Node",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [],
+      "functions": [
+        {
+          "id": "f_tw53u5mfj7",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_hrmm2z4be8",
+            "nodes": [
+              {
+                "id": "n_rhrsoihysz",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_15wzssrpdt",
+                "type": "core.print",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Hello, world!"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_wksxlg1s1c",
+                "from": {
+                  "node": "n_rhrsoihysz",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_15wzssrpdt",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Prints a greeting when the scene starts."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_4i2xgpi9s8",
+    "activeFunctionId": "f_tw53u5mfj7"
+  }
+}

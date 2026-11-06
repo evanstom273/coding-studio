@@ -1,0 +1,618 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_k8qwyok4mx",
+  "name": "Timer-Based Actions",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_2cumttrs53",
+      "name": "Ticker",
+      "path": "ticker",
+      "settings": {
+        "extends": "Node",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [
+        {
+          "id": "v_ry0wjlqbb8",
+          "name": "interval",
+          "type": "float",
+          "default": 1,
+          "exported": true
+        },
+        {
+          "id": "v_509rfokxcc",
+          "name": "ticks",
+          "type": "int",
+          "default": 0
+        },
+        {
+          "id": "v_b3hy10mt39",
+          "name": "timer",
+          "type": "Timer"
+        }
+      ],
+      "functions": [
+        {
+          "id": "f_09awmdptsq",
+          "name": "_on_timer_timeout",
+          "kind": "function",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_1lnka5bwep",
+            "nodes": [
+              {
+                "id": "n_b48m1snicd",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_72b4k7b0s9",
+                "type": "core.set_var",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_509rfokxcc",
+                  "operation": "+"
+                },
+                "inputs": {
+                  "value": 1
+                }
+              },
+              {
+                "id": "n_o92ppxh4md",
+                "type": "core.get_var",
+                "position": {
+                  "x": 300,
+                  "y": 300
+                },
+                "props": {
+                  "variable": "v_509rfokxcc"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_oicrnbdjad",
+                "type": "core.to_string",
+                "position": {
+                  "x": 600,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_s9rrw05n81",
+                "type": "core.concat",
+                "position": {
+                  "x": 900,
+                  "y": 300
+                },
+                "props": {
+                  "count": 2
+                },
+                "inputs": {
+                  "s0": "Tick "
+                }
+              },
+              {
+                "id": "n_dkk8m5zh36",
+                "type": "core.print",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_p91ph44jn8",
+                "type": "core.greater_equal",
+                "position": {
+                  "x": 900,
+                  "y": 450
+                },
+                "props": {
+                  "type": "int"
+                },
+                "inputs": {
+                  "b": 5
+                }
+              },
+              {
+                "id": "n_2gns3bpp42",
+                "type": "core.branch",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_jkk6ubz7wp",
+                "type": "core.get_var",
+                "position": {
+                  "x": 900,
+                  "y": 600
+                },
+                "props": {
+                  "variable": "v_b3hy10mt39"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_9t09rx28md",
+                "type": "godot.timer.stop",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_z0ttjbjef0",
+                "type": "core.print",
+                "position": {
+                  "x": 1500,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Timer finished"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_b4blai38y1",
+                "from": {
+                  "node": "n_b48m1snicd",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_72b4k7b0s9",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_7y0xmgb6hs",
+                "from": {
+                  "node": "n_72b4k7b0s9",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_dkk8m5zh36",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_w60itam44h",
+                "from": {
+                  "node": "n_dkk8m5zh36",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_2gns3bpp42",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_dobpkziyp6",
+                "from": {
+                  "node": "n_o92ppxh4md",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_oicrnbdjad",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_2bnbu782o0",
+                "from": {
+                  "node": "n_oicrnbdjad",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_s9rrw05n81",
+                  "port": "s1"
+                }
+              },
+              {
+                "id": "e_cjsubfalbu",
+                "from": {
+                  "node": "n_s9rrw05n81",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_dkk8m5zh36",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_3nkvsgp1nf",
+                "from": {
+                  "node": "n_o92ppxh4md",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_p91ph44jn8",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_l5zerp5o0d",
+                "from": {
+                  "node": "n_p91ph44jn8",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_2gns3bpp42",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_4m0q8ts2eb",
+                "from": {
+                  "node": "n_2gns3bpp42",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_9t09rx28md",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_dks20d48jf",
+                "from": {
+                  "node": "n_jkk6ubz7wp",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_9t09rx28md",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_wfxw12jxmy",
+                "from": {
+                  "node": "n_9t09rx28md",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_z0ttjbjef0",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_uhfe656ezd",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_jmhqxq6ci3",
+            "nodes": [
+              {
+                "id": "n_yeqwnodiou",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_9bgdinprdi",
+                "type": "core.print",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Starting in half a second…"
+                }
+              },
+              {
+                "id": "n_5l13dhmfno",
+                "type": "godot.delay",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "seconds": 0.5
+                }
+              },
+              {
+                "id": "n_1fj2yzahc1",
+                "type": "core.new_object",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {
+                  "type": "Timer"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_eyhptk4s7h",
+                "type": "core.set_var",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_b3hy10mt39",
+                  "operation": "="
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_8gu0op3q77",
+                "type": "core.get_var",
+                "position": {
+                  "x": 1200,
+                  "y": 300
+                },
+                "props": {
+                  "variable": "v_b3hy10mt39"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_sfqxwn4sf1",
+                "type": "core.get_var",
+                "position": {
+                  "x": 1500,
+                  "y": 450
+                },
+                "props": {
+                  "variable": "v_ry0wjlqbb8"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_3ic8e3q21b",
+                "type": "godot.timer.set_wait_time",
+                "position": {
+                  "x": 1500,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_q80j4sbd1k",
+                "type": "godot.connect_signal",
+                "position": {
+                  "x": 1800,
+                  "y": 0
+                },
+                "props": {
+                  "signal": "timeout",
+                  "method": "f_09awmdptsq"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_8qke611sg8",
+                "type": "godot.node.add_child",
+                "position": {
+                  "x": 2100,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_z7gipa4zpj",
+                "type": "godot.timer.start",
+                "position": {
+                  "x": 2400,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_o6ujg6qgwv",
+                "from": {
+                  "node": "n_yeqwnodiou",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_9bgdinprdi",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_d6qztrlf89",
+                "from": {
+                  "node": "n_9bgdinprdi",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_5l13dhmfno",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_7x4f062njt",
+                "from": {
+                  "node": "n_5l13dhmfno",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_1fj2yzahc1",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_u4xn8lgboy",
+                "from": {
+                  "node": "n_1fj2yzahc1",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_eyhptk4s7h",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_k70m6gcpun",
+                "from": {
+                  "node": "n_eyhptk4s7h",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_3ic8e3q21b",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_rvu3lc21xt",
+                "from": {
+                  "node": "n_3ic8e3q21b",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_q80j4sbd1k",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_jbd339xct7",
+                "from": {
+                  "node": "n_q80j4sbd1k",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_8qke611sg8",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_09dbnu8w04",
+                "from": {
+                  "node": "n_8qke611sg8",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_z7gipa4zpj",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_x8ijh3yuys",
+                "from": {
+                  "node": "n_1fj2yzahc1",
+                  "port": "object"
+                },
+                "to": {
+                  "node": "n_eyhptk4s7h",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_r56ka2kino",
+                "from": {
+                  "node": "n_8gu0op3q77",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_3ic8e3q21b",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_ryyc7mi7f5",
+                "from": {
+                  "node": "n_sfqxwn4sf1",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_3ic8e3q21b",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_61oumxfx2o",
+                "from": {
+                  "node": "n_8gu0op3q77",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_q80j4sbd1k",
+                  "port": "source"
+                }
+              },
+              {
+                "id": "e_sqpu4cccfa",
+                "from": {
+                  "node": "n_8gu0op3q77",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_8qke611sg8",
+                  "port": "node"
+                }
+              },
+              {
+                "id": "e_12r1709pir",
+                "from": {
+                  "node": "n_8gu0op3q77",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_z7gipa4zpj",
+                  "port": "target"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Ticks five times, then stops."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_2cumttrs53",
+    "activeFunctionId": "f_09awmdptsq"
+  }
+}

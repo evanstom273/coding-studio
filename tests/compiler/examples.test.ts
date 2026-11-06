@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import { toolchainFor } from '@cs/toolchain';
 import { compileProject } from '@cs/compiler-core';
 import { EXAMPLES } from '@cs/examples';
+import { projectToJson } from '@cs/project-format';
 
 const GOLDEN = join(__dirname, '../fixtures/golden');
 const tc = toolchainFor('gdscript');
@@ -27,6 +28,14 @@ describe('example graphs', () => {
         const out = join(process.env.GODOT_OUT, r.files[0].path);
         mkdirSync(dirname(out), { recursive: true });
         writeFileSync(out, content);
+      }
+      if (process.env.EXAMPLES_OUT) {
+        // Demo project for the Godot plugin: editable graph + its generated script side by side.
+        const p = ex.build(tc);
+        const dir = join(process.env.EXAMPLES_OUT, ex.id.replace(/-/g, '_'));
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, `${ex.id.replace(/-/g, '_')}.vproj.json`), projectToJson({ ...p, createdAt: 0, updatedAt: 0 }));
+        writeFileSync(join(dir, r.files[0].path), content);
       }
     });
   }

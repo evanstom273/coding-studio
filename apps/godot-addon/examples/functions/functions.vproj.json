@@ -1,0 +1,477 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_7i7843m73y",
+  "name": "Functions",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_2h1sr7jr7y",
+      "name": "MathHelpers",
+      "path": "math_helpers",
+      "settings": {
+        "extends": "Node",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [],
+      "functions": [
+        {
+          "id": "f_wgpg3beqx4",
+          "name": "add",
+          "kind": "function",
+          "params": [
+            {
+              "id": "p_s14871ub9b",
+              "name": "a",
+              "type": "int"
+            },
+            {
+              "id": "p_762ww73b4s",
+              "name": "b",
+              "type": "int"
+            }
+          ],
+          "returnType": "int",
+          "locals": [],
+          "description": "Returns the sum of a and b.",
+          "graph": {
+            "id": "g_h79di89fqt",
+            "nodes": [
+              {
+                "id": "n_8p40t8tqw1",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_wvu0iao95u",
+                "type": "core.add",
+                "position": {
+                  "x": 300,
+                  "y": 150
+                },
+                "props": {
+                  "type": "int",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_5y7q7g35ai",
+                "type": "core.return",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_fl1jvykedw",
+                "from": {
+                  "node": "n_8p40t8tqw1",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_5y7q7g35ai",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_tqwtuppvu8",
+                "from": {
+                  "node": "n_8p40t8tqw1",
+                  "port": "p_s14871ub9b"
+                },
+                "to": {
+                  "node": "n_wvu0iao95u",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_fb2r1l43l8",
+                "from": {
+                  "node": "n_8p40t8tqw1",
+                  "port": "p_762ww73b4s"
+                },
+                "to": {
+                  "node": "n_wvu0iao95u",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_6sb616br7k",
+                "from": {
+                  "node": "n_wvu0iao95u",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_5y7q7g35ai",
+                  "port": "value"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_66hxbhj4rm",
+          "name": "parity",
+          "kind": "function",
+          "params": [
+            {
+              "id": "p_5bzszk88o8",
+              "name": "n",
+              "type": "int"
+            }
+          ],
+          "returnType": "string",
+          "locals": [],
+          "description": "Describes whether n is even or odd.",
+          "graph": {
+            "id": "g_hzxgh4n8ie",
+            "nodes": [
+              {
+                "id": "n_h9s4c6196h",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_h1yd7v0r4q",
+                "type": "core.modulo",
+                "position": {
+                  "x": 300,
+                  "y": 150
+                },
+                "props": {
+                  "type": "int"
+                },
+                "inputs": {
+                  "b": 2
+                }
+              },
+              {
+                "id": "n_wfompcj5jj",
+                "type": "core.equal",
+                "position": {
+                  "x": 600,
+                  "y": 150
+                },
+                "props": {
+                  "type": "int"
+                },
+                "inputs": {
+                  "b": 0
+                }
+              },
+              {
+                "id": "n_mg0tms8xz2",
+                "type": "core.branch",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_k0yr45gdx9",
+                "type": "core.return",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "value": "even"
+                }
+              },
+              {
+                "id": "n_5s939b02vq",
+                "type": "core.return",
+                "position": {
+                  "x": 900,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {
+                  "value": "odd"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_sv2ck46awf",
+                "from": {
+                  "node": "n_h9s4c6196h",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_mg0tms8xz2",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_l0leijegjs",
+                "from": {
+                  "node": "n_h9s4c6196h",
+                  "port": "p_5bzszk88o8"
+                },
+                "to": {
+                  "node": "n_h1yd7v0r4q",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_0xk7kozqhb",
+                "from": {
+                  "node": "n_h1yd7v0r4q",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_wfompcj5jj",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_oaj2mmznjr",
+                "from": {
+                  "node": "n_wfompcj5jj",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_mg0tms8xz2",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_5x4q44dgi9",
+                "from": {
+                  "node": "n_mg0tms8xz2",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_k0yr45gdx9",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_tefqkpyk05",
+                "from": {
+                  "node": "n_mg0tms8xz2",
+                  "port": "false"
+                },
+                "to": {
+                  "node": "n_5s939b02vq",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_l0v9879s9x",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_j1zhi1gkth",
+            "nodes": [
+              {
+                "id": "n_uueum8siv1",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_s1bbd4w2d7",
+                "type": "core.call_function",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "function": "f_wgpg3beqx4"
+                },
+                "inputs": {
+                  "p_s14871ub9b": 2,
+                  "p_762ww73b4s": 3
+                }
+              },
+              {
+                "id": "n_lu6f1zby6r",
+                "type": "core.call_function",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {
+                  "function": "f_66hxbhj4rm"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_79fr8qqtio",
+                "type": "core.to_string",
+                "position": {
+                  "x": 600,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_pmv33xiwiv",
+                "type": "core.concat",
+                "position": {
+                  "x": 900,
+                  "y": 150
+                },
+                "props": {
+                  "count": 3
+                },
+                "inputs": {
+                  "s1": " is "
+                }
+              },
+              {
+                "id": "n_xr186wra0u",
+                "type": "core.print",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_404gokjsr3",
+                "from": {
+                  "node": "n_uueum8siv1",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_s1bbd4w2d7",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_8187ogklq8",
+                "from": {
+                  "node": "n_s1bbd4w2d7",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_lu6f1zby6r",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_nqudvsnh8g",
+                "from": {
+                  "node": "n_lu6f1zby6r",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_xr186wra0u",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_c9lsqoi1t9",
+                "from": {
+                  "node": "n_s1bbd4w2d7",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_lu6f1zby6r",
+                  "port": "p_5bzszk88o8"
+                }
+              },
+              {
+                "id": "e_f2kr7htdwy",
+                "from": {
+                  "node": "n_s1bbd4w2d7",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_79fr8qqtio",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_yh06i2oogi",
+                "from": {
+                  "node": "n_79fr8qqtio",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_pmv33xiwiv",
+                  "port": "s0"
+                }
+              },
+              {
+                "id": "e_ni83zmn9dt",
+                "from": {
+                  "node": "n_lu6f1zby6r",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_pmv33xiwiv",
+                  "port": "s2"
+                }
+              },
+              {
+                "id": "e_sn0waaepqd",
+                "from": {
+                  "node": "n_pmv33xiwiv",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_xr186wra0u",
+                  "port": "value"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Small helper functions."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_2h1sr7jr7y",
+    "activeFunctionId": "f_wgpg3beqx4"
+  }
+}

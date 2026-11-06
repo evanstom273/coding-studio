@@ -1,0 +1,189 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_63clqptse6",
+  "name": "2D Character Movement",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_edbz6zbb76",
+      "name": "TopDownPlayer",
+      "path": "top_down_player",
+      "settings": {
+        "extends": "CharacterBody2D",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [
+        {
+          "id": "v_f3gquzdqvt",
+          "name": "speed",
+          "type": "float",
+          "default": 300,
+          "exported": true,
+          "description": "Pixels per second."
+        }
+      ],
+      "functions": [
+        {
+          "id": "f_lctyhgzi4r",
+          "name": "_physics_process",
+          "kind": "event",
+          "event": "_physics_process",
+          "params": [
+            {
+              "id": "p_643uiuxhbc",
+              "name": "delta",
+              "type": "float"
+            }
+          ],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_9kp1ji1qh9",
+            "nodes": [
+              {
+                "id": "n_42ymw8uij6",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_85rx2uuoqz",
+                "type": "godot.input.get_vector",
+                "position": {
+                  "x": 0,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_bwohejrdkx",
+                "type": "core.get_var",
+                "position": {
+                  "x": 0,
+                  "y": 450
+                },
+                "props": {
+                  "variable": "v_f3gquzdqvt"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_tnjmch12l8",
+                "type": "core.multiply",
+                "position": {
+                  "x": 300,
+                  "y": 300
+                },
+                "props": {
+                  "type": "Vector2",
+                  "rhsType": "float"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_0muo1b7mtr",
+                "type": "godot.characterbody2d.set_velocity",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_ek5t2767nr",
+                "type": "godot.characterbody2d.move_and_slide",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_30i5nsa6na",
+                "from": {
+                  "node": "n_42ymw8uij6",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_0muo1b7mtr",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_g277sz3br1",
+                "from": {
+                  "node": "n_0muo1b7mtr",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_ek5t2767nr",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_ybh3npz4d2",
+                "from": {
+                  "node": "n_85rx2uuoqz",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_tnjmch12l8",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_4ewab0n652",
+                "from": {
+                  "node": "n_bwohejrdkx",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_tnjmch12l8",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_ke7e5wqpo6",
+                "from": {
+                  "node": "n_tnjmch12l8",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_0muo1b7mtr",
+                  "port": "value"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Moves in eight directions with the ui_* actions."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_edbz6zbb76",
+    "activeFunctionId": "f_lctyhgzi4r"
+  }
+}

@@ -1,0 +1,769 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_u185xgs7i0",
+  "name": "Mouse-Look Camera",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_8kpiafa7ja",
+      "name": "FirstPersonLook",
+      "path": "first_person_look",
+      "settings": {
+        "extends": "CharacterBody3D",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [
+        {
+          "id": "v_tz18tdfxvs",
+          "name": "sensitivity",
+          "type": "float",
+          "default": 0.003,
+          "exported": true,
+          "description": "Radians per pixel of mouse movement."
+        },
+        {
+          "id": "v_dt18st4liy",
+          "name": "head",
+          "type": "Node3D",
+          "attributes": {
+            "onreadyPath": "Head"
+          }
+        }
+      ],
+      "functions": [
+        {
+          "id": "f_vzhkr5z6q2",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_b6cfa4ngk5",
+            "nodes": [
+              {
+                "id": "n_i47fg8y5ti",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_8grr7sm2uj",
+                "type": "godot.set_mouse_mode",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "mode": "MOUSE_MODE_CAPTURED"
+                },
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_s1qks3lst8",
+                "from": {
+                  "node": "n_i47fg8y5ti",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_8grr7sm2uj",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_2e20a02b0g",
+          "name": "_unhandled_input",
+          "kind": "event",
+          "event": "_unhandled_input",
+          "params": [
+            {
+              "id": "p_k5ravl35ex",
+              "name": "event",
+              "type": "InputEvent"
+            }
+          ],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_9ccus3wpeu",
+            "nodes": [
+              {
+                "id": "n_djarmbjfm1",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_uum9mhib27",
+                "type": "core.sequence",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "count": 2
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_1osmp9qe5a",
+                "type": "core.is_instance",
+                "position": {
+                  "x": 300,
+                  "y": 300
+                },
+                "props": {
+                  "type": "InputEventMouseMotion"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_iwwk67ehbs",
+                "type": "core.branch",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_sgqdkkbvk0",
+                "type": "core.cast",
+                "position": {
+                  "x": 600,
+                  "y": 450
+                },
+                "props": {
+                  "type": "InputEventMouseMotion"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_005avvd3k0",
+                "type": "godot.inputeventmousemotion.get_relative",
+                "position": {
+                  "x": 900,
+                  "y": 450
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_d1h9in190z",
+                "type": "godot.break_vector2",
+                "position": {
+                  "x": 1200,
+                  "y": 450
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_9bkw8ii2v9",
+                "type": "core.get_var",
+                "position": {
+                  "x": 1200,
+                  "y": 750
+                },
+                "props": {
+                  "variable": "v_tz18tdfxvs"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_kencqlamm0",
+                "type": "core.multiply",
+                "position": {
+                  "x": 1500,
+                  "y": 450
+                },
+                "props": {
+                  "type": "float",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_eytn41359n",
+                "type": "core.negate",
+                "position": {
+                  "x": 1800,
+                  "y": 450
+                },
+                "props": {
+                  "type": "float"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_bo41dthpdp",
+                "type": "godot.node3d.rotate_y",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_bcpdxkmdh5",
+                "type": "core.multiply",
+                "position": {
+                  "x": 1500,
+                  "y": 600
+                },
+                "props": {
+                  "type": "float",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_7e7xoragpu",
+                "type": "core.negate",
+                "position": {
+                  "x": 1800,
+                  "y": 600
+                },
+                "props": {
+                  "type": "float"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_iiqqvj3c6h",
+                "type": "core.get_var",
+                "position": {
+                  "x": 1500,
+                  "y": 900
+                },
+                "props": {
+                  "variable": "v_dt18st4liy"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_586lkr4b3u",
+                "type": "godot.node3d.rotate_x",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_a1jqs1fen9",
+                "type": "godot.node3d.get_rotation",
+                "position": {
+                  "x": 1800,
+                  "y": 900
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_rts5g6904s",
+                "type": "godot.break_vector3",
+                "position": {
+                  "x": 2100,
+                  "y": 900
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_p3x74mqi9t",
+                "type": "godot.global.deg_to_rad",
+                "position": {
+                  "x": 2100,
+                  "y": 1050
+                },
+                "props": {},
+                "inputs": {
+                  "deg": -89
+                }
+              },
+              {
+                "id": "n_aee1wjtk3z",
+                "type": "godot.global.deg_to_rad",
+                "position": {
+                  "x": 2100,
+                  "y": 1200
+                },
+                "props": {},
+                "inputs": {
+                  "deg": 89
+                }
+              },
+              {
+                "id": "n_lc1gvve80j",
+                "type": "core.clamp",
+                "position": {
+                  "x": 2400,
+                  "y": 900
+                },
+                "props": {
+                  "type": "float"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_81cjev3axt",
+                "type": "godot.make_vector3",
+                "position": {
+                  "x": 2700,
+                  "y": 900
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_h8ywkvk5qr",
+                "type": "godot.node3d.set_rotation",
+                "position": {
+                  "x": 1500,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_q8qfbserd2",
+                "type": "godot.inputevent.is_action_pressed",
+                "position": {
+                  "x": 600,
+                  "y": 1350
+                },
+                "props": {},
+                "inputs": {
+                  "action": "ui_cancel"
+                }
+              },
+              {
+                "id": "n_l3eq5ifmbz",
+                "type": "core.branch",
+                "position": {
+                  "x": 900,
+                  "y": 1350
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_6940pa5q0d",
+                "type": "godot.set_mouse_mode",
+                "position": {
+                  "x": 1200,
+                  "y": 1350
+                },
+                "props": {
+                  "mode": "MOUSE_MODE_VISIBLE"
+                },
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_3t5otx1h7u",
+                "from": {
+                  "node": "n_djarmbjfm1",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_uum9mhib27",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_mju4ud5tb3",
+                "from": {
+                  "node": "n_uum9mhib27",
+                  "port": "then_0"
+                },
+                "to": {
+                  "node": "n_iwwk67ehbs",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_nkliok85ij",
+                "from": {
+                  "node": "n_djarmbjfm1",
+                  "port": "p_k5ravl35ex"
+                },
+                "to": {
+                  "node": "n_1osmp9qe5a",
+                  "port": "object"
+                }
+              },
+              {
+                "id": "e_719hutj1q0",
+                "from": {
+                  "node": "n_1osmp9qe5a",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_iwwk67ehbs",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_agu3itoad7",
+                "from": {
+                  "node": "n_djarmbjfm1",
+                  "port": "p_k5ravl35ex"
+                },
+                "to": {
+                  "node": "n_sgqdkkbvk0",
+                  "port": "object"
+                }
+              },
+              {
+                "id": "e_v7t3p2mr1b",
+                "from": {
+                  "node": "n_sgqdkkbvk0",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_005avvd3k0",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_9v17nd1y6a",
+                "from": {
+                  "node": "n_005avvd3k0",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_d1h9in190z",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_9r8zmig256",
+                "from": {
+                  "node": "n_d1h9in190z",
+                  "port": "x"
+                },
+                "to": {
+                  "node": "n_kencqlamm0",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_kza04w965p",
+                "from": {
+                  "node": "n_9bkw8ii2v9",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_kencqlamm0",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_zb106t23bf",
+                "from": {
+                  "node": "n_kencqlamm0",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_eytn41359n",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_5b4vp8uwa0",
+                "from": {
+                  "node": "n_eytn41359n",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_bo41dthpdp",
+                  "port": "angle"
+                }
+              },
+              {
+                "id": "e_im1uwa0xl4",
+                "from": {
+                  "node": "n_d1h9in190z",
+                  "port": "y"
+                },
+                "to": {
+                  "node": "n_bcpdxkmdh5",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_pc1onrc2o3",
+                "from": {
+                  "node": "n_9bkw8ii2v9",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_bcpdxkmdh5",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_biu9vh5jdp",
+                "from": {
+                  "node": "n_bcpdxkmdh5",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_7e7xoragpu",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_0jcz10rolq",
+                "from": {
+                  "node": "n_7e7xoragpu",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_586lkr4b3u",
+                  "port": "angle"
+                }
+              },
+              {
+                "id": "e_pwuioxip6b",
+                "from": {
+                  "node": "n_iiqqvj3c6h",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_586lkr4b3u",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_h1mriohir9",
+                "from": {
+                  "node": "n_iwwk67ehbs",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_bo41dthpdp",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_2ifkz7dec4",
+                "from": {
+                  "node": "n_bo41dthpdp",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_586lkr4b3u",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_6jvrr496aj",
+                "from": {
+                  "node": "n_iiqqvj3c6h",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_a1jqs1fen9",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_16va1oy4a7",
+                "from": {
+                  "node": "n_a1jqs1fen9",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_rts5g6904s",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_11b1dikwy3",
+                "from": {
+                  "node": "n_rts5g6904s",
+                  "port": "x"
+                },
+                "to": {
+                  "node": "n_lc1gvve80j",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_n47myz2bw8",
+                "from": {
+                  "node": "n_p3x74mqi9t",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_lc1gvve80j",
+                  "port": "min"
+                }
+              },
+              {
+                "id": "e_htmf7vtfss",
+                "from": {
+                  "node": "n_aee1wjtk3z",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_lc1gvve80j",
+                  "port": "max"
+                }
+              },
+              {
+                "id": "e_gn9jcc28hm",
+                "from": {
+                  "node": "n_lc1gvve80j",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_81cjev3axt",
+                  "port": "x"
+                }
+              },
+              {
+                "id": "e_wi81tepb2q",
+                "from": {
+                  "node": "n_rts5g6904s",
+                  "port": "y"
+                },
+                "to": {
+                  "node": "n_81cjev3axt",
+                  "port": "y"
+                }
+              },
+              {
+                "id": "e_zuagl63soz",
+                "from": {
+                  "node": "n_rts5g6904s",
+                  "port": "z"
+                },
+                "to": {
+                  "node": "n_81cjev3axt",
+                  "port": "z"
+                }
+              },
+              {
+                "id": "e_5qwhpf0fdk",
+                "from": {
+                  "node": "n_81cjev3axt",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_h8ywkvk5qr",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_wl87450lof",
+                "from": {
+                  "node": "n_iiqqvj3c6h",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_h8ywkvk5qr",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_9deb2awtqm",
+                "from": {
+                  "node": "n_586lkr4b3u",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_h8ywkvk5qr",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_t1pu2ct3i2",
+                "from": {
+                  "node": "n_uum9mhib27",
+                  "port": "then_1"
+                },
+                "to": {
+                  "node": "n_l3eq5ifmbz",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_qrh7eytcg9",
+                "from": {
+                  "node": "n_djarmbjfm1",
+                  "port": "p_k5ravl35ex"
+                },
+                "to": {
+                  "node": "n_q8qfbserd2",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_mjrd1oyubx",
+                "from": {
+                  "node": "n_q8qfbserd2",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_l3eq5ifmbz",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_1x5r298xy1",
+                "from": {
+                  "node": "n_l3eq5ifmbz",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_6940pa5q0d",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Expects a child Node3D called \"Head\" holding the Camera3D."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_8kpiafa7ja",
+    "activeFunctionId": "f_vzhkr5z6q2"
+  }
+}

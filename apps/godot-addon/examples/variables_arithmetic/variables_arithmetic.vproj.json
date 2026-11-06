@@ -1,0 +1,431 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_v8y05quubd",
+  "name": "Variables and Arithmetic",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_kwn12nvwtp",
+      "name": "ScoreKeeper",
+      "path": "score_keeper",
+      "settings": {
+        "extends": "Node",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [
+        {
+          "id": "v_m5cimr8rk3",
+          "name": "MAX_SCORE",
+          "type": "int",
+          "default": 100,
+          "constant": true
+        },
+        {
+          "id": "v_hc0hc28oe4",
+          "name": "score",
+          "type": "int",
+          "default": 0,
+          "description": "Points collected so far."
+        },
+        {
+          "id": "v_pt2dei1stf",
+          "name": "multiplier",
+          "type": "float",
+          "default": 1.5,
+          "exported": true
+        }
+      ],
+      "functions": [
+        {
+          "id": "f_f8mceuglzm",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_kjyux14f17",
+            "nodes": [
+              {
+                "id": "n_l6yi2dxfif",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_0yz35jfi0i",
+                "type": "core.set_var",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_hc0hc28oe4",
+                  "operation": "+"
+                },
+                "inputs": {
+                  "value": 10
+                }
+              },
+              {
+                "id": "n_1ua8158pp0",
+                "type": "core.set_var",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_hc0hc28oe4",
+                  "operation": "*"
+                },
+                "inputs": {
+                  "value": 3
+                }
+              },
+              {
+                "id": "n_15kjcgwznp",
+                "type": "core.print",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_azz20the7u",
+                "type": "core.concat",
+                "position": {
+                  "x": 600,
+                  "y": 150
+                },
+                "props": {
+                  "count": 2
+                },
+                "inputs": {
+                  "s0": "Score: "
+                }
+              },
+              {
+                "id": "n_ng4xm1eygh",
+                "type": "core.to_string",
+                "position": {
+                  "x": 300,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_vntefufrbm",
+                "type": "core.get_var",
+                "position": {
+                  "x": 0,
+                  "y": 150
+                },
+                "props": {
+                  "variable": "v_hc0hc28oe4"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_bqwwstog79",
+                "type": "core.print",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_2a0wrfl0ei",
+                "type": "core.multiply",
+                "position": {
+                  "x": 600,
+                  "y": 300
+                },
+                "props": {
+                  "type": "float",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_wmvrn52md6",
+                "type": "core.get_var",
+                "position": {
+                  "x": 300,
+                  "y": 450
+                },
+                "props": {
+                  "variable": "v_pt2dei1stf"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_e8e8bme7xq",
+                "type": "core.to_string",
+                "position": {
+                  "x": 900,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_ucf8xga04q",
+                "type": "core.concat",
+                "position": {
+                  "x": 900,
+                  "y": 450
+                },
+                "props": {
+                  "count": 2
+                },
+                "inputs": {
+                  "s0": "Weighted: "
+                }
+              },
+              {
+                "id": "n_72zemfsydd",
+                "type": "core.print",
+                "position": {
+                  "x": 1500,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_i4y66q1uqi",
+                "type": "core.min",
+                "position": {
+                  "x": 1200,
+                  "y": 300
+                },
+                "props": {
+                  "type": "int"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_0pqo3jg8ev",
+                "type": "core.get_var",
+                "position": {
+                  "x": 900,
+                  "y": 600
+                },
+                "props": {
+                  "variable": "v_m5cimr8rk3"
+                },
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_xc4w0kxxiu",
+                "from": {
+                  "node": "n_l6yi2dxfif",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_0yz35jfi0i",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_b3k3yge8lj",
+                "from": {
+                  "node": "n_0yz35jfi0i",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_1ua8158pp0",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_awioj4vnd7",
+                "from": {
+                  "node": "n_1ua8158pp0",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_15kjcgwznp",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_d2q7sik001",
+                "from": {
+                  "node": "n_vntefufrbm",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_ng4xm1eygh",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_1oqm4j1sh6",
+                "from": {
+                  "node": "n_ng4xm1eygh",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_azz20the7u",
+                  "port": "s1"
+                }
+              },
+              {
+                "id": "e_iogqlifxl5",
+                "from": {
+                  "node": "n_azz20the7u",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_15kjcgwznp",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_onum7dliwd",
+                "from": {
+                  "node": "n_vntefufrbm",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_2a0wrfl0ei",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_1pnm07zw0s",
+                "from": {
+                  "node": "n_wmvrn52md6",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_2a0wrfl0ei",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_vso0mque1c",
+                "from": {
+                  "node": "n_2a0wrfl0ei",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_e8e8bme7xq",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_1juyej64bx",
+                "from": {
+                  "node": "n_e8e8bme7xq",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_ucf8xga04q",
+                  "port": "s1"
+                }
+              },
+              {
+                "id": "e_4sale3t6z1",
+                "from": {
+                  "node": "n_ucf8xga04q",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_bqwwstog79",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_gg0ynpvois",
+                "from": {
+                  "node": "n_vntefufrbm",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_i4y66q1uqi",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_8r1hdea3r0",
+                "from": {
+                  "node": "n_0pqo3jg8ev",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_i4y66q1uqi",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_srb4j8zu4b",
+                "from": {
+                  "node": "n_i4y66q1uqi",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_72zemfsydd",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_bgvme06jkn",
+                "from": {
+                  "node": "n_15kjcgwznp",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_bqwwstog79",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_f7011xdw5b",
+                "from": {
+                  "node": "n_bqwwstog79",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_72zemfsydd",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Keeps a score and does some arithmetic with it."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_kwn12nvwtp",
+    "activeFunctionId": "f_f8mceuglzm"
+  }
+}

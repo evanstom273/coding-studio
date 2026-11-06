@@ -1,0 +1,768 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_hhagb25mfg",
+  "name": "3D Character Movement",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_bycld9b53b",
+      "name": "Player3D",
+      "path": "player3_d",
+      "settings": {
+        "extends": "CharacterBody3D",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [
+        {
+          "id": "v_tb9qzzpow7",
+          "name": "speed",
+          "type": "float",
+          "default": 5,
+          "exported": true
+        },
+        {
+          "id": "v_01z41jq77n",
+          "name": "gravity",
+          "type": "float",
+          "default": 9.8,
+          "exported": true
+        }
+      ],
+      "functions": [
+        {
+          "id": "f_4k1ghsrwa9",
+          "name": "_physics_process",
+          "kind": "event",
+          "event": "_physics_process",
+          "params": [
+            {
+              "id": "p_ipwz43g3um",
+              "name": "delta",
+              "type": "float"
+            }
+          ],
+          "returnType": "void",
+          "locals": [
+            {
+              "id": "v_f089hvrbvo",
+              "name": "input_dir",
+              "type": "Vector2"
+            },
+            {
+              "id": "v_gtef5n88mw",
+              "name": "direction",
+              "type": "Vector3"
+            }
+          ],
+          "graph": {
+            "id": "g_gz7krbkvq4",
+            "nodes": [
+              {
+                "id": "n_80cjirrot3",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_isxcjirvap",
+                "type": "godot.characterbody3d.is_on_floor",
+                "position": {
+                  "x": 0,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_g7gir12czp",
+                "type": "core.not",
+                "position": {
+                  "x": 300,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_mzxkric50d",
+                "type": "core.branch",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_wxq0f6evwk",
+                "type": "godot.characterbody3d.get_velocity",
+                "position": {
+                  "x": 300,
+                  "y": 450
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_gbsos7ltp4",
+                "type": "core.get_var",
+                "position": {
+                  "x": 300,
+                  "y": 600
+                },
+                "props": {
+                  "variable": "v_01z41jq77n"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_qgpgmx3f1u",
+                "type": "core.multiply",
+                "position": {
+                  "x": 600,
+                  "y": 600
+                },
+                "props": {
+                  "type": "float",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_xkl0xlxdpt",
+                "type": "godot.make_vector3",
+                "position": {
+                  "x": 900,
+                  "y": 600
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_ckz93pfmbb",
+                "type": "core.subtract",
+                "position": {
+                  "x": 900,
+                  "y": 450
+                },
+                "props": {
+                  "type": "Vector3",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_0i9s69apb2",
+                "type": "godot.characterbody3d.set_velocity",
+                "position": {
+                  "x": 1200,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_wiz1gi7v5h",
+                "type": "godot.input.get_vector",
+                "position": {
+                  "x": 1200,
+                  "y": 750
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_n17e3mqqtw",
+                "type": "core.set_var",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_f089hvrbvo",
+                  "operation": "="
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_h3faf13ph2",
+                "type": "core.get_var",
+                "position": {
+                  "x": 1500,
+                  "y": 900
+                },
+                "props": {
+                  "variable": "v_f089hvrbvo"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_iv404t6ngu",
+                "type": "godot.break_vector2",
+                "position": {
+                  "x": 1500,
+                  "y": 750
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_wcd4olpo2v",
+                "type": "godot.make_vector3",
+                "position": {
+                  "x": 1800,
+                  "y": 750
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_v710hbp245",
+                "type": "godot.node3d.get_basis",
+                "position": {
+                  "x": 1800,
+                  "y": 600
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_u1krb4p6zf",
+                "type": "core.multiply",
+                "position": {
+                  "x": 2100,
+                  "y": 600
+                },
+                "props": {
+                  "type": "Basis",
+                  "rhsType": "Vector3"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_rfrs84hhox",
+                "type": "godot.vector3.normalized",
+                "position": {
+                  "x": 2400,
+                  "y": 600
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_vasyn4bud2",
+                "type": "core.set_var",
+                "position": {
+                  "x": 1500,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_gtef5n88mw",
+                  "operation": "="
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_i1591oc96j",
+                "type": "core.get_var",
+                "position": {
+                  "x": 1800,
+                  "y": 300
+                },
+                "props": {
+                  "variable": "v_gtef5n88mw"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_9axep49xd7",
+                "type": "godot.break_vector3",
+                "position": {
+                  "x": 2100,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_s8lnofqiux",
+                "type": "core.get_var",
+                "position": {
+                  "x": 2100,
+                  "y": 450
+                },
+                "props": {
+                  "variable": "v_tb9qzzpow7"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_vfuhgbsp7m",
+                "type": "core.multiply",
+                "position": {
+                  "x": 2400,
+                  "y": 300
+                },
+                "props": {
+                  "type": "float",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_nzkdnff18h",
+                "type": "core.multiply",
+                "position": {
+                  "x": 2400,
+                  "y": 450
+                },
+                "props": {
+                  "type": "float",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_jxruthnow1",
+                "type": "godot.characterbody3d.get_velocity",
+                "position": {
+                  "x": 2100,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_o7qqksm3lx",
+                "type": "godot.break_vector3",
+                "position": {
+                  "x": 2400,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_xc5q0vdxai",
+                "type": "godot.make_vector3",
+                "position": {
+                  "x": 2700,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_0n4qpm6f5x",
+                "type": "godot.characterbody3d.set_velocity",
+                "position": {
+                  "x": 2700,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_rjwjqkh3iu",
+                "type": "godot.characterbody3d.move_and_slide",
+                "position": {
+                  "x": 3000,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_2lxpx7cbh5",
+                "from": {
+                  "node": "n_80cjirrot3",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_mzxkric50d",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_nyqbg44g9u",
+                "from": {
+                  "node": "n_isxcjirvap",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_g7gir12czp",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_408yxd7gq2",
+                "from": {
+                  "node": "n_g7gir12czp",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_mzxkric50d",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_uku879dex4",
+                "from": {
+                  "node": "n_mzxkric50d",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_0i9s69apb2",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_2w14kedt5u",
+                "from": {
+                  "node": "n_gbsos7ltp4",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_qgpgmx3f1u",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_9a4ju4hp4v",
+                "from": {
+                  "node": "n_80cjirrot3",
+                  "port": "p_ipwz43g3um"
+                },
+                "to": {
+                  "node": "n_qgpgmx3f1u",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_5xykfb5hnp",
+                "from": {
+                  "node": "n_qgpgmx3f1u",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_xkl0xlxdpt",
+                  "port": "y"
+                }
+              },
+              {
+                "id": "e_urkeue1vy2",
+                "from": {
+                  "node": "n_wxq0f6evwk",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_ckz93pfmbb",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_1n1shzodxl",
+                "from": {
+                  "node": "n_xkl0xlxdpt",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_ckz93pfmbb",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_jqlr08wg1i",
+                "from": {
+                  "node": "n_ckz93pfmbb",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_0i9s69apb2",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_85pnknjw9w",
+                "from": {
+                  "node": "n_wiz1gi7v5h",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_n17e3mqqtw",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_5p47rotjff",
+                "from": {
+                  "node": "n_h3faf13ph2",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_iv404t6ngu",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_cxvxddac46",
+                "from": {
+                  "node": "n_iv404t6ngu",
+                  "port": "x"
+                },
+                "to": {
+                  "node": "n_wcd4olpo2v",
+                  "port": "x"
+                }
+              },
+              {
+                "id": "e_uv6nj73n78",
+                "from": {
+                  "node": "n_iv404t6ngu",
+                  "port": "y"
+                },
+                "to": {
+                  "node": "n_wcd4olpo2v",
+                  "port": "z"
+                }
+              },
+              {
+                "id": "e_vjdd81qa2e",
+                "from": {
+                  "node": "n_v710hbp245",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_u1krb4p6zf",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_ayxb3lkcai",
+                "from": {
+                  "node": "n_wcd4olpo2v",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_u1krb4p6zf",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_lzi8gf0yvw",
+                "from": {
+                  "node": "n_u1krb4p6zf",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_rfrs84hhox",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_jv8botex0t",
+                "from": {
+                  "node": "n_rfrs84hhox",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_vasyn4bud2",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_1h4nh0zjjo",
+                "from": {
+                  "node": "n_mzxkric50d",
+                  "port": "false"
+                },
+                "to": {
+                  "node": "n_n17e3mqqtw",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_qc3iwjnell",
+                "from": {
+                  "node": "n_0i9s69apb2",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_n17e3mqqtw",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_7hx4zx16th",
+                "from": {
+                  "node": "n_n17e3mqqtw",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_vasyn4bud2",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_50x3xdbeue",
+                "from": {
+                  "node": "n_i1591oc96j",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_9axep49xd7",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_7xkb29389n",
+                "from": {
+                  "node": "n_9axep49xd7",
+                  "port": "x"
+                },
+                "to": {
+                  "node": "n_vfuhgbsp7m",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_gf9j6llrmh",
+                "from": {
+                  "node": "n_s8lnofqiux",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_vfuhgbsp7m",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_2grlg5xton",
+                "from": {
+                  "node": "n_9axep49xd7",
+                  "port": "z"
+                },
+                "to": {
+                  "node": "n_nzkdnff18h",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_l0u3n1p9eb",
+                "from": {
+                  "node": "n_s8lnofqiux",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_nzkdnff18h",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_ofm0jzf87t",
+                "from": {
+                  "node": "n_jxruthnow1",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_o7qqksm3lx",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_rjebkp9otr",
+                "from": {
+                  "node": "n_vfuhgbsp7m",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_xc5q0vdxai",
+                  "port": "x"
+                }
+              },
+              {
+                "id": "e_xab92yeslj",
+                "from": {
+                  "node": "n_o7qqksm3lx",
+                  "port": "y"
+                },
+                "to": {
+                  "node": "n_xc5q0vdxai",
+                  "port": "y"
+                }
+              },
+              {
+                "id": "e_0alum8ddzj",
+                "from": {
+                  "node": "n_nzkdnff18h",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_xc5q0vdxai",
+                  "port": "z"
+                }
+              },
+              {
+                "id": "e_5el7c67s7g",
+                "from": {
+                  "node": "n_xc5q0vdxai",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_0n4qpm6f5x",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_zqkbrefw7r",
+                "from": {
+                  "node": "n_vasyn4bud2",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_0n4qpm6f5x",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_2wk1o8ecvm",
+                "from": {
+                  "node": "n_0n4qpm6f5x",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_rjwjqkh3iu",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Walks on the ground relative to where it faces."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_bycld9b53b",
+    "activeFunctionId": "f_4k1ghsrwa9"
+  }
+}

@@ -1,0 +1,465 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_ki01ykljlo",
+  "name": "Signals",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_gf228tyb90",
+      "name": "Health",
+      "path": "health",
+      "settings": {
+        "extends": "Node",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [
+        {
+          "id": "v_hign4u0li0",
+          "name": "health",
+          "type": "int",
+          "default": 100
+        }
+      ],
+      "functions": [
+        {
+          "id": "f_ke2mmf0odf",
+          "name": "_on_health_changed",
+          "kind": "function",
+          "params": [
+            {
+              "id": "p_ooyjwusz22",
+              "name": "new_health",
+              "type": "int"
+            }
+          ],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_zumyu3rlzi",
+            "nodes": [
+              {
+                "id": "n_si38auogv2",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_gtydblsqm8",
+                "type": "core.to_string",
+                "position": {
+                  "x": 300,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_xg7l4sjlm9",
+                "type": "core.concat",
+                "position": {
+                  "x": 600,
+                  "y": 150
+                },
+                "props": {
+                  "count": 2
+                },
+                "inputs": {
+                  "s0": "Health: "
+                }
+              },
+              {
+                "id": "n_mv3j5qhww1",
+                "type": "core.print",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_u19jc5ueqe",
+                "from": {
+                  "node": "n_si38auogv2",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_mv3j5qhww1",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_1qns047xnb",
+                "from": {
+                  "node": "n_si38auogv2",
+                  "port": "p_ooyjwusz22"
+                },
+                "to": {
+                  "node": "n_gtydblsqm8",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_3ue8u2kbi0",
+                "from": {
+                  "node": "n_gtydblsqm8",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_xg7l4sjlm9",
+                  "port": "s1"
+                }
+              },
+              {
+                "id": "e_a2wbj1r8f6",
+                "from": {
+                  "node": "n_xg7l4sjlm9",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_mv3j5qhww1",
+                  "port": "value"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_gsv4l0tfva",
+          "name": "take_damage",
+          "kind": "function",
+          "params": [
+            {
+              "id": "p_43g0k8jqqr",
+              "name": "amount",
+              "type": "int"
+            }
+          ],
+          "returnType": "void",
+          "locals": [],
+          "description": "Reduce health and notify listeners.",
+          "graph": {
+            "id": "g_o0dzcmp2ud",
+            "nodes": [
+              {
+                "id": "n_a82j504x81",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_n7kcj8n7fb",
+                "type": "core.set_var",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_hign4u0li0",
+                  "operation": "-"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_h5qphn12dl",
+                "type": "core.get_var",
+                "position": {
+                  "x": 300,
+                  "y": 300
+                },
+                "props": {
+                  "variable": "v_hign4u0li0"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_bb6yw71hak",
+                "type": "godot.emit_signal",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {
+                  "signal": "sig_szg99xupet"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_ugoq2fsgml",
+                "type": "core.less_equal",
+                "position": {
+                  "x": 600,
+                  "y": 300
+                },
+                "props": {
+                  "type": "int"
+                },
+                "inputs": {
+                  "b": 0
+                }
+              },
+              {
+                "id": "n_cwp1vevyw3",
+                "type": "core.branch",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_g6fzztwdv6",
+                "type": "godot.emit_signal",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {
+                  "signal": "sig_mkpuxhqx8c"
+                },
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_gbu5yof9pd",
+                "from": {
+                  "node": "n_a82j504x81",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_n7kcj8n7fb",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_mtywlmltt1",
+                "from": {
+                  "node": "n_n7kcj8n7fb",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_bb6yw71hak",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_jkpva4uy76",
+                "from": {
+                  "node": "n_bb6yw71hak",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_cwp1vevyw3",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_0rgsp6tn6g",
+                "from": {
+                  "node": "n_a82j504x81",
+                  "port": "p_43g0k8jqqr"
+                },
+                "to": {
+                  "node": "n_n7kcj8n7fb",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_3k4qxo6bfn",
+                "from": {
+                  "node": "n_h5qphn12dl",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_bb6yw71hak",
+                  "port": "p_lp2aqnvo7p"
+                }
+              },
+              {
+                "id": "e_2shv2qwcos",
+                "from": {
+                  "node": "n_h5qphn12dl",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_ugoq2fsgml",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_ei2rlb1uxf",
+                "from": {
+                  "node": "n_ugoq2fsgml",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_cwp1vevyw3",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_vule5zo4qw",
+                "from": {
+                  "node": "n_cwp1vevyw3",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_g6fzztwdv6",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_uq7c0nbrg9",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_94g6sqvupk",
+            "nodes": [
+              {
+                "id": "n_udcqnpwu2c",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_kt0xw9ez69",
+                "type": "godot.connect_signal",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "signal": "health_changed",
+                  "method": "f_ke2mmf0odf"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_lru7j1yf0a",
+                "type": "core.call_function",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {
+                  "function": "f_gsv4l0tfva"
+                },
+                "inputs": {
+                  "p_43g0k8jqqr": 30
+                }
+              },
+              {
+                "id": "n_vtba6nxla0",
+                "type": "core.call_function",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {
+                  "function": "f_gsv4l0tfva"
+                },
+                "inputs": {
+                  "p_43g0k8jqqr": 80
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_8troa20q2g",
+                "from": {
+                  "node": "n_udcqnpwu2c",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_kt0xw9ez69",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_19phimkj7c",
+                "from": {
+                  "node": "n_kt0xw9ez69",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_lru7j1yf0a",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_s1pe8q6c7o",
+                "from": {
+                  "node": "n_lru7j1yf0a",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_vtba6nxla0",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [
+        {
+          "id": "sig_szg99xupet",
+          "name": "health_changed",
+          "params": [
+            {
+              "id": "p_lp2aqnvo7p",
+              "name": "new_health",
+              "type": "int"
+            }
+          ],
+          "description": "Emitted after damage is taken."
+        },
+        {
+          "id": "sig_mkpuxhqx8c",
+          "name": "died",
+          "params": []
+        }
+      ],
+      "enums": [],
+      "description": "A health component that announces changes with signals."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_gf228tyb90",
+    "activeFunctionId": "f_ke2mmf0odf"
+  }
+}

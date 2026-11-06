@@ -1,0 +1,579 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_17tpi2o5fh",
+  "name": "Interaction System",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_3yav41h4pc",
+      "name": "Interactable",
+      "path": "interactable",
+      "settings": {
+        "extends": "Area2D",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [
+        {
+          "id": "v_8op2xu5n4o",
+          "name": "prompt",
+          "type": "string",
+          "default": "Press Enter to interact",
+          "exported": true
+        },
+        {
+          "id": "v_yagofu6wmr",
+          "name": "player_inside",
+          "type": "bool",
+          "default": false
+        }
+      ],
+      "functions": [
+        {
+          "id": "f_e9lv7nl1eg",
+          "name": "_on_body_entered",
+          "kind": "function",
+          "params": [
+            {
+              "id": "p_5fg6spmtnp",
+              "name": "body",
+              "type": "Node2D"
+            }
+          ],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_32n53yjit3",
+            "nodes": [
+              {
+                "id": "n_g5052ys8ix",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_eruetparnw",
+                "type": "godot.node.is_in_group",
+                "position": {
+                  "x": 300,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {
+                  "group": "player"
+                }
+              },
+              {
+                "id": "n_xipci2w9kn",
+                "type": "core.branch",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_e8h2dzxmz2",
+                "type": "core.set_var",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_yagofu6wmr",
+                  "operation": "="
+                },
+                "inputs": {
+                  "value": true
+                }
+              },
+              {
+                "id": "n_ksuw3c0rke",
+                "type": "core.get_var",
+                "position": {
+                  "x": 600,
+                  "y": 300
+                },
+                "props": {
+                  "variable": "v_8op2xu5n4o"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_n9bblwzpe8",
+                "type": "core.print",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_opklj47k98",
+                "from": {
+                  "node": "n_g5052ys8ix",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_xipci2w9kn",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_dkejxpxstf",
+                "from": {
+                  "node": "n_g5052ys8ix",
+                  "port": "p_5fg6spmtnp"
+                },
+                "to": {
+                  "node": "n_eruetparnw",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_9ccx162frj",
+                "from": {
+                  "node": "n_eruetparnw",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_xipci2w9kn",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_kf6u8z3mc1",
+                "from": {
+                  "node": "n_xipci2w9kn",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_e8h2dzxmz2",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_pu8yerbvy4",
+                "from": {
+                  "node": "n_ksuw3c0rke",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_n9bblwzpe8",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_gxhw42ezvv",
+                "from": {
+                  "node": "n_e8h2dzxmz2",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_n9bblwzpe8",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_ylxxta18xd",
+          "name": "_on_body_exited",
+          "kind": "function",
+          "params": [
+            {
+              "id": "p_6huo7bv3hf",
+              "name": "body",
+              "type": "Node2D"
+            }
+          ],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_35quvi10j1",
+            "nodes": [
+              {
+                "id": "n_50z2vmtjp6",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_pnber7vi24",
+                "type": "godot.node.is_in_group",
+                "position": {
+                  "x": 300,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {
+                  "group": "player"
+                }
+              },
+              {
+                "id": "n_89oamjyf3p",
+                "type": "core.branch",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_1h6f13i6rh",
+                "type": "core.set_var",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {
+                  "variable": "v_yagofu6wmr",
+                  "operation": "="
+                },
+                "inputs": {
+                  "value": false
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_ddwbv3burl",
+                "from": {
+                  "node": "n_50z2vmtjp6",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_89oamjyf3p",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_4nfyo1b515",
+                "from": {
+                  "node": "n_50z2vmtjp6",
+                  "port": "p_6huo7bv3hf"
+                },
+                "to": {
+                  "node": "n_pnber7vi24",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_jecu4q2cy3",
+                "from": {
+                  "node": "n_pnber7vi24",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_89oamjyf3p",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_rrrhz9l0go",
+                "from": {
+                  "node": "n_89oamjyf3p",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_1h6f13i6rh",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_cvzlcqxuub",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_fwao20wqw6",
+            "nodes": [
+              {
+                "id": "n_49730x9nvx",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_bt1i0qlkpw",
+                "type": "godot.connect_signal",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "signal": "body_entered",
+                  "method": "f_e9lv7nl1eg"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_s4z011eagd",
+                "type": "godot.connect_signal",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {
+                  "signal": "body_exited",
+                  "method": "f_ylxxta18xd"
+                },
+                "inputs": {}
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_e22uk7hs4b",
+                "from": {
+                  "node": "n_49730x9nvx",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_bt1i0qlkpw",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_8agclily1v",
+                "from": {
+                  "node": "n_bt1i0qlkpw",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_s4z011eagd",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "f_ngxma1ucl6",
+          "name": "_unhandled_input",
+          "kind": "event",
+          "event": "_unhandled_input",
+          "params": [
+            {
+              "id": "p_f5l0egh9hk",
+              "name": "event",
+              "type": "InputEvent"
+            }
+          ],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_vyyipgzxts",
+            "nodes": [
+              {
+                "id": "n_06bqevy125",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_gw1kyr1u2g",
+                "type": "core.get_var",
+                "position": {
+                  "x": 0,
+                  "y": 300
+                },
+                "props": {
+                  "variable": "v_yagofu6wmr"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_5lxpx0jluh",
+                "type": "godot.inputevent.is_action_pressed",
+                "position": {
+                  "x": 0,
+                  "y": 450
+                },
+                "props": {},
+                "inputs": {
+                  "action": "ui_accept"
+                }
+              },
+              {
+                "id": "n_h1324nge5h",
+                "type": "core.and",
+                "position": {
+                  "x": 300,
+                  "y": 300
+                },
+                "props": {
+                  "type": "bool"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_521aiearhh",
+                "type": "core.branch",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_2gpx3ip5vt",
+                "type": "godot.emit_signal",
+                "position": {
+                  "x": 600,
+                  "y": 0
+                },
+                "props": {
+                  "signal": "sig_hsp0z0u59f"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_9vgp6bamdk",
+                "type": "core.print",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Interacted!"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_zz66yjv8du",
+                "from": {
+                  "node": "n_06bqevy125",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_521aiearhh",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_nh10s0bgh8",
+                "from": {
+                  "node": "n_06bqevy125",
+                  "port": "p_f5l0egh9hk"
+                },
+                "to": {
+                  "node": "n_5lxpx0jluh",
+                  "port": "target"
+                }
+              },
+              {
+                "id": "e_sdwu0sh783",
+                "from": {
+                  "node": "n_gw1kyr1u2g",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_h1324nge5h",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_sxonei6a7t",
+                "from": {
+                  "node": "n_5lxpx0jluh",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_h1324nge5h",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_ujl1l6pj0h",
+                "from": {
+                  "node": "n_h1324nge5h",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_521aiearhh",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_ffh5n1in3e",
+                "from": {
+                  "node": "n_521aiearhh",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_2gpx3ip5vt",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_qpin2at3z8",
+                "from": {
+                  "node": "n_2gpx3ip5vt",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_9vgp6bamdk",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [
+        {
+          "id": "sig_hsp0z0u59f",
+          "name": "interacted",
+          "params": []
+        }
+      ],
+      "enums": [],
+      "description": "Add to an Area2D with a CollisionShape2D. Bodies in the \"player\" group can interact with ui_accept."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_3yav41h4pc",
+    "activeFunctionId": "f_e9lv7nl1eg"
+  }
+}

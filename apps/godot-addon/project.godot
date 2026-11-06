@@ -1,0 +1,13 @@
+; Demo Godot 4 project for the Coding Studio editor plugin.
+; Open this folder in Godot 4.2+; the plugin is enabled below.
+
+config_version=5
+
+[application]
+
+config/name="Coding Studio Demo"
+config/features=PackedStringArray("4.2")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/coding_studio/plugin.cfg")

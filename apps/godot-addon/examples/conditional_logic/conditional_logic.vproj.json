@@ -1,0 +1,312 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_2s0r0mg6d7",
+  "name": "Conditional Logic",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_6bjmp0o4vi",
+      "name": "HealthCheck",
+      "path": "health_check",
+      "settings": {
+        "extends": "Node",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [
+        {
+          "id": "v_sn3hz11po3",
+          "name": "health",
+          "type": "int",
+          "default": 75,
+          "exported": true
+        }
+      ],
+      "functions": [
+        {
+          "id": "f_s8p199aquk",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [],
+          "graph": {
+            "id": "g_soxzydkypv",
+            "nodes": [
+              {
+                "id": "n_yw6phde6o3",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_wbqqa954yc",
+                "type": "core.get_var",
+                "position": {
+                  "x": 0,
+                  "y": 150
+                },
+                "props": {
+                  "variable": "v_sn3hz11po3"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_jlr33dt0f0",
+                "type": "core.greater",
+                "position": {
+                  "x": 300,
+                  "y": 150
+                },
+                "props": {
+                  "type": "int"
+                },
+                "inputs": {
+                  "b": 50
+                }
+              },
+              {
+                "id": "n_tqblg2irwo",
+                "type": "core.greater",
+                "position": {
+                  "x": 600,
+                  "y": 300
+                },
+                "props": {
+                  "type": "int"
+                },
+                "inputs": {
+                  "b": 20
+                }
+              },
+              {
+                "id": "n_hhy71no4jk",
+                "type": "core.branch",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_8jhhxcmp9k",
+                "type": "core.branch",
+                "position": {
+                  "x": 600,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_sm8a0zyxo1",
+                "type": "core.print",
+                "position": {
+                  "x": 900,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Healthy"
+                }
+              },
+              {
+                "id": "n_iuab5tizwk",
+                "type": "core.print",
+                "position": {
+                  "x": 900,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Hurt"
+                }
+              },
+              {
+                "id": "n_s04ou0m5to",
+                "type": "core.print",
+                "position": {
+                  "x": 900,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Critical!"
+                }
+              },
+              {
+                "id": "n_zjgzj50hr1",
+                "type": "core.print",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Check complete"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_v32p6zp6sq",
+                "from": {
+                  "node": "n_yw6phde6o3",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_hhy71no4jk",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_yab1qr9zts",
+                "from": {
+                  "node": "n_wbqqa954yc",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_jlr33dt0f0",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_2d83dxs194",
+                "from": {
+                  "node": "n_wbqqa954yc",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_tqblg2irwo",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_hmthgwve3u",
+                "from": {
+                  "node": "n_jlr33dt0f0",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_hhy71no4jk",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_zfvb09mibb",
+                "from": {
+                  "node": "n_tqblg2irwo",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_8jhhxcmp9k",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_63utaqh6pz",
+                "from": {
+                  "node": "n_hhy71no4jk",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_sm8a0zyxo1",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_srcutkavxo",
+                "from": {
+                  "node": "n_hhy71no4jk",
+                  "port": "false"
+                },
+                "to": {
+                  "node": "n_8jhhxcmp9k",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_07vr0huzpz",
+                "from": {
+                  "node": "n_8jhhxcmp9k",
+                  "port": "true"
+                },
+                "to": {
+                  "node": "n_iuab5tizwk",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_gvhej30ppx",
+                "from": {
+                  "node": "n_8jhhxcmp9k",
+                  "port": "false"
+                },
+                "to": {
+                  "node": "n_s04ou0m5to",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_3wix32oauv",
+                "from": {
+                  "node": "n_sm8a0zyxo1",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_zjgzj50hr1",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_6vi0bwn0zd",
+                "from": {
+                  "node": "n_iuab5tizwk",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_zjgzj50hr1",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_wzfnp7qk8p",
+                "from": {
+                  "node": "n_s04ou0m5to",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_zjgzj50hr1",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Reports how healthy the player is."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_6bjmp0o4vi",
+    "activeFunctionId": "f_s8p199aquk"
+  }
+}

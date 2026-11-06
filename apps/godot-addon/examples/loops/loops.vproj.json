@@ -1,0 +1,465 @@
+{
+  "format": "coding-studio-project",
+  "schemaVersion": 1,
+  "id": "p_ettzu8tudi",
+  "name": "Loops",
+  "language": "gdscript",
+  "languageVersion": "4.4",
+  "compilerSettings": {
+    "indent": "tab",
+    "indentSize": 4,
+    "header": true,
+    "comments": true
+  },
+  "scripts": [
+    {
+      "id": "s_tcrzjhkwu8",
+      "name": "Loops",
+      "path": "loops",
+      "settings": {
+        "extends": "Node",
+        "class_name": "",
+        "tool": false
+      },
+      "variables": [],
+      "functions": [
+        {
+          "id": "f_p8h4eoxgyq",
+          "name": "_ready",
+          "kind": "event",
+          "event": "_ready",
+          "params": [],
+          "returnType": "void",
+          "locals": [
+            {
+              "id": "v_w2psmg17x8",
+              "name": "countdown",
+              "type": "int",
+              "default": 3
+            }
+          ],
+          "graph": {
+            "id": "g_1v6c71wumu",
+            "nodes": [
+              {
+                "id": "n_woe10erj82",
+                "type": "core.entry",
+                "position": {
+                  "x": 0,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_hmj6dnsipp",
+                "type": "core.for_range",
+                "position": {
+                  "x": 300,
+                  "y": 0
+                },
+                "props": {
+                  "indexName": "i"
+                },
+                "inputs": {
+                  "from": 1,
+                  "to": 6
+                }
+              },
+              {
+                "id": "n_gprz86p06v",
+                "type": "core.multiply",
+                "position": {
+                  "x": 600,
+                  "y": 300
+                },
+                "props": {
+                  "type": "int",
+                  "rhsType": ""
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_5gpvv61szk",
+                "type": "core.to_string",
+                "position": {
+                  "x": 900,
+                  "y": 300
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_k7tz10dvqs",
+                "type": "core.print",
+                "position": {
+                  "x": 900,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_qy0bjhuzl5",
+                "type": "core.make_array",
+                "position": {
+                  "x": 900,
+                  "y": 600
+                },
+                "props": {
+                  "elementType": "string",
+                  "count": 3
+                },
+                "inputs": {
+                  "item_0": "sword",
+                  "item_1": "shield",
+                  "item_2": "potion"
+                }
+              },
+              {
+                "id": "n_61fre6blmo",
+                "type": "core.for_each",
+                "position": {
+                  "x": 1200,
+                  "y": 0
+                },
+                "props": {
+                  "elementType": "string",
+                  "elementName": "item"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_as02xgvimf",
+                "type": "core.concat",
+                "position": {
+                  "x": 1500,
+                  "y": 450
+                },
+                "props": {
+                  "count": 2
+                },
+                "inputs": {
+                  "s0": "Item: "
+                }
+              },
+              {
+                "id": "n_889nknszyn",
+                "type": "core.print",
+                "position": {
+                  "x": 1500,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_84wx20sy1m",
+                "type": "core.get_var",
+                "position": {
+                  "x": 1800,
+                  "y": 450
+                },
+                "props": {
+                  "variable": "v_w2psmg17x8"
+                },
+                "inputs": {}
+              },
+              {
+                "id": "n_ja1rqwxawa",
+                "type": "core.greater",
+                "position": {
+                  "x": 2100,
+                  "y": 450
+                },
+                "props": {
+                  "type": "int"
+                },
+                "inputs": {
+                  "b": 0
+                }
+              },
+              {
+                "id": "n_5ehgdrjuhv",
+                "type": "core.while",
+                "position": {
+                  "x": 2100,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_0s0uqo7d0w",
+                "type": "core.to_string",
+                "position": {
+                  "x": 2400,
+                  "y": 450
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_prqch1rq99",
+                "type": "core.print",
+                "position": {
+                  "x": 2400,
+                  "y": 150
+                },
+                "props": {},
+                "inputs": {}
+              },
+              {
+                "id": "n_slcp7vymni",
+                "type": "core.set_var",
+                "position": {
+                  "x": 2700,
+                  "y": 150
+                },
+                "props": {
+                  "variable": "v_w2psmg17x8",
+                  "operation": "-"
+                },
+                "inputs": {
+                  "value": 1
+                }
+              },
+              {
+                "id": "n_pbobuaa5w1",
+                "type": "core.print",
+                "position": {
+                  "x": 2400,
+                  "y": 0
+                },
+                "props": {},
+                "inputs": {
+                  "value": "Liftoff!"
+                }
+              }
+            ],
+            "edges": [
+              {
+                "id": "e_96ocjd5cdh",
+                "from": {
+                  "node": "n_woe10erj82",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_hmj6dnsipp",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_417e0l3tv2",
+                "from": {
+                  "node": "n_hmj6dnsipp",
+                  "port": "body"
+                },
+                "to": {
+                  "node": "n_k7tz10dvqs",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_79g9ok12xb",
+                "from": {
+                  "node": "n_hmj6dnsipp",
+                  "port": "index"
+                },
+                "to": {
+                  "node": "n_gprz86p06v",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_a5e9c313e4",
+                "from": {
+                  "node": "n_hmj6dnsipp",
+                  "port": "index"
+                },
+                "to": {
+                  "node": "n_gprz86p06v",
+                  "port": "b"
+                }
+              },
+              {
+                "id": "e_te90s2lun7",
+                "from": {
+                  "node": "n_gprz86p06v",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_5gpvv61szk",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_om16y6didg",
+                "from": {
+                  "node": "n_5gpvv61szk",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_k7tz10dvqs",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_9q33jh21lo",
+                "from": {
+                  "node": "n_hmj6dnsipp",
+                  "port": "completed"
+                },
+                "to": {
+                  "node": "n_61fre6blmo",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_kyhwvx8vlo",
+                "from": {
+                  "node": "n_qy0bjhuzl5",
+                  "port": "array"
+                },
+                "to": {
+                  "node": "n_61fre6blmo",
+                  "port": "array"
+                }
+              },
+              {
+                "id": "e_b1vnes0c2x",
+                "from": {
+                  "node": "n_61fre6blmo",
+                  "port": "body"
+                },
+                "to": {
+                  "node": "n_889nknszyn",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_xzla57cq55",
+                "from": {
+                  "node": "n_61fre6blmo",
+                  "port": "element"
+                },
+                "to": {
+                  "node": "n_as02xgvimf",
+                  "port": "s1"
+                }
+              },
+              {
+                "id": "e_9ewimo20h6",
+                "from": {
+                  "node": "n_as02xgvimf",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_889nknszyn",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_3ndvc87ds9",
+                "from": {
+                  "node": "n_61fre6blmo",
+                  "port": "completed"
+                },
+                "to": {
+                  "node": "n_5ehgdrjuhv",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_2sxbpdtfp3",
+                "from": {
+                  "node": "n_84wx20sy1m",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_ja1rqwxawa",
+                  "port": "a"
+                }
+              },
+              {
+                "id": "e_nzcvmlv0bw",
+                "from": {
+                  "node": "n_ja1rqwxawa",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_5ehgdrjuhv",
+                  "port": "condition"
+                }
+              },
+              {
+                "id": "e_4hnqhsvrqq",
+                "from": {
+                  "node": "n_5ehgdrjuhv",
+                  "port": "body"
+                },
+                "to": {
+                  "node": "n_prqch1rq99",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_g0j17iuxp6",
+                "from": {
+                  "node": "n_84wx20sy1m",
+                  "port": "value"
+                },
+                "to": {
+                  "node": "n_0s0uqo7d0w",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_xjwh2x0bwj",
+                "from": {
+                  "node": "n_0s0uqo7d0w",
+                  "port": "result"
+                },
+                "to": {
+                  "node": "n_prqch1rq99",
+                  "port": "value"
+                }
+              },
+              {
+                "id": "e_yghr4pdrf1",
+                "from": {
+                  "node": "n_prqch1rq99",
+                  "port": "then"
+                },
+                "to": {
+                  "node": "n_slcp7vymni",
+                  "port": "exec"
+                }
+              },
+              {
+                "id": "e_nsn5wxyx4k",
+                "from": {
+                  "node": "n_5ehgdrjuhv",
+                  "port": "completed"
+                },
+                "to": {
+                  "node": "n_pbobuaa5w1",
+                  "port": "exec"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "signals": [],
+      "enums": [],
+      "description": "Demonstrates the three loop kinds."
+    }
+  ],
+  "createdAt": 0,
+  "updatedAt": 0,
+  "editor": {
+    "activeScriptId": "s_tcrzjhkwu8",
+    "activeFunctionId": "f_p8h4eoxgyq"
+  }
+}
