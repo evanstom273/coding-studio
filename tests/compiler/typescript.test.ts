@@ -190,3 +190,69 @@ describe('TypeScript backend', () => {
     expect(() => applyOps(gp, [{ op: 'update_function', function: gp.scripts[0].functions[0].id, async: true }], g)).toThrow(/can't be marked async|engine event/);
   });
 });
+
+describe('inline functions (closures)', () => {
+  it('capture and update the owner\'s locals, work as array callbacks, and run', () => {
+    let p = createProject(tc.adapter, 'Closures', { template: 'empty', scriptName: 'Main' });
+    p = { ...p, scripts: p.scripts.map((s) => ({ ...s, settings: { output: 'js' } })) };
+    const r = applyOps(
+      p,
+      [
+        { op: 'add_function', ref: 'main', name: 'main', exported: true },
+        { op: 'add_variable', function: '$main', name: 'factor', type: 'int', default: 3 },
+        { op: 'add_variable', function: '$main', name: 'total', type: 'int', default: 0 },
+        // scale = (x) => x * factor
+        { op: 'add_function', ref: 'scale', kind: 'lambda', owner: '$main', name: 'scale', params: [{ name: 'x', type: 'int' }], returnType: 'int' },
+        { op: 'add_node', ref: 'fx', graph: '$scale', type: 'core.get_var', props: { variable: 'factor' } },
+        { op: 'add_node', ref: 'mul', graph: '$scale', type: 'core.multiply', props: { type: 'int' } },
+        { op: 'add_node', ref: 'ret', graph: '$scale', type: 'core.return' },
+        { op: 'connect', graph: '$scale', from: { node: '$scale.entry', port: 'x' }, to: { node: '$mul', port: 'a' } },
+        { op: 'connect', graph: '$scale', from: { node: '$fx', port: 'value' }, to: { node: '$mul', port: 'b' } },
+        { op: 'connect', graph: '$scale', from: { node: '$scale.entry', port: 'then' }, to: { node: '$ret', port: 'exec' } },
+        { op: 'connect', graph: '$scale', from: { node: '$mul', port: 'result' }, to: { node: '$ret', port: 'value' } },
+        // add = (x) => { total += x }
+        { op: 'add_function', ref: 'add', kind: 'lambda', owner: '$main', name: 'addToTotal', params: [{ name: 'x', type: 'int' }] },
+        { op: 'add_node', ref: 'inc', graph: '$add', type: 'core.set_var', props: { variable: 'total', operation: '+' } },
+        { op: 'connect', graph: '$add', from: { node: '$add.entry', port: 'then' }, to: { node: '$inc', port: 'exec' } },
+        { op: 'connect', graph: '$add', from: { node: '$add.entry', port: 'x' }, to: { node: '$inc', port: 'value' } },
+        // main: const nums = [1, 2, 3].map(scale); nums.forEach(add); print(JSON.stringify(nums)); print(total)
+        { op: 'add_node', ref: 'arr', graph: '$main', type: 'core.make_array', props: { elementType: 'int', count: 3 }, inputs: { item_0: 1, item_1: 2, item_2: 3 } },
+        { op: 'add_node', ref: 'cScale', graph: '$main', type: 'ts.closure', props: { function: '$scale' } },
+        { op: 'add_node', ref: 'map', graph: '$main', type: 'ts.call_method', props: { name: 'map', argNames: ['fn'], argTypes: ['fn(int) -> int'], returnType: 'array<int>' } },
+        { op: 'add_node', ref: 'cAdd', graph: '$main', type: 'ts.closure', props: { function: '$add' } },
+        { op: 'add_node', ref: 'each', graph: '$main', type: 'ts.call_method', props: { name: 'forEach', argNames: ['fn'], argTypes: ['fn(int) -> void'] } },
+        { op: 'add_node', ref: 'json', graph: '$main', type: 'ts.call', props: { name: 'JSON.stringify', argTypes: ['any'], returnType: 'string' } },
+        { op: 'add_node', ref: 'p1', graph: '$main', type: 'core.print' },
+        { op: 'add_node', ref: 'tot', graph: '$main', type: 'core.get_var', props: { variable: 'total' } },
+        { op: 'add_node', ref: 'p2', graph: '$main', type: 'core.print' },
+        { op: 'connect', graph: '$main', from: { node: '$main.entry', port: 'then' }, to: { node: '$map', port: 'exec' } },
+        { op: 'connect', graph: '$main', from: { node: '$arr', port: 'array' }, to: { node: '$map', port: 'object' } },
+        { op: 'connect', graph: '$main', from: { node: '$cScale', port: 'fn' }, to: { node: '$map', port: 'arg_0' } },
+        { op: 'connect', graph: '$main', from: { node: '$map', port: 'then' }, to: { node: '$each', port: 'exec' } },
+        { op: 'connect', graph: '$main', from: { node: '$map', port: 'result' }, to: { node: '$each', port: 'object' } },
+        { op: 'connect', graph: '$main', from: { node: '$cAdd', port: 'fn' }, to: { node: '$each', port: 'arg_0' } },
+        { op: 'connect', graph: '$main', from: { node: '$each', port: 'then' }, to: { node: '$json', port: 'exec' } },
+        { op: 'connect', graph: '$main', from: { node: '$map', port: 'result' }, to: { node: '$json', port: 'arg_0' } },
+        { op: 'connect', graph: '$main', from: { node: '$json', port: 'then' }, to: { node: '$p1', port: 'exec' } },
+        { op: 'connect', graph: '$main', from: { node: '$json', port: 'result' }, to: { node: '$p1', port: 'value' } },
+        { op: 'connect', graph: '$main', from: { node: '$p1', port: 'then' }, to: { node: '$p2', port: 'exec' } },
+        { op: 'connect', graph: '$main', from: { node: '$tot', port: 'value' }, to: { node: '$p2', port: 'value' } },
+      ],
+      tc,
+    );
+    const c = compileProject(tc, r.project);
+    expect(c.diagnostics.filter((d) => d.severity !== 'info')).toEqual([]);
+    const js = c.files[0].content;
+    expect(js).toContain('let map_result = [1, 2, 3].map((x) => {\n\t\treturn x * factor;\n\t});');
+    expect(js).toContain('map_result.forEach((x) => {\n\t\ttotal += x;\n\t});');
+    const dir = mkdtempSync(join(tmpdir(), 'cs-closure-'));
+    writeFileSync(join(dir, 'main.mjs'), `${js}\nmain();\n`);
+    expect(execFileSync(process.execPath, [join(dir, 'main.mjs')], { encoding: 'utf8' }).trim().split('\n')).toEqual(['[3,6,9]', '18']);
+    // and the TypeScript version type-checks
+    const ts = compileProject(tc, { ...r.project, scripts: r.project.scripts.map((s) => ({ ...s, settings: { output: 'ts' } })) }).files[0];
+    expect(ts.content).toContain('.map((x: number): number => {');
+    // deleting the owner deletes its inline functions
+    const del = applyOps(r.project, [{ op: 'delete_function', function: r.created.main }], tc).project;
+    expect(del.scripts[0].functions).toEqual([]);
+  });
+});

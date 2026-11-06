@@ -272,6 +272,25 @@ function ProjectExplorer() {
                   onDelete={() => void del(`function ${f.name}`, [{ op: 'delete_function', function: f.id }])}
                 />
               ))}
+            {/* Inline functions (closures), listed with the function they belong to. */}
+            {script.functions
+              .filter((f) => f.kind === 'lambda')
+              .map((f) => (
+                <Row
+                  key={f.id}
+                  testId="function-row"
+                  active={f.id === activeFunctionId}
+                  errors={errorsIn(f.id)}
+                  icon={<span className="pl-2 text-[11px] text-muted">↳</span>}
+                  label={f.name}
+                  sub={`inline in ${script.functions.find((o) => o.id === f.owner)?.name ?? '?'}`}
+                  onClick={() => {
+                    show({ kind: 'function', id: f.id });
+                    openGraph(script.id, f.id);
+                  }}
+                  onDelete={() => void del(`inline function ${f.name}`, [{ op: 'delete_function', function: f.id }])}
+                />
+              ))}
           </Section>
           <Section
             title="Variables"

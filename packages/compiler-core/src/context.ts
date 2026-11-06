@@ -35,9 +35,19 @@ export function makeNodeContext(tc: Toolchain, script: ScriptDoc, fn: FunctionDe
     }
     return t;
   };
+  // A closure also sees its owners' parameters and locals (nearest first).
+  const chain: FunctionDecl[] = [fn];
+  for (let f = fn; f.kind === 'lambda' && f.owner; ) {
+    const o = script.functions.find((x) => x.id === f.owner);
+    if (!o || chain.includes(o)) break;
+    chain.push(o);
+    f = o;
+  }
   const vars = (): ResolvedVariable[] => [
-    ...fn.params.map((p) => ({ id: p.id, name: p.name, type: type(p.type), scope: 'param' as const, constant: false, decl: p })),
-    ...fn.locals.map((v) => ({ id: v.id, name: v.name, type: type(v.type), scope: 'local' as const, constant: !!v.constant, decl: v })),
+    ...chain.flatMap((f) => [
+      ...f.params.map((p) => ({ id: p.id, name: p.name, type: type(p.type), scope: 'param' as const, constant: false, decl: p })),
+      ...f.locals.map((v) => ({ id: v.id, name: v.name, type: type(v.type), scope: 'local' as const, constant: !!v.constant, decl: v })),
+    ]),
     ...script.variables.map((v) => ({ id: v.id, name: v.name, type: type(v.type), scope: 'member' as const, constant: !!v.constant, decl: v })),
   ];
   let cachedVars: ResolvedVariable[] | null = null;

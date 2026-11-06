@@ -115,7 +115,8 @@ function sanitizeScript(raw: Doc, i: number, issues: string[]): ScriptDoc {
     .map((f, j) => ({
       id: str(f.id, `f_auto${j}`),
       name: str(f.name, `function_${j}`),
-      kind: f.kind === 'event' ? 'event' : 'function',
+      kind: f.kind === 'event' ? 'event' : f.kind === 'lambda' && typeof f.owner === 'string' ? 'lambda' : 'function',
+      ...(f.kind === 'lambda' && typeof f.owner === 'string' ? { owner: f.owner } : {}),
       ...(typeof f.event === 'string' ? { event: f.event } : {}),
       params: sanitizeParams(f.params),
       returnType: str(f.returnType, 'void'),

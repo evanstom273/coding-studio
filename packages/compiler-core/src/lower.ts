@@ -29,6 +29,8 @@ export interface LowerInput {
   /** Identifiers already taken in this function (members, params, locals, reserved words). */
   takenNames: Set<string>;
   report: (d: Diagnostic) => void;
+  /** Compiles an inline function of the script (closures). */
+  lowerLambda?: (functionId: string) => IRExpr | undefined;
 }
 
 export function lowerFunction(inp: LowerInput): IRFunction {
@@ -254,6 +256,7 @@ class FunctionLowerer {
         return [{ k: 'var', name, ...(type && type.kind !== 'any' ? { type } : {}), init: expr }];
       },
       uniqueName: (hint) => self.uniqueName(hint),
+      lambda: (fid) => self.inp.lowerLambda?.(fid),
       error: (code, message, o) => self.diag('error', code, message, nodeId, o?.port, o?.suggestion),
       warn: (code, message, o) => self.diag('warning', code, message, nodeId, o?.port, o?.suggestion),
     };

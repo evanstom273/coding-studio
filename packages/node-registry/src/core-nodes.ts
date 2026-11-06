@@ -679,7 +679,9 @@ const callFunction: NodeDefinition = {
     return [exec.in(), ...f.params.map((p) => data.in(p.id, p.name, ctx.type(p.type), p.default !== undefined ? { default: p.default } : { required: true })), exec.out(), ...(rt.kind === 'void' ? [] : [data.out('result', 'Result', rt)])];
   },
   check: (n, ctx, report) => {
-    if (!ctx.func(n.props.function)) report('E_UNDEFINED_FUNCTION', 'This node calls a function that does not exist.', { suggestion: 'Pick a function in the inspector or delete the node.' });
+    const f = ctx.func(n.props.function);
+    if (!f) report('E_UNDEFINED_FUNCTION', 'This node calls a function that does not exist.', { suggestion: 'Pick a function in the inspector or delete the node.' });
+    else if (f.kind === 'lambda') report('E_CLOSURE_CALL', `${f.name} is an inline function: pass it as a value (its Inline Function node) rather than calling it here.`);
   },
   lowerExec: (lc) => {
     const f = lc.ctx.func(lc.node.props.function);

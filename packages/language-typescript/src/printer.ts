@@ -78,6 +78,7 @@ function numLit(v: number): string {
 export class TSPrinter {
   readonly imports: ImportManager;
   private matchCounter = 0;
+  private unit = '\t';
   /** Names of enums in this module (JS mode prints them as frozen objects). */
   constructor(
     private readonly module: IRModule,
@@ -163,6 +164,15 @@ export class TSPrinter {
         return [this.imports.use(e), P.primary];
       case 'func_ref':
         return [e.name, P.primary];
+      case 'lambda': {
+        const params = e.params.map((p) => `${p.name}${this.ann(p.type) || (this.mode === 'ts' ? ': any' : '')}`).join(', ');
+        const ret = this.mode === 'ts' ? `: ${e.isAsync ? `Promise<${tsType(e.returnType)}>` : tsType(e.returnType)}` : '';
+        const w = new CodeWriter(this.unit, this.module.scriptId);
+        w.indent();
+        for (const s of e.body) this.stmt(w, s, e.src?.graphId);
+        const inner = w.result().content.replace(/\n$/, '');
+        return [`${e.isAsync ? 'async ' : ''}(${params})${ret} => {${e.body.length ? `\n${inner}\n` : ''}}`, P.assign];
+      }
       case 'invoke':
         return [`${this.expr(e.callee, P.member)}(${e.args.map((a) => this.expr(a, P.assign)).join(', ')})`, P.member];
       case 'lang':
@@ -371,6 +381,7 @@ export class TSPrinter {
 
   render(ctx: CompilationContext, header: string): ReturnType<CodeWriter['result']> {
     const unit = ctx.settings.indent === 'tab' ? '\t' : ' '.repeat(ctx.settings.indentSize);
+    this.unit = unit;
     // Print the body first, so the import manager knows every import before the header is written.
     const body = new CodeWriter(unit, this.module.scriptId);
     const { members } = this.module;

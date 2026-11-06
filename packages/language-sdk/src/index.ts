@@ -158,6 +158,7 @@ export function allCapabilities(value: boolean): LanguageCapabilities {
     match: value,
     nullable: value,
     dynamicTyping: value,
+    closures: value,
   };
 }
 
@@ -177,6 +178,13 @@ export class CodeWriter {
     this.depth = Math.max(0, this.depth - 1);
   }
   line(text = '', src?: { graphId?: string; nodeId?: string }) {
+    // Multi-line text (e.g. an inline function inside an expression): indent every line.
+    if (text.includes('\n')) {
+      const [first, ...rest] = text.split('\n');
+      this.line(first, src);
+      for (const r of rest) this.lines.push(r ? this.indentUnit.repeat(this.depth) + r : '');
+      return;
+    }
     this.lines.push(text ? this.indentUnit.repeat(this.depth) + text : '');
     if (src?.nodeId || src?.graphId) this.map.push({ line: this.lines.length, scriptId: this.scriptId, graphId: src.graphId, nodeId: src.nodeId });
   }

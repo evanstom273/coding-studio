@@ -198,9 +198,38 @@ const funcRef: NodeDefinition = {
     return [data.out('fn', 'Function', t)];
   },
   check: (n, ctx, report) => {
-    if (!ctx.func(n.props.function)) report('E_UNDEFINED_FUNCTION', 'Pick a function in the inspector.');
+    const f = ctx.func(n.props.function);
+    if (!f) report('E_UNDEFINED_FUNCTION', 'Pick a function in the inspector.');
+    else if (f.kind === 'lambda') report('E_CLOSURE_AS_VALUE', `${f.name} is an inline function: use its Inline Function node.`);
   },
   lowerExpr: (_p, lc) => ({ k: 'func_ref', name: lc.ctx.func(lc.node.props.function)?.name ?? 'undefined' }),
+};
+
+const closure: NodeDefinition = {
+  type: 'ts.closure',
+  title: 'Inline Function',
+  category: 'Functions',
+  description: 'A function written right here (an arrow function / closure). Its graph can use this function\'s parameters and local variables. Use it for event handlers, array callbacks (map, filter), setTimeout…',
+  keywords: ['lambda', 'arrow', 'closure', 'callback', 'handler', 'anonymous', '=>'],
+  flavor: 'pure',
+  languages: L,
+  props: [{ key: 'function', label: 'Function', kind: 'function', default: '' }],
+  displayTitle: (n, ctx) => {
+    const f = ctx.func(n.props.function);
+    return f ? `(${f.params.map((p) => p.name).join(', ')}) => ${f.name}` : 'Inline function (missing)';
+  },
+  ports: (n, ctx) => {
+    const f = ctx.func(n.props.function);
+    const t: TypeRef = f ? { kind: 'function', params: f.params.map((p) => ctx.type(p.type)), returns: ctx.type(f.returnType) } : T.any;
+    return [data.out('fn', 'Function', t)];
+  },
+  check: (n, ctx, report) => {
+    const f = ctx.func(n.props.function);
+    if (!f) report('E_UNDEFINED_FUNCTION', 'This inline function no longer exists.');
+    else if (f.kind !== 'lambda') report('E_NOT_CLOSURE', `${f.name} is a normal function: use "Function as Value" for it.`);
+    else if (f.owner !== ctx.fn.id) report('E_CLOSURE_OWNER', `${f.name} belongs to another function.`);
+  },
+  lowerExpr: (_p, lc) => lc.lambda(String(lc.node.props.function)) ?? { k: 'null' },
 };
 
 const callFn: NodeDefinition = {
@@ -323,5 +352,5 @@ const nullish: NodeDefinition = {
 };
 
 export function typescriptNodes(): NodeDefinition[] {
-  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, callFn, callMethod, nullish];
+  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, nullish];
 }

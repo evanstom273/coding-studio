@@ -39,7 +39,7 @@ export type EditOp =
   | { op: 'add_script'; ref?: string; name: string; path?: string; template?: string; settings?: Record<string, JsonValue>; description?: string }
   | { op: 'update_script'; script?: string; name?: string; path?: string; settings?: Record<string, JsonValue>; description?: string }
   | { op: 'delete_script'; script: string }
-  | { op: 'add_function'; ref?: string; script?: string; name?: string; kind?: 'function' | 'event'; event?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean }
+  | { op: 'add_function'; ref?: string; script?: string; name?: string; kind?: 'function' | 'event' | 'lambda'; owner?: string; event?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean }
   | { op: 'update_function'; function: string; script?: string; name?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean }
   | { op: 'delete_function'; function: string; script?: string }
   | { op: 'add_variable'; ref?: string; script?: string; function?: string; name: string; type: string; default?: JsonValue; exported?: boolean; constant?: boolean; description?: string; attributes?: Record<string, JsonValue> }
@@ -333,9 +333,16 @@ function validateProps(ctx: OpContext, s: ScriptDoc, f: FunctionDecl, schema: Pr
         if (v === '') break;
         const id = ctx.deref(v);
         const scopes = p.variableScopes ?? ['member', 'local', 'param'];
+        // Inline functions also see their owners' parameters and locals.
+        const chain = [f];
+        for (let cur = f; cur.kind === 'lambda' && cur.owner; ) {
+          const o = s.functions.find((x) => x.id === cur.owner);
+          if (!o || chain.includes(o)) break;
+          chain.push(o);
+          cur = o;
+        }
         const all = [
-          ...(scopes.includes('param') ? f.params : []),
-          ...(scopes.includes('local') ? f.locals : []),
+          ...chain.flatMap((g) => [...(scopes.includes('param') ? g.params : []), ...(scopes.includes('local') ? g.locals : [])]),
           ...(scopes.includes('member') ? s.variables : []),
         ];
         const hit = all.find((x) => x.id === id) ?? all.find((x) => x.name === v);
@@ -592,7 +599,13 @@ function applyOne(ctx: OpContext, op: EditOp, warnings: string[]): [string | und
     case 'add_function': {
       const s = ctx.script(op.script);
       let f: FunctionDecl;
-      if (op.kind === 'event' || op.event) {
+      if (op.kind === 'lambda') {
+        if (!tc.adapter.capabilities.closures) throw new OpError(`${tc.adapter.name} has no inline functions`);
+        const owner = ctx.scriptOfFunction(op.owner, op.script);
+        if (owner.s.id !== s.id) throw new OpError('An inline function must be in the same script as its owner');
+        const name = checkIdent(ctx, op.name ?? 'callback', 'Function');
+        f = createFunction({ name, kind: 'lambda', owner: owner.f.id, params: params(ctx, s, op.params ?? [], `Function ${name}`), returnType: checkType(ctx, s, op.returnType ?? 'void', `Function ${name} return`, true), description: op.description });
+      } else if (op.kind === 'event' || op.event) {
         const ev = op.event ?? op.name;
         if (!ev || !tc.adapter.events.some((e) => e.id === ev)) throw new OpError(`Unknown event "${ev}" (available: ${tc.adapter.events.map((e) => e.id).join(', ')})`);
         if (s.functions.some((x) => x.kind === 'event' && x.event === ev)) throw new OpError(`Script ${s.name} already handles ${ev}`);
@@ -629,7 +642,18 @@ function applyOne(ctx: OpContext, op: EditOp, warnings: string[]): [string | und
     }
     case 'delete_function': {
       const { s, f } = ctx.scriptOfFunction(op.function, op.script);
-      s.functions = s.functions.filter((x) => x.id !== f.id);
+      // Inline functions go with their owner (and theirs with them).
+      const gone = new Set([f.id]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const x of s.functions) {
+          if (x.kind === 'lambda' && x.owner && gone.has(x.owner) && !gone.has(x.id)) {
+            gone.add(x.id);
+            grew = true;
+          }
+        }
+      }
+      s.functions = s.functions.filter((x) => !gone.has(x.id));
       const users = s.functions.filter((g) => g.graph.nodes.some((n) => Object.values(n.props).includes(f.id)));
       if (users.length) warnings.push(`Nodes in ${users.map((u) => u.name).join(', ')} still refer to ${f.name}; they will show errors until updated.`);
       return [];

@@ -38,6 +38,7 @@ export const CAPABILITY_KEYS = [
   'match',
   'nullable',
   'dynamicTyping',
+  'closures',
 ] as const;
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number];
 export type LanguageCapabilities = Record<CapabilityKey, boolean>;
@@ -161,6 +162,8 @@ export interface LowerContext {
   bind(port: string, expr: IRExpr, opts?: { type?: TypeRef; nameHint?: string; sideEffect?: boolean }): IRStmt[];
   /** A fresh local identifier based on `hint`. */
   uniqueName(hint: string): string;
+  /** Compile an inline function (kind `lambda`) of this script into a closure expression. */
+  lambda(functionId: string): IRExpr | undefined;
   /** Current loop nesting depth (for break/continue validation). */
   readonly loopDepth: number;
   error(code: string, message: string, opts?: { port?: string; suggestion?: string }): void;

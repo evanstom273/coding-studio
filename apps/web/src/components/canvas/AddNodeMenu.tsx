@@ -22,6 +22,23 @@ export interface MenuEntry {
   type: string;
   props?: Record<string, JsonValue>;
   def: NodeDefinition;
+  /** Creating the node also creates a new inline function owned by the current one. */
+  newClosure?: boolean;
+}
+
+/** Edit operations that add a palette entry's node (with `ref: 'n'`) at a position. */
+export function opsForEntry(e: Pick<MenuEntry, 'type' | 'props' | 'newClosure'>, fn: FunctionDecl, script: ScriptDoc, position: { x: number; y: number }): EditOp[] {
+  const at = { x: Math.round(position.x), y: Math.round(position.y) };
+  if (e.newClosure) {
+    const taken = new Set(script.functions.map((f) => f.name));
+    let name = 'callback';
+    for (let i = 2; taken.has(name); i++) name = `callback${i}`;
+    return [
+      { op: 'add_function', ref: 'lam', kind: 'lambda', owner: fn.id, name },
+      { op: 'add_node', ref: 'n', graph: fn.id, type: e.type, position: at, props: { function: '$lam' } },
+    ];
+  }
+  return [{ op: 'add_node', ref: 'n', type: e.type, position: at, ...(e.props ? { props: e.props } : {}) }];
 }
 
 /** Palette entries for the active script: every node type plus shortcuts for its own variables, functions and signals. */
@@ -36,7 +53,7 @@ export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDec
     if (v.scope !== 'constant') out.push({ key: `set:${v.id}`, title: `Set ${v.name}`, category: 'Variables', description: `Assign ${v.scope} ${v.name}: ${v.type}`, type: 'core.set_var', props: { variable: v.id }, def: def('core.set_var') });
   }
   for (const f of script.functions) {
-    if (f.kind === 'event') continue;
+    if (f.kind === 'event' || f.kind === 'lambda') continue;
     out.push({ key: `call:${f.id}`, title: `Call ${f.name}`, category: 'Functions', description: f.description ?? `Call ${f.name}()`, type: 'core.call_function', props: { function: f.id }, def: def('core.call_function') });
   }
   if (reg.get('godot.emit_signal') && tc.adapter.capabilities.signals) {
@@ -46,6 +63,11 @@ export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDec
   for (const d of reg.available(tc.adapter.id, tc.adapter.capabilities)) {
     out.push({ key: d.type, title: d.title, category: d.category, description: d.description, type: d.type, def: d });
     d.presets?.forEach((p, i) => out.push({ key: `${d.type}#${i}`, title: p.title, category: p.category ?? d.category, description: p.description ?? d.description, type: d.type, props: p.props, def: d }));
+  }
+  const closure = reg.get('ts.closure');
+  if (closure && tc.adapter.capabilities.closures) {
+    out.push({ key: 'closure#new', title: 'New Inline Function', category: 'Functions', description: closure.description, type: 'ts.closure', newClosure: true, def: closure });
+    for (const l of script.functions) if (l.kind === 'lambda' && l.owner === fn.id) out.push({ key: `closure#${l.id}`, title: `${l.name} (inline function)`, category: 'Functions', description: l.description ?? closure.description, type: 'ts.closure', props: { function: l.id }, def: closure });
   }
   const call = reg.get('ts.call');
   if (call && tc.adapter.capabilities.modules) {
@@ -117,7 +139,7 @@ export function AddNodeMenu({ screen, flow, pending, onClose }: { screen: { x: n
   if (!script || !fn) return null;
 
   const choose = (e: MenuEntry) => {
-    const ops: EditOp[] = [{ op: 'add_node', ref: 'n', type: e.type, position: { x: Math.round(flow.x), y: Math.round(flow.y) }, ...(e.props ? { props: e.props } : {}) }];
+    const ops = opsForEntry(e, fn, script, flow);
     if (pending) {
       const port = compatiblePort(tc, script, fn, e, pending);
       if (port) ops.push(pending.handleType === 'source' ? { op: 'connect', from: { node: pending.nodeId, port: pending.portId }, to: { node: '$n', port: port.id } } : { op: 'connect', from: { node: '$n', port: port.id }, to: { node: pending.nodeId, port: pending.portId } });

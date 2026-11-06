@@ -96,6 +96,8 @@ export type IRExpr =
   | { k: 'import'; module: string; name: string; kind: 'named' | 'default' | 'namespace' }
   /** Call the value of an expression (an imported function, a callback): callee(args). */
   | { k: 'invoke'; callee: IRExpr; args: IRExpr[] }
+  /** An inline function (closure): (params) => { body } */
+  | { k: 'lambda'; params: IRParam[]; returnType: TypeRef; body: IRStmt[]; isAsync?: boolean; src?: SourceRef }
   /** A function of this module used as a value (callbacks). */
   | { k: 'func_ref'; name: string }
   /** Property access that yields undefined instead of failing on null (`a?.b`). */

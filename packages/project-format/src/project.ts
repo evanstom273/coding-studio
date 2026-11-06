@@ -43,6 +43,7 @@ export function createFunction(init: Partial<FunctionDecl> & { name: string }): 
     name: init.name,
     kind: init.kind ?? 'function',
     ...(init.event ? { event: init.event } : {}),
+    ...(init.owner ? { owner: init.owner } : {}),
     params: init.params ?? [],
     returnType: init.returnType ?? 'void',
     locals: init.locals ?? [],

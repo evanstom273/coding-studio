@@ -73,7 +73,8 @@ export interface ParamDecl {
   default?: JsonValue;
 }
 
-export type FunctionKind = 'function' | 'event';
+/** `lambda`: an inline function (closure) owned by another function; it can use the owner's parameters and locals. */
+export type FunctionKind = 'function' | 'event' | 'lambda';
 
 export interface FunctionDecl {
   id: string;
@@ -85,6 +86,8 @@ export interface FunctionDecl {
   returnType: string;
   locals: VariableDecl[];
   description?: string;
+  /** kind `lambda`: the function whose parameters and locals it can use. */
+  owner?: string;
   /** Languages with async functions (TypeScript): the function is `async` and may use Await. */
   async?: boolean;
   /** Languages with modules: the function is exported from its file. */

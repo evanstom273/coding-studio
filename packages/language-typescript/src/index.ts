@@ -51,6 +51,7 @@ export const typescriptAdapter: LanguageAdapter = {
     match: true,
     nullable: true,
     dynamicTyping: true,
+    closures: true,
   },
   types: typescriptTypes,
   identifiers: {

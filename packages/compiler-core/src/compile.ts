@@ -64,9 +64,17 @@ export function compileScript(tc: Toolchain, script: ScriptDoc, opts: CompileOpt
       src: { scriptId: script.id },
     });
   }
+  const used = new Set<string>();
   for (const fn of script.functions) {
-    const f = compileFunction(tc, script, fn, report);
+    if (fn.kind === 'lambda') continue; // compiled where a Closure node uses it
+    const f = compileFunction(tc, script, fn, report, used);
     if (f) members.push(f);
+  }
+  for (const fn of script.functions) {
+    if (fn.kind !== 'lambda') continue;
+    if (!tc.adapter.capabilities.closures) report({ severity: 'error', code: 'E_UNSUPPORTED_FEATURE', message: `${tc.adapter.name} has no inline functions (${fn.name}).`, scriptId: script.id, functionId: fn.id });
+    else if (!script.functions.some((f) => f.id === fn.owner)) report({ severity: 'error', code: 'E_ORPHAN_CLOSURE', message: `Inline function ${fn.name} belongs to a function that no longer exists.`, scriptId: script.id, functionId: fn.id, graphId: fn.graph.id, suggestion: 'Delete it, or recreate it from a Closure node.' });
+    else if (!used.has(fn.id)) report({ severity: 'warning', code: 'W_UNUSED_CLOSURE', message: `Inline function ${fn.name} isn't used by any Closure node, so no code is generated for it.`, scriptId: script.id, functionId: fn.id, graphId: fn.graph.id });
   }
 
   const module: IRModule = {
@@ -391,7 +399,7 @@ export function checkConnection(tc: Toolchain, from: { kind: string; direction: 
   return { message: c };
 }
 
-function compileFunction(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, report: (d: Diagnostic) => void) {
+function compileFunction(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, report: (d: Diagnostic) => void, used = new Set<string>(), outerTaken?: Set<string>, stack: string[] = []) {
   const at = { scriptId: script.id, functionId: fn.id, graphId: fn.graph.id };
   let errorsHere = 0;
   const rep = (d: Diagnostic) => {
@@ -403,7 +411,7 @@ function compileFunction(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, rep
   // Structural errors (cycles, bad edges) make lowering meaningless.
   if (errorsHere > 0) return undefined;
   const ctx = makeNodeContext(tc, script, fn);
-  const taken = new Set<string>([
+  const taken = outerTaken ?? new Set<string>([
     ...script.variables.map((v) => v.name),
     ...script.functions.map((f) => f.name),
     ...script.signals.map((s) => s.name),
@@ -411,7 +419,21 @@ function compileFunction(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, rep
     ...fn.params.map((p) => p.name),
     ...fn.locals.map((l) => l.name),
   ]);
-  const ir = lowerFunction({ tc, script, fn, ctx, infos: analysis.infos, index: analysis.index, entryId: analysis.entryId, takenNames: taken, report: rep });
+  if (outerTaken) for (const n of [...fn.params, ...fn.locals]) taken.add(n.name);
+  const lowerLambda = (fid: string) => {
+    const lf = script.functions.find((f) => f.id === fid);
+    if (!lf || lf.kind !== 'lambda') return undefined;
+    if (stack.includes(fid) || fid === fn.id) {
+      rep({ severity: 'error', code: 'E_CLOSURE_CYCLE', message: `Inline function ${lf.name} uses itself.`, ...at });
+      return undefined;
+    }
+    if (lf.owner !== fn.id) rep({ severity: 'error', code: 'E_CLOSURE_OWNER', message: `Inline function ${lf.name} belongs to another function; it can only be used where it was created.`, ...at });
+    used.add(fid);
+    const f = compileFunction(tc, script, lf, report, used, taken, [...stack, fn.id]);
+    if (!f) return undefined;
+    return { k: 'lambda' as const, params: f.params, returnType: f.returnType, body: f.body, ...(f.isAsync ? { isAsync: true } : {}), src: f.src };
+  };
+  const ir = lowerFunction({ tc, script, fn, ctx, infos: analysis.infos, index: analysis.index, entryId: analysis.entryId, takenNames: taken, report: rep, lowerLambda });
   // Pure nodes are evaluated where they are used: an allocating one used twice builds two objects.
   for (const n of fn.graph.nodes) {
     const def = tc.registry.get(n.type);

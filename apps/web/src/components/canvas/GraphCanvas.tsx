@@ -29,7 +29,7 @@ import { useCompile } from '@web/compile/store';
 import { BlueprintNode } from './BlueprintNode';
 import { FrameNode } from './FrameNode';
 import { RerouteNode } from './RerouteNode';
-import { AddNodeMenu, type PendingConnection } from './AddNodeMenu';
+import { AddNodeMenu, opsForEntry, type PendingConnection } from './AddNodeMenu';
 import { portColor, type BPNodeData } from './model';
 import { NodeContextMenu } from './NodeContextMenu';
 import { DND_MIME, type DragNodePayload } from '@web/lib/dnd';
@@ -223,12 +223,16 @@ function Canvas() {
     };
     // Double-click in the node library: add at the centre of the visible canvas.
     const addType = (ev: Event) => {
-      const e = (ev as CustomEvent<{ type: string; props?: Record<string, never> }>).detail;
+      const e = (ev as CustomEvent<{ type: string; props?: Record<string, never>; newClosure?: boolean }>).detail;
       const el = document.querySelector('.react-flow');
       const r = el?.getBoundingClientRect();
       if (!r) return;
       const pos = rf.screenToFlowPosition({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
-      const res = useEditor.getState().tryDispatch([{ op: 'add_node', ref: 'n', type: e.type, position: { x: Math.round(pos.x), y: Math.round(pos.y) }, ...(e.props ? { props: e.props } : {}) }], 'Add node');
+      const st = useEditor.getState();
+      const sc = st.project?.scripts.find((x) => x.id === st.activeScriptId);
+      const f = sc?.functions.find((x) => x.id === st.activeFunctionId);
+      if (!sc || !f) return;
+      const res = st.tryDispatch(opsForEntry(e, f, sc, pos), 'Add node');
       if (res) useEditor.getState().select([res.created.n]);
     };
     const fit = () => void rf.fitView({ padding: 0.2, duration: 250, maxZoom: 1.2 });
@@ -292,7 +296,8 @@ function Canvas() {
         }}
         onNodeDoubleClick={(_e, n) => {
           const node = fn.graph.nodes.find((x) => x.id === n.id);
-          const target = node?.type === 'core.call_function' ? script.functions.find((f) => f.id === node.props.function) : undefined;
+          // Call Function / Inline Function / Function as Value: double-click opens that function's graph.
+          const target = node && ['core.call_function', 'ts.closure', 'ts.function_ref'].includes(node.type) ? script.functions.find((f) => f.id === node.props.function) : undefined;
           if (target) useEditor.getState().setActive(script.id, target.id);
           // Narrow screens: double-tap a node to see its properties.
           else if (compact) useUI.getState().set({ drawer: 'right' });
