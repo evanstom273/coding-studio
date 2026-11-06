@@ -131,6 +131,9 @@ export class GDScriptPrinter {
         return this.builtin(e.op, e.args, e.type);
       case 'lang':
         return this.langExpr(e);
+      default:
+        // await / template / object / import / func_ref / optional_prop come from other languages' node packs.
+        throw new Error(`GDScript can't express "${e.k}"`);
     }
   }
 
@@ -195,6 +198,8 @@ export class GDScriptPrinter {
         return method('clear');
       case 'map_get':
         return method('get');
+      case 'map_set':
+        return [`${this.primary(a[0])}[${this.expr(a[1])}] = ${this.expr(a[2])}`, 0];
       case 'map_keys':
         return method('keys');
       case 'map_erase':
@@ -320,6 +325,8 @@ export class GDScriptPrinter {
       case 'lang':
         this.langStmt(w, s, src);
         break;
+      default:
+        throw new Error(`GDScript can't express "${s.k}"`);
     }
   }
 

@@ -412,6 +412,21 @@ function compileFunction(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, rep
     ...fn.locals.map((l) => l.name),
   ]);
   const ir = lowerFunction({ tc, script, fn, ctx, infos: analysis.infos, index: analysis.index, entryId: analysis.entryId, takenNames: taken, report: rep });
+  // Pure nodes are evaluated where they are used: an allocating one used twice builds two objects.
+  for (const n of fn.graph.nodes) {
+    const def = tc.registry.get(n.type);
+    if (!def?.allocates) continue;
+    const uses = fn.graph.edges.filter((e) => e.from.node === n.id).length;
+    if (uses > 1) rep({ severity: 'warning', code: 'W_REBUILT_EACH_USE', message: `"${def.title}" is connected to ${uses} inputs, and each one gets its own new copy (changes made through one aren't seen by the others).`, ...at, nodeId: n.id, suggestion: 'Store it in a variable (Set) and read the variable (Get) where it is needed.' });
+  }
+  if (fn.async) {
+    if (!tc.adapter.capabilities.async || tc.adapter.id === 'gdscript') rep({ severity: 'error', code: 'E_UNSUPPORTED', message: `${tc.adapter.name} has no async functions; turn off "async" on ${fn.name}.`, ...at });
+    ir.isAsync = true;
+  }
+  if (fn.exported) {
+    if (!tc.adapter.capabilities.modules) rep({ severity: 'warning', code: 'W_UNSUPPORTED', message: `${tc.adapter.name} has no exports; "export" on ${fn.name} is ignored.`, ...at });
+    else ir.exported = true;
+  }
   if (ir.returnType.kind !== 'void' && !alwaysReturns(ir.body)) {
     rep({ severity: 'error', code: 'E_MISSING_RETURN', message: `${fn.name} must return a ${tc.adapter.types.format(ir.returnType)} on every path.`, ...at, nodeId: analysis.entryId, suggestion: 'Add a Return node at the end of every branch.' });
   }

@@ -37,8 +37,11 @@ export function NewProjectDialog({ onClose }: { onClose: () => void }) {
         <Field label="Project name">
           <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} data-testid="project-name" />
         </Field>
-        <Field label="Language" hint="GDScript is fully supported. The compiler is built for more languages; see docs/LANGUAGE_ADAPTERS.md.">
-          <select className={inputCls} value={language} onChange={(e) => setLanguage(e.target.value)}>
+        <Field label="Language" hint="GDScript for Godot; TypeScript / JavaScript for web projects (ES modules).">
+          <select className={inputCls} value={language} onChange={(e) => {
+              setLanguage(e.target.value);
+              setTemplate(languages.get(e.target.value)?.templates[0]?.id ?? '');
+            }} data-testid="project-language">
             {languages.all().map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}

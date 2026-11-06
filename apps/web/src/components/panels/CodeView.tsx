@@ -4,6 +4,7 @@ import '@web/lib/monaco';
 import type { editor } from 'monaco-editor';
 import { useCompile } from '@web/compile/store';
 import { useEditor } from '@web/store/editor';
+import { monacoLanguage } from '@web/lib/fileTypes';
 
 /**
  * Read-only view of the generated source for the active script. The graph is the source of
@@ -68,7 +69,7 @@ export default function CodeView() {
       <div className="min-h-0 flex-1" data-testid="code-view">
         <Editor
           height="100%"
-          language="gdscript"
+          language={monacoLanguage(file?.path ?? '.gd')}
           theme="coding-studio"
           value={file?.content ?? ''}
           onMount={onMount}

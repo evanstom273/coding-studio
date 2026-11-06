@@ -121,6 +121,8 @@ function sanitizeScript(raw: Doc, i: number, issues: string[]): ScriptDoc {
       returnType: str(f.returnType, 'void'),
       locals: sanitizeVars(f.locals),
       ...(typeof f.description === 'string' ? { description: f.description } : {}),
+      ...(f.async === true ? { async: true } : {}),
+      ...(f.exported === true ? { exported: true } : {}),
       graph: sanitizeGraph(f.graph, `${name}.${str(f.name, '?')}`, issues),
     }));
   return {

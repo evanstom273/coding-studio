@@ -6,10 +6,12 @@ import { LanguageRegistry, type LanguageAdapter } from '@cs/language-sdk';
 import { NodeRegistry } from '@cs/node-registry';
 import { CORE_NODES } from '@cs/node-registry/core-nodes';
 import { gdscriptAdapter } from '@cs/language-gdscript';
+import { typescriptAdapter } from '@cs/language-typescript';
 import type { Toolchain } from '@cs/compiler-core';
 
 export const languages = new LanguageRegistry();
 languages.register(gdscriptAdapter);
+languages.register(typescriptAdapter);
 
 const cache = new Map<string, Toolchain>();
 

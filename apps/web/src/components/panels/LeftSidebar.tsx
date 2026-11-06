@@ -31,7 +31,7 @@ function NodeLibrary() {
   const [q, setQ] = useState('');
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const tc = toolchainFor(project.language);
-  const entries = useMemo(() => (script && fn ? paletteEntries(tc, script, fn).filter((e) => !e.key.includes(':')) : []), [tc, script, fn]);
+  const entries = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, project.scripts).filter((e) => !e.key.includes(':')) : []), [tc, script, fn, project.scripts]);
   const filtered = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return entries.filter((e) => words.every((w) => `${e.title} ${e.category} ${(e.def.keywords ?? []).join(' ')} ${e.type}`.toLowerCase().includes(w)));

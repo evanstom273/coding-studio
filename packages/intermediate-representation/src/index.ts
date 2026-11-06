@@ -57,6 +57,7 @@ export type BuiltinOp =
   | 'array_clear'
   | 'map_has'
   | 'map_get'
+  | 'map_set'
   | 'map_keys'
   | 'map_size'
   | 'map_erase';
@@ -85,6 +86,20 @@ export type IRExpr =
   | { k: 'instanceof'; expr: IRExpr; type: TypeRef }
   /** Reference to a member enum value. */
   | { k: 'enum'; enumName: string; member: string }
+  /** Wait for an async value (TypeScript `await`). */
+  | { k: 'await'; expr: IRExpr }
+  /** String with embedded values (TypeScript template literal). */
+  | { k: 'template'; parts: (string | IRExpr)[] }
+  /** Object literal with fixed keys. */
+  | { k: 'object'; entries: { key: string; value: IRExpr }[] }
+  /** A binding imported from another module; the backend's import manager writes the import. */
+  | { k: 'import'; module: string; name: string; kind: 'named' | 'default' | 'namespace' }
+  /** Call the value of an expression (an imported function, a callback): callee(args). */
+  | { k: 'invoke'; callee: IRExpr; args: IRExpr[] }
+  /** A function of this module used as a value (callbacks). */
+  | { k: 'func_ref'; name: string }
+  /** Property access that yields undefined instead of failing on null (`a?.b`). */
+  | { k: 'optional_prop'; target: IRExpr; name: string }
   /**
    * Language-specific construct produced by a language node pack. Only the backend whose id is
    * `lang` may print it; others report it as unsupported. `op` names the construct; `args` are
@@ -110,6 +125,9 @@ export type IRStmt = (
   | { k: 'continue' }
   | { k: 'return'; value?: IRExpr }
   | { k: 'comment'; text: string }
+  /** try { body } catch (catchVar) { handler } finally { finally } */
+  | { k: 'try'; body: IRStmt[]; catchVar?: string; handler?: IRStmt[]; finally?: IRStmt[] }
+  | { k: 'throw'; value: IRExpr }
   /** Language-specific statement (see IRExpr 'lang'). */
   | { k: 'lang'; lang: string; op: string; args: IRExpr[]; data?: Record<string, JsonValue> }
 ) & { src?: SourceRef };
@@ -131,6 +149,8 @@ export interface IRFunction {
   returnType: TypeRef;
   body: IRStmt[];
   isStatic?: boolean;
+  isAsync?: boolean;
+  exported?: boolean;
   doc?: string;
   /** Lifecycle event id when this function is a host callback (GDScript "_ready"). */
   event?: string;
@@ -213,6 +233,11 @@ export function walkStmts(stmts: IRStmt[], fn: (s: IRStmt) => void) {
         for (const a of s.arms) walkStmts(a.body, fn);
         if (s.default) walkStmts(s.default, fn);
         break;
+      case 'try':
+        walkStmts(s.body, fn);
+        if (s.handler) walkStmts(s.handler, fn);
+        if (s.finally) walkStmts(s.finally, fn);
+        break;
     }
   }
 }
@@ -260,7 +285,21 @@ export function walkExpr(e: IRExpr, fn: (e: IRExpr) => void) {
       break;
     case 'cast':
     case 'instanceof':
+    case 'await':
       walkExpr(e.expr, fn);
+      break;
+    case 'optional_prop':
+      walkExpr(e.target, fn);
+      break;
+    case 'invoke':
+      walkExpr(e.callee, fn);
+      e.args.forEach((a) => walkExpr(a, fn));
+      break;
+    case 'template':
+      e.parts.forEach((p) => typeof p !== 'string' && walkExpr(p, fn));
+      break;
+    case 'object':
+      e.entries.forEach((x) => walkExpr(x.value, fn));
       break;
   }
 }
@@ -285,6 +324,8 @@ export function stmtExprs(s: IRStmt): IRExpr[] {
       return [s.subject, ...s.arms.flatMap((a) => a.values)];
     case 'return':
       return s.value ? [s.value] : [];
+    case 'throw':
+      return [s.value];
     case 'lang':
       return s.args;
     default:
@@ -295,7 +336,8 @@ export function stmtExprs(s: IRStmt): IRExpr[] {
 /** True when every path through the block ends in a return (used for missing-return checks). */
 export function alwaysReturns(stmts: IRStmt[]): boolean {
   for (const s of stmts) {
-    if (s.k === 'return') return true;
+    if (s.k === 'return' || s.k === 'throw') return true;
+    if (s.k === 'try' && (s.finally && alwaysReturns(s.finally) ? true : alwaysReturns(s.body) && (!s.handler || alwaysReturns(s.handler)))) return true;
     if (s.k === 'if' && s.else && alwaysReturns(s.then) && alwaysReturns(s.else)) return true;
     if (s.k === 'match' && s.default && s.arms.every((a) => alwaysReturns(a.body)) && alwaysReturns(s.default)) return true;
   }

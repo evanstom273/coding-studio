@@ -47,6 +47,8 @@ export function createFunction(init: Partial<FunctionDecl> & { name: string }): 
     returnType: init.returnType ?? 'void',
     locals: init.locals ?? [],
     ...(init.description ? { description: init.description } : {}),
+    ...(init.async ? { async: true } : {}),
+    ...(init.exported ? { exported: true } : {}),
     graph: init.graph ?? { id: newId('g'), nodes: [entryNode()], edges: [] },
   };
 }
@@ -71,7 +73,12 @@ export function createScript(adapter: LanguageAdapter, name: string, opts: { pat
     path: opts.path ?? toSnakeCase(name),
     settings: structuredClone(tpl?.settings ?? {}),
     variables: [],
-    functions: (tpl?.events ?? []).map((e) => createEventFunction(adapter, e)),
+    functions: [
+      ...(tpl?.events ?? []).map((e) => createEventFunction(adapter, e)),
+      ...(tpl?.functions ?? []).map((f) =>
+        createFunction({ name: f.name, params: (f.params ?? []).map((p) => ({ id: newId('p'), ...p })), returnType: f.returnType ?? 'void', ...(f.description ? { description: f.description } : {}), ...(f.exported ? { exported: true } : {}), ...(f.async ? { async: true } : {}) }),
+      ),
+    ],
     signals: [],
     enums: [],
   };

@@ -202,6 +202,10 @@ export interface NodeDefinition {
   languages?: string[];
   /** Hidden from the palette (entry nodes). */
   internal?: boolean;
+  /** Pure nodes that build a new object each time they are evaluated (Make Array/Map/Object). */
+  allocates?: boolean;
+  /** Ready-made configurations shown as their own palette entries (e.g. Call → fetch, JSON.parse). */
+  presets?: { title: string; description?: string; category?: string; keywords?: string[]; props: Record<string, JsonValue> }[];
   /** Dynamic title (e.g. "Set speed"). */
   displayTitle?(node: GraphNode, ctx: NodeContext): string;
   ports(node: GraphNode, ctx: NodeContext): PortSpec[];

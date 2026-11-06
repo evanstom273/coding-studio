@@ -18,7 +18,7 @@ afterAll(() => server.close());
 describe('Godot companion service', () => {
   const tc = toolchainFor('gdscript');
   it('health and palette', async () => {
-    expect(await (await fetch(url('/health'))).json()).toMatchObject({ ok: true, languages: ['gdscript'] });
+    expect(await (await fetch(url('/health'))).json()).toMatchObject({ ok: true, languages: ['gdscript', 'typescript'] });
     const palette = (await (await fetch(url('/palette?language=gdscript'))).json()) as { type: string }[];
     expect(palette.some((p) => p.type === 'godot.characterbody2d.move_and_slide')).toBe(true);
   });

@@ -305,6 +305,20 @@ function FunctionEditor({ fn, script }: { fn: FunctionDecl; script: ScriptDoc })
           <Row label="Description">
             <textarea className={`${inputCls} h-14 py-1`} value={fn.description ?? ''} onChange={(e) => upd({ description: e.target.value }, 'Edit description', `fdesc:${fn.id}`)} />
           </Row>
+          {project.language !== 'gdscript' && (
+            <div className="mb-2 flex gap-4 text-[12px]">
+              {toolchainFor(project.language).adapter.capabilities.async && (
+                <label className="flex items-center gap-1.5" title="Lets the function use Await; it returns a Promise.">
+                  <input type="checkbox" checked={!!fn.async} onChange={(e) => upd({ async: e.target.checked }, e.target.checked ? 'Make async' : 'Make not async')} data-testid="fn-async" /> async
+                </label>
+              )}
+              {toolchainFor(project.language).adapter.capabilities.modules && (
+                <label className="flex items-center gap-1.5" title="Other files (and other scripts' Call nodes) can import it.">
+                  <input type="checkbox" checked={!!fn.exported} onChange={(e) => upd({ exported: e.target.checked }, e.target.checked ? 'Export function' : 'Stop exporting function')} data-testid="fn-exported" /> export
+                </label>
+              )}
+            </div>
+          )}
         </>
       )}
       <Row label="Local variables">

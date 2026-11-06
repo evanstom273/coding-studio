@@ -485,6 +485,7 @@ const arrT = (n: GraphNode, ctx: NodeContext) => tp(n, ctx, 'elementType', 'any'
 
 const makeArray: NodeDefinition = {
   type: 'core.make_array',
+  allocates: true,
   title: 'Make Array',
   category: 'Arrays',
   description: 'Build an array from its items.',
@@ -564,6 +565,7 @@ const mapIn = (n: GraphNode, ctx: NodeContext) => {
 
 const makeMap: NodeDefinition = {
   type: 'core.make_map',
+  allocates: true,
   title: 'Make Dictionary',
   category: 'Dictionaries',
   description: 'Build a dictionary from key/value pairs.',
@@ -605,7 +607,7 @@ const mapSet: NodeDefinition = {
     const { k, v } = mapTypes(n, ctx);
     return [exec.in(), mapIn(n, ctx), data.in('key', 'Key', k, { default: zeroOf(k) }), data.in('value', 'Value', v, { required: true }), exec.out()];
   },
-  lowerExec: (lc) => ({ stmts: [{ k: 'assign', target: { k: 'index', target: lc.input('map'), index: lc.input('key') }, value: lc.input('value') }], next: 'then' }),
+  lowerExec: (lc) => ({ stmts: [{ k: 'expr', expr: { k: 'builtin', op: 'map_set', args: [lc.input('map'), lc.input('key'), lc.input('value')] } }], next: 'then' }),
 };
 
 const mapHas: NodeDefinition = {
@@ -791,6 +793,7 @@ const castNode: NodeDefinition = {
 
 const newObject: NodeDefinition = {
   type: 'core.new_object',
+  allocates: true,
   title: 'Create Object',
   category: 'Objects',
   description: 'Create a new instance of a class (e.g. a Timer). Nodes must still be added to the tree.',

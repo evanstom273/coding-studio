@@ -67,13 +67,14 @@ Operations (fields in brackets are optional; script/graph default to the active 
 - delete_nodes {nodes[]} · move_nodes {nodes[], dx, dy | positions{id:{x,y}}} · duplicate_nodes {nodes[], [offset], [ref → "$ref.0"…]}
 - connect {from {node, port}, to {node, port}, [ref]}  (output → input; replaces an existing wire into a data input / out of an exec output)
 - disconnect {edges[] | from | to}
-- add_function {name, [params [{name,type,default?}]], [returnType], [description], [ref]}  or {kind:"event", event:"_ready"|"_process"|"_physics_process"|"_input"|…}
-- update_function {function, [name], [params], [returnType], [description]} · delete_function {function}
+- add_function {name, [params [{name,type,default?}]], [returnType], [description], [async], [exported], [ref]}  or {kind:"event", event:"_ready"|"_process"|"_physics_process"|"_input"|…} (GDScript)
+- update_function {function, [name], [params], [returnType], [description], [async], [exported]}  (async/exported: TypeScript) · delete_function {function}
 - add_variable {name, type, [default], [exported], [constant], [description], [attributes {onreadyPath}], [function → local variable]} · update_variable {variable, …} · delete_variable {variable}
 - add_signal {name, [params]} · update_signal · delete_signal · add_enum {name, members[]} · update_enum · delete_enum
 - add_script {name, [path], [template], [settings {extends, class_name, tool}]} · update_script {script, …} · delete_script {script}
 - update_project {[name], [languageVersion], [compilerSettings]}
 Node props that reference variables/functions/signals/enums accept their id or name.
+TypeScript nodes: ts.call {module (npm package) | scriptPath (another script of the project) | neither (globals like fetch, JSON.parse), name, argNames[], argTypes[], returnType, await} · ts.call_method {name, argTypes[], returnType, await, optional} · ts.await {type} · ts.try (exec outs try/catch/finally/then, data out error) · ts.throw · ts.template {template "Hi {name}"} · ts.object {keys[]} · ts.get_field / ts.set_field {name, optional} · ts.function_ref {function} · ts.default_value (??). Imports are written automatically.
 Execution flow: connect exec output "then" (or "true"/"false", "body", "completed"…) to exec input "exec". Every function graph starts at its Entry node (output "then", plus one data output per parameter, keyed by parameter id or name).`;
 
 export function buildServer(bridge: Relay, host: ToolHost): McpServer {
@@ -112,7 +113,7 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     'create_project',
     {
       title: 'Create project',
-      description: 'Create a project with one script and open it in the editor. Templates (GDScript): node, node2d, node3d, character2d, character3d, control, refcounted.',
+      description: 'Create a project with one script and open it in the editor. language: gdscript (Godot, default) or typescript (web; script setting output "js" writes plain JavaScript). Templates — GDScript: node, node2d, node3d, character2d, character3d, control, refcounted; TypeScript: module (exported main), async-module, empty.',
       inputSchema: { name: z.string(), language: z.string().optional().describe('Default gdscript'), template: z.string().optional(), script_name: z.string().optional().describe('Name of the first script (default Main)') },
     },
     (a) => call('create_project', a, 20_000),
@@ -194,8 +195,8 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
   server.registerTool('delete_variable', { title: 'Delete variable', description: 'Delete a variable.', inputSchema: { project, expected_revision: revision, script, variable: z.string(), function: z.string().optional() }, annotations: { destructiveHint: true } }, ({ project: p, expected_revision, ...v }) => batch({ project: p, expected_revision }, [{ op: 'delete_variable', ...v }]));
   server.registerTool(
     'create_function',
-    { title: 'Create function', description: 'Add a function with its own graph (an Entry node is created automatically).', inputSchema: { project, expected_revision: revision, script, name: z.string(), params: z.array(param).optional(), return_type: z.string().optional(), description: z.string().optional() } },
-    (a) => batch(a, [{ op: 'add_function', ref: 'function', script: a.script, name: a.name, params: a.params, returnType: a.return_type, description: a.description }]),
+    { title: 'Create function', description: 'Add a function with its own graph (an Entry node is created automatically). TypeScript: async=true allows Await nodes; exported=true lets other scripts call it.', inputSchema: { project, expected_revision: revision, script, name: z.string(), params: z.array(param).optional(), return_type: z.string().optional(), description: z.string().optional(), async: z.boolean().optional(), exported: z.boolean().optional() } },
+    (a) => batch(a, [{ op: 'add_function', ref: 'function', script: a.script, name: a.name, params: a.params, returnType: a.return_type, description: a.description, async: a.async, exported: a.exported }]),
   );
   server.registerTool(
     'update_function',

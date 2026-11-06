@@ -60,6 +60,9 @@
       ],
       "@cs/git": [
         "packages/git/src/index.ts"
+      ],
+      "@cs/language-typescript": [
+        "packages/language-typescript/src/index.ts"
       ]
     }
   },

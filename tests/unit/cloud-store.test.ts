@@ -330,3 +330,30 @@ describe('CI through the cloud connector', () => {
     expect(fake.dispatches).toEqual([{ workflow: '.github/workflows/ci.yml', ref: 'main' }]);
   });
 });
+
+describe('TypeScript projects through the connector', () => {
+  it('Claude creates a TS project, adds an exported async function using fetch, and gets TypeScript', async () => {
+    const cloud = new CloudService(kv(), backend(), () => undefined, 'https://site', () => 0);
+    await cloud.handle('create_project', { name: 'Web', language: 'typescript', template: 'empty' });
+    await cloud.handle('batch_edit', {
+      operations: [
+        { op: 'add_function', ref: 'f', name: 'load', params: [{ name: 'url', type: 'string' }], returnType: 'any', async: true, exported: true },
+        { op: 'add_node', ref: 'fetch', graph: '$f', type: 'ts.call', props: { name: 'fetch', argNames: ['url'], argTypes: ['string'], returnType: 'Response', await: true } },
+        { op: 'add_node', ref: 'json', graph: '$f', type: 'ts.call_method', props: { name: 'json', returnType: 'any', await: true } },
+        { op: 'add_node', ref: 'ret', graph: '$f', type: 'core.return' },
+        { op: 'connect', graph: '$f', from: { node: '$f.entry', port: 'then' }, to: { node: '$fetch', port: 'exec' } },
+        { op: 'connect', graph: '$f', from: { node: '$f.entry', port: 'url' }, to: { node: '$fetch', port: 'arg_0' } },
+        { op: 'connect', graph: '$f', from: { node: '$fetch', port: 'then' }, to: { node: '$json', port: 'exec' } },
+        { op: 'connect', graph: '$f', from: { node: '$fetch', port: 'result' }, to: { node: '$json', port: 'object' } },
+        { op: 'connect', graph: '$f', from: { node: '$json', port: 'then' }, to: { node: '$ret', port: 'exec' } },
+        { op: 'connect', graph: '$f', from: { node: '$json', port: 'result' }, to: { node: '$ret', port: 'value' } },
+      ],
+    });
+    const r = (await cloud.handle('compile_project', {})) as { ok: boolean; files: { path: string; content: string }[] };
+    expect(r.ok).toBe(true);
+    expect(r.files[0].path).toBe('main.ts');
+    expect(r.files[0].content).toContain('export async function load(url: string): Promise<any> {');
+    expect(r.files[0].content).toContain('let fetch_result: Response = await fetch(url);');
+    expect(r.files[0].content).toContain('let json_result = await fetch_result.json();');
+  });
+});

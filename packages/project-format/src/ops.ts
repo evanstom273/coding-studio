@@ -39,8 +39,8 @@ export type EditOp =
   | { op: 'add_script'; ref?: string; name: string; path?: string; template?: string; settings?: Record<string, JsonValue>; description?: string }
   | { op: 'update_script'; script?: string; name?: string; path?: string; settings?: Record<string, JsonValue>; description?: string }
   | { op: 'delete_script'; script: string }
-  | { op: 'add_function'; ref?: string; script?: string; name?: string; kind?: 'function' | 'event'; event?: string; params?: ParamInput[]; returnType?: string; description?: string }
-  | { op: 'update_function'; function: string; script?: string; name?: string; params?: ParamInput[]; returnType?: string; description?: string }
+  | { op: 'add_function'; ref?: string; script?: string; name?: string; kind?: 'function' | 'event'; event?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean }
+  | { op: 'update_function'; function: string; script?: string; name?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean }
   | { op: 'delete_function'; function: string; script?: string }
   | { op: 'add_variable'; ref?: string; script?: string; function?: string; name: string; type: string; default?: JsonValue; exported?: boolean; constant?: boolean; description?: string; attributes?: Record<string, JsonValue> }
   | { op: 'update_variable'; variable: string; script?: string; function?: string; name?: string; type?: string; default?: JsonValue | null; exported?: boolean; constant?: boolean; description?: string; attributes?: Record<string, JsonValue> | null }
@@ -601,6 +601,7 @@ function applyOne(ctx: OpContext, op: EditOp, warnings: string[]): [string | und
         const name = checkIdent(ctx, op.name, 'Function');
         f = createFunction({ name, params: params(ctx, s, op.params ?? [], `Function ${name}`), returnType: checkType(ctx, s, op.returnType ?? 'void', `Function ${name} return`, true), description: op.description });
       }
+      applyModifiers(tc, f, op);
       checkUniqueMember(s, f.name);
       s.functions.push(f);
       const entry = f.graph.nodes.find((n) => n.type === 'core.entry')!;
@@ -620,6 +621,7 @@ function applyOne(ctx: OpContext, op: EditOp, warnings: string[]): [string | und
       }
       if (op.params !== undefined) f.params = params(ctx, s, op.params, `Function ${f.name}`, f.params);
       if (op.returnType !== undefined) f.returnType = checkType(ctx, s, op.returnType, `Function ${f.name} return`, true);
+      applyModifiers(tc, f, op);
       if (op.description !== undefined) f.description = String(op.description);
       // Signature changes alter Entry/Return/Call ports in every graph of the script.
       for (const g of s.functions) pruneEdges(ctx, s, d.fn(s.id, g.id), warnings);
@@ -905,6 +907,22 @@ function applyVarFields(ctx: OpContext, s: ScriptDoc, v: VariableDecl, op: { def
 }
 
 /** Convenience: graph lookup for read-only callers. */
+/** async / exported flags, where the language has them. */
+function applyModifiers(tc: Toolchain, f: FunctionDecl, op: { async?: unknown; exported?: unknown }) {
+  if (op.async !== undefined) {
+    if (typeof op.async !== 'boolean') throw new OpError('"async" must be true or false');
+    if (op.async && tc.adapter.id === 'gdscript') throw new OpError('GDScript functions can\'t be marked async (use await on signals instead)');
+    if (op.async) f.async = true;
+    else delete f.async;
+  }
+  if (op.exported !== undefined) {
+    if (typeof op.exported !== 'boolean') throw new OpError('"exported" must be true or false');
+    if (op.exported && !tc.adapter.capabilities.modules) throw new OpError(`${tc.adapter.name} has no exports`);
+    if (op.exported) f.exported = true;
+    else delete f.exported;
+  }
+}
+
 export function findFunction(p: Project, ref: string): { script: ScriptDoc; fn: FunctionDecl } | undefined {
   for (const s of p.scripts) {
     const f = s.functions.find((x) => x.id === ref || x.graph.id === ref);

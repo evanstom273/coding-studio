@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'apps/web/dist', 'node_modules', 'apps/godot-addon', '.wrangler', 'test-results', 'playwright-report'] },
+  { ignores: ['dist', 'apps/web/dist', 'node_modules', 'apps/godot-addon', '.wrangler', 'test-results', 'playwright-report', 'tests/fixtures/golden'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

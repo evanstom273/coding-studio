@@ -85,6 +85,10 @@ export interface FunctionDecl {
   returnType: string;
   locals: VariableDecl[];
   description?: string;
+  /** Languages with async functions (TypeScript): the function is `async` and may use Await. */
+  async?: boolean;
+  /** Languages with modules: the function is exported from its file. */
+  exported?: boolean;
   graph: Graph;
 }
 

@@ -59,6 +59,8 @@ export interface ScriptTemplate {
   settings: Record<string, JsonValue>;
   /** Events created with the script. */
   events: string[];
+  /** Ordinary functions created with the script (languages without lifecycle events). */
+  functions?: { name: string; params?: { name: string; type: string }[]; returnType?: string; exported?: boolean; async?: boolean; description?: string }[];
 }
 
 export interface CompilationContext {

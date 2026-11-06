@@ -25,7 +25,8 @@ export interface MenuEntry {
 }
 
 /** Palette entries for the active script: every node type plus shortcuts for its own variables, functions and signals. */
-export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl): MenuEntry[] {
+/** `others`: the project's other scripts (their exported functions become Call entries where the language has modules). */
+export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, others: ScriptDoc[] = []): MenuEntry[] {
   const out: MenuEntry[] = [];
   const reg = tc.registry;
   const def = (t: string) => reg.get(t)!;
@@ -42,7 +43,21 @@ export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDec
     for (const s of script.signals) out.push({ key: `emit:${s.id}`, title: `Emit ${s.name}`, category: 'Godot/Signals', description: `Emit signal ${s.name}`, type: 'godot.emit_signal', props: { signal: s.id }, def: def('godot.emit_signal') });
   }
   for (const e of script.enums) for (const m of e.members) out.push({ key: `enum:${e.id}:${m.name}`, title: `${e.name}.${m.name}`, category: 'Variables', description: `Enum value`, type: 'core.enum_value', props: { enum: e.id, member: m.name }, def: def('core.enum_value') });
-  for (const d of reg.available(tc.adapter.id, tc.adapter.capabilities)) out.push({ key: d.type, title: d.title, category: d.category, description: d.description, type: d.type, def: d });
+  for (const d of reg.available(tc.adapter.id, tc.adapter.capabilities)) {
+    out.push({ key: d.type, title: d.title, category: d.category, description: d.description, type: d.type, def: d });
+    d.presets?.forEach((p, i) => out.push({ key: `${d.type}#${i}`, title: p.title, category: p.category ?? d.category, description: p.description ?? d.description, type: d.type, props: p.props, def: d }));
+  }
+  const call = reg.get('ts.call');
+  if (call && tc.adapter.capabilities.modules) {
+    for (const s of others) {
+      if (s.id === script.id) continue;
+      for (const f of s.functions) {
+        if (!f.exported) continue;
+        const props = { scriptPath: s.path, name: f.name, argNames: f.params.map((p) => p.name), argTypes: f.params.map((p) => p.type), returnType: f.returnType, await: !!f.async && !!fn.async };
+        out.push({ key: `xcall#${s.id}#${f.id}`, title: `${s.name}.${f.name}()`, category: `Project/${s.name}`, description: f.description ?? `Call ${f.name} exported by ${s.path}`, type: 'ts.call', props, def: call });
+      }
+    }
+  }
   return out;
 }
 
@@ -81,7 +96,8 @@ export function AddNodeMenu({ screen, flow, pending, onClose }: { screen: { x: n
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => inputRef.current?.focus(), []);
 
-  const all = useMemo(() => (script && fn ? paletteEntries(tc, script, fn) : []), [tc, script, fn]);
+  const scripts = useEditor((s) => s.project?.scripts);
+  const all = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, scripts) : []), [tc, script, fn, scripts]);
   const contextual = useMemo(() => (pending && script && fn ? all.filter((e) => compatiblePort(tc, script, fn, e, pending)) : all), [all, pending, tc, script, fn]);
   const results = useMemo(
     () =>

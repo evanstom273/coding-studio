@@ -33,9 +33,10 @@
       "@cs/project-service": ["packages/project-service/src/index.ts"],
       "@cs/workspace": ["packages/workspace/src/index.ts"],
       "@cs/git": ["packages/git/src/index.ts"],
+      "@cs/language-typescript": ["packages/language-typescript/src/index.ts"],
       "@web/*": ["apps/web/src/*"]
     }
   },
   "include": ["packages", "apps/web/src", "mcp", "tests", "apps/web/vite.config.ts", "vitest.config.ts", "playwright.config.ts", "aliases.ts"],
-  "exclude": ["node_modules", "dist", "apps/web/dist"]
+  "exclude": ["node_modules", "dist", "apps/web/dist", "tests/fixtures/golden"]
 }
