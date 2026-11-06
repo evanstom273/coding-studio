@@ -54,6 +54,9 @@
       ],
       "@cs/project-service": [
         "packages/project-service/src/index.ts"
+      ],
+      "@cs/workspace": [
+        "packages/workspace/src/index.ts"
       ]
     }
   },

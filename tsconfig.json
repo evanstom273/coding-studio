@@ -31,6 +31,7 @@
       "@cs/shared-protocol": ["packages/shared-protocol/src/index.ts"],
       "@cs/examples": ["packages/examples/src/index.ts"],
       "@cs/project-service": ["packages/project-service/src/index.ts"],
+      "@cs/workspace": ["packages/workspace/src/index.ts"],
       "@web/*": ["apps/web/src/*"]
     }
   },
