@@ -1,11 +1,14 @@
 /**
- * Optional connection from the editor to the local MCP server (mcp/server). OFF by default.
+ * Connections from the editor to Claude. Both are OFF by default and independent:
  *
- * - Connects only to ws://127.0.0.1:<port> (loopback).
- * - Says hello with a random per-tab session id. If another tab already owns the bridge the server
- *   answers "busy"; this tab then shows a "Take over" button — nothing is replaced silently.
- * - Requests run one at a time, in order, through the same edit operations as the UI.
- * - The editor works exactly the same when the bridge is off or the server is not running.
+ *  - local:  ws://127.0.0.1:<port> — the MCP server Claude Code / Claude desktop runs on this PC.
+ *  - remote: wss://<this site>/bridge/<key> — the "Claude connector" served by this site's Worker,
+ *            for Claude on a phone, on claude.ai, or anywhere a local server can't run.
+ *
+ * Each says hello with a random per-tab session id. If another tab already owns that link, the
+ * tab is told it's busy and shows a "Take over" button — nothing is replaced silently. Requests
+ * from either link run one at a time, in order, through the same edit operations as the UI.
+ * The editor works exactly the same when both are off.
  */
 import { create } from 'zustand';
 import { BRIDGE_DEFAULT_PORT, BRIDGE_MAX_PAYLOAD, BRIDGE_PROTOCOL_VERSION, type BridgeHello, type BridgeMessage, type BridgeResponse } from '@cs/shared-protocol';
@@ -21,171 +24,268 @@ export interface BridgeLogEntry {
 }
 
 interface BridgeState {
+  // local MCP server
   enabled: boolean;
   port: number;
   status: BridgeStatus;
   statusText: string;
-  log: BridgeLogEntry[];
   /** True when this page is served by the local MCP server. */
   servedByMcp: boolean;
+  // remote connector
+  remoteEnabled: boolean;
+  remoteKey: string;
+  remoteStatus: BridgeStatus;
+  remoteStatusText: string;
+  log: BridgeLogEntry[];
   setEnabled(on: boolean): void;
   setPort(port: number): void;
   takeOver(): void;
+  setRemoteEnabled(on: boolean): void;
+  /** New secret link; the old one stops working. */
+  resetRemoteKey(): void;
+  takeOverRemote(): void;
   clearLog(): void;
 }
 
 const KEY = 'coding-studio:bridge';
-export const APP_VERSION = '0.1.0';
-const sessionId = (() => {
-  const b = new Uint8Array(12);
-  crypto.getRandomValues(b);
-  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
-})();
+const REMOTE_KEY = 'coding-studio:connector';
+export const APP_VERSION = '0.2.0';
 
-function load(): { enabled: boolean; port: number } {
+const randomId = (bytes: number) => {
+  const b = new Uint8Array(bytes);
+  crypto.getRandomValues(b);
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+const sessionId = randomId(12);
+
+function readJson(key: string): Record<string, unknown> {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-    return { enabled: v.enabled === true, port: Number.isInteger(v.port) && v.port > 1024 && v.port < 65536 ? v.port : BRIDGE_DEFAULT_PORT };
+    return JSON.parse(localStorage.getItem(key) ?? '{}');
   } catch {
-    return { enabled: false, port: BRIDGE_DEFAULT_PORT };
+    return {};
+  }
+}
+function writeJson(key: string, v: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* storage unavailable */
   }
 }
 
-function persist() {
-  const { enabled, port } = useBridge.getState();
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ enabled, port }));
-  } catch {
-    /* ignore */
-  }
+function loadLocal() {
+  const v = readJson(KEY);
+  return { enabled: v.enabled === true, port: Number.isInteger(v.port) && (v.port as number) > 1024 && (v.port as number) < 65536 ? (v.port as number) : BRIDGE_DEFAULT_PORT };
+}
+function loadRemote() {
+  const v = readJson(REMOTE_KEY);
+  const key = typeof v.key === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(v.key) ? v.key : randomId(32);
+  return { remoteEnabled: v.enabled === true, remoteKey: key };
+}
+
+/** The link to paste into Claude → Settings → Connectors → Add custom connector. */
+export function connectorUrl(key = useBridge.getState().remoteKey) {
+  return `${window.location.origin}/mcp/${key}`;
 }
 
 export const useBridge = create<BridgeState>()((set, get) => ({
-  ...load(),
+  ...loadLocal(),
+  ...loadRemote(),
   status: 'off',
   statusText: 'Claude Code access is off',
-  log: [],
+  remoteStatus: 'off',
+  remoteStatusText: 'Claude connector is off',
   servedByMcp: false,
+  log: [],
   setEnabled(enabled) {
     set({ enabled });
-    persist();
-    disconnect();
-    if (enabled) connect(false);
+    writeJson(KEY, { enabled, port: get().port });
+    local.restart(false);
   },
   setPort(port) {
     set({ port });
-    persist();
-    if (get().enabled) {
-      disconnect();
-      connect(false);
-    }
+    writeJson(KEY, { enabled: get().enabled, port });
+    if (get().enabled) local.restart(false);
   },
   takeOver() {
-    disconnect();
-    connect(true);
+    local.restart(true);
+  },
+  setRemoteEnabled(remoteEnabled) {
+    set({ remoteEnabled });
+    writeJson(REMOTE_KEY, { enabled: remoteEnabled, key: get().remoteKey });
+    remote.restart(false);
+  },
+  resetRemoteKey() {
+    const remoteKey = randomId(32);
+    set({ remoteKey });
+    writeJson(REMOTE_KEY, { enabled: get().remoteEnabled, key: remoteKey });
+    remote.restart(false);
+  },
+  takeOverRemote() {
+    remote.restart(true);
   },
   clearLog() {
     set({ log: [] });
   },
 }));
 
-let socket: WebSocket | null = null;
-let retryTimer: ReturnType<typeof setTimeout> | null = null;
-let retryDelay = 1000;
-let queue: Promise<void> = Promise.resolve();
-
 export function bridgeLog(entry: Omit<BridgeLogEntry, 'at'>) {
   useBridge.setState((s) => ({ log: [{ at: Date.now(), ...entry }, ...s.log].slice(0, 200) }));
 }
 
-function setStatus(status: BridgeStatus, statusText: string) {
-  useBridge.setState({ status, statusText });
+/** Requests from both links share one queue so edits never interleave. */
+let queue: Promise<void> = Promise.resolve();
+
+interface LinkConfig {
+  name: string;
+  enabled(): boolean;
+  url(): string;
+  setStatus(status: BridgeStatus, text: string): void;
+  offText: string;
+  unreachableText(): string;
+  /** Send "ping" this often (ms) to keep proxies from dropping an idle socket. */
+  keepAlive?: number;
 }
 
-function disconnect() {
-  if (retryTimer) clearTimeout(retryTimer);
-  retryTimer = null;
-  const s = socket;
-  socket = null;
-  s?.close(1000);
-  setStatus('off', useBridge.getState().enabled ? 'Disconnected' : 'Claude Code access is off');
-}
+class Link {
+  private socket: WebSocket | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private retryDelay = 1000;
 
-function connect(takeover: boolean) {
-  const { enabled, port } = useBridge.getState();
-  if (!enabled || socket) return;
-  setStatus('connecting', `Connecting to 127.0.0.1:${port}…`);
-  let ws: WebSocket;
-  try {
-    ws = new WebSocket(`ws://127.0.0.1:${port}`);
-  } catch (e) {
-    setStatus('unavailable', `Browser blocked the connection: ${e instanceof Error ? e.message : String(e)}`);
-    return;
+  constructor(private readonly cfg: LinkConfig) {}
+
+  get open() {
+    return !!this.socket;
   }
-  socket = ws;
-  let welcomed = false;
-  ws.onopen = () => {
-    const hello: BridgeHello = { type: 'hello', protocol: BRIDGE_PROTOCOL_VERSION, app: 'coding-studio', appVersion: APP_VERSION, sessionId, ...(takeover ? { takeover: true } : {}) };
-    ws.send(JSON.stringify(hello));
-  };
-  ws.onmessage = (ev) => {
-    const raw = String(ev.data);
-    if (raw.length > BRIDGE_MAX_PAYLOAD) return;
-    let msg: BridgeMessage;
+
+  restart(takeover: boolean) {
+    this.stop();
+    if (this.cfg.enabled()) this.connect(takeover);
+  }
+
+  stop() {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    if (this.pingTimer) clearInterval(this.pingTimer);
+    this.retryTimer = null;
+    this.pingTimer = null;
+    const s = this.socket;
+    this.socket = null;
+    s?.close(1000);
+    this.cfg.setStatus('off', this.cfg.enabled() ? 'Disconnected' : this.cfg.offText);
+  }
+
+  connect(takeover: boolean) {
+    if (!this.cfg.enabled() || this.socket) return;
+    const url = this.cfg.url();
+    this.cfg.setStatus('connecting', 'Connecting…');
+    let ws: WebSocket;
     try {
-      msg = JSON.parse(raw);
-    } catch {
+      ws = new WebSocket(url);
+    } catch (e) {
+      this.cfg.setStatus('unavailable', `The browser blocked the connection: ${e instanceof Error ? e.message : String(e)}`);
       return;
     }
-    if (msg.type === 'welcome') {
-      welcomed = true;
-      retryDelay = 1000;
-      setStatus('connected', 'Connected to Claude Code');
-      bridgeLog({ method: 'connected', ok: true, ms: 0, text: 'This tab now accepts edits from Claude Code' });
-      return;
-    }
-    if (msg.type === 'rejected') {
-      setStatus(msg.reason === 'busy' ? 'busy' : 'unavailable', msg.message);
-      socket = null;
-      ws.close();
-      return;
-    }
-    if (msg.type === 'revoked') {
-      setStatus('revoked', msg.message);
-      bridgeLog({ method: 'revoked', ok: false, ms: 0, text: msg.message });
-      socket = null;
-      ws.close();
-      return;
-    }
-    if (msg.type !== 'request' || !welcomed) return;
-    queue = queue.then(async () => {
-      const t0 = performance.now();
-      let res: BridgeResponse;
-      const { handleRequest, BridgeHandlerError } = await import('./handlers');
+    this.socket = ws;
+    let welcomed = false;
+    ws.onopen = () => {
+      const hello: BridgeHello = { type: 'hello', protocol: BRIDGE_PROTOCOL_VERSION, app: 'coding-studio', appVersion: APP_VERSION, sessionId, ...(takeover ? { takeover: true } : {}) };
+      ws.send(JSON.stringify(hello));
+      if (this.cfg.keepAlive) this.pingTimer = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send('ping'), this.cfg.keepAlive);
+    };
+    ws.onmessage = (ev) => {
+      const raw = String(ev.data);
+      if (raw === 'pong' || raw.length > BRIDGE_MAX_PAYLOAD) return;
+      let msg: BridgeMessage;
       try {
-        const result = await handleRequest(msg.method, msg.params ?? {});
-        res = { type: 'response', id: msg.id, ok: true, result };
-        bridgeLog({ method: msg.method, ok: true, ms: performance.now() - t0, text: summarize(msg.method, msg.params) });
-      } catch (e) {
-        const err = e instanceof BridgeHandlerError ? { code: e.code, message: e.message, details: e.details } : { code: (e as { code?: string })?.code ?? 'E_INTERNAL', message: e instanceof Error ? e.message : String(e) };
-        res = { type: 'response', id: msg.id, ok: false, error: err };
-        bridgeLog({ method: msg.method, ok: false, ms: performance.now() - t0, text: err.message });
+        msg = JSON.parse(raw);
+      } catch {
+        return;
       }
-      let out = JSON.stringify(res);
-      if (out.length > BRIDGE_MAX_PAYLOAD) out = JSON.stringify({ type: 'response', id: msg.id, ok: false, error: { code: 'E_PAYLOAD_TOO_LARGE', message: 'Result exceeds the bridge payload limit; request less data.' } } satisfies BridgeResponse);
-      if (ws.readyState === WebSocket.OPEN) ws.send(out);
-    });
-  };
-  ws.onclose = () => {
-    if (socket === ws) {
-      socket = null;
-      if (useBridge.getState().enabled) scheduleRetry();
+      if (msg.type === 'welcome') {
+        welcomed = true;
+        this.retryDelay = 1000;
+        this.cfg.setStatus('connected', `Connected (${this.cfg.name})`);
+        bridgeLog({ method: 'connected', ok: true, ms: 0, text: `This tab now accepts edits from Claude (${this.cfg.name})` });
+        return;
+      }
+      if (msg.type === 'rejected' || msg.type === 'revoked') {
+        this.cfg.setStatus(msg.type === 'revoked' ? 'revoked' : msg.reason === 'busy' ? 'busy' : 'unavailable', msg.message);
+        if (msg.type === 'revoked') bridgeLog({ method: 'revoked', ok: false, ms: 0, text: msg.message });
+        this.socket = null;
+        if (this.pingTimer) clearInterval(this.pingTimer);
+        ws.close();
+        return;
+      }
+      if (msg.type !== 'request' || !welcomed) return;
+      queue = queue.then(async () => {
+        const t0 = performance.now();
+        let res: BridgeResponse;
+        const { handleRequest, BridgeHandlerError } = await import('./handlers');
+        try {
+          const result = await handleRequest(msg.method, msg.params ?? {});
+          res = { type: 'response', id: msg.id, ok: true, result };
+          bridgeLog({ method: msg.method, ok: true, ms: performance.now() - t0, text: summarize(msg.method, msg.params) });
+        } catch (e) {
+          const err = e instanceof BridgeHandlerError ? { code: e.code, message: e.message, details: e.details } : { code: (e as { code?: string })?.code ?? 'E_INTERNAL', message: e instanceof Error ? e.message : String(e) };
+          res = { type: 'response', id: msg.id, ok: false, error: err };
+          bridgeLog({ method: msg.method, ok: false, ms: performance.now() - t0, text: err.message });
+        }
+        let out = JSON.stringify(res);
+        if (out.length > BRIDGE_MAX_PAYLOAD) out = JSON.stringify({ type: 'response', id: msg.id, ok: false, error: { code: 'E_PAYLOAD_TOO_LARGE', message: 'Result exceeds the bridge payload limit; request less data.' } } satisfies BridgeResponse);
+        if (ws.readyState === WebSocket.OPEN) ws.send(out);
+      });
+    };
+    ws.onclose = () => {
+      if (this.socket !== ws) return;
+      this.socket = null;
+      if (this.pingTimer) clearInterval(this.pingTimer);
+      if (this.cfg.enabled()) this.scheduleRetry();
+    };
+    ws.onerror = () => {
+      /* onclose follows */
+    };
+  }
+
+  private scheduleRetry() {
+    this.cfg.setStatus('unavailable', this.cfg.unreachableText());
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.connect(false);
+    }, this.retryDelay);
+    this.retryDelay = Math.min(10_000, this.retryDelay * 1.6);
+  }
+
+  /** Reconnect straight away (e.g. when a phone brings the tab back to the front). */
+  nudge() {
+    if (this.cfg.enabled() && !this.socket) {
+      if (this.retryTimer) clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+      this.retryDelay = 1000;
+      this.connect(false);
     }
-  };
-  ws.onerror = () => {
-    /* onclose follows */
-  };
+  }
 }
+
+const local = new Link({
+  name: 'Claude on this computer',
+  enabled: () => useBridge.getState().enabled,
+  url: () => `ws://127.0.0.1:${useBridge.getState().port}`,
+  setStatus: (status, statusText) => useBridge.setState({ status, statusText: status === 'connected' ? 'Connected to Claude on this computer' : statusText }),
+  offText: 'Claude Code access is off',
+  unreachableText: () => `MCP server not reachable on 127.0.0.1:${useBridge.getState().port}. Is Claude running with the coding-studio server? Retrying…`,
+});
+
+const remote = new Link({
+  name: 'Claude connector',
+  enabled: () => useBridge.getState().remoteEnabled,
+  url: () => `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bridge/${useBridge.getState().remoteKey}`,
+  setStatus: (remoteStatus, remoteStatusText) => useBridge.setState({ remoteStatus, remoteStatusText: remoteStatus === 'connected' ? 'Connected: Claude can use this tab through the connector' : remoteStatusText }),
+  offText: 'Claude connector is off',
+  unreachableText: () => 'Connector service not reachable from this page. Retrying… (it only exists on the deployed site, not on localhost dev servers)',
+  keepAlive: 25_000,
+});
 
 function summarize(method: string, params: Record<string, unknown>): string {
   if (method === 'batch_edit' && Array.isArray(params.operations)) {
@@ -200,21 +300,20 @@ function summarize(method: string, params: Record<string, unknown>): string {
   return keys.join(' ');
 }
 
-function scheduleRetry() {
-  if (!useBridge.getState().enabled) return;
-  const { port } = useBridge.getState();
-  setStatus('unavailable', `MCP server not reachable on 127.0.0.1:${port}. Is Claude Code running with the coding-studio server? Retrying…`);
-  if (retryTimer) clearTimeout(retryTimer);
-  retryTimer = setTimeout(() => {
-    retryTimer = null;
-    connect(false);
-  }, retryDelay);
-  retryDelay = Math.min(10_000, retryDelay * 1.6);
-}
-
-/** Reconnect on load if the user enabled the bridge before. */
+let started = false;
+/** Reconnect on load to whatever the user enabled before. */
 export function initBridge() {
-  if (useBridge.getState().enabled && !socket) connect(false);
+  if (started) return;
+  started = true;
+  if (useBridge.getState().enabled) local.connect(false);
+  if (useBridge.getState().remoteEnabled) remote.connect(false);
+  // Phones suspend background tabs; reconnect as soon as the tab is visible again.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      local.nudge();
+      remote.nudge();
+    }
+  });
   void detectLocalServer();
 }
 

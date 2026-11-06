@@ -33,6 +33,6 @@
       "@web/*": ["apps/web/src/*"]
     }
   },
-  "include": ["packages", "apps/web/src", "mcp", "tests", "apps/web/vite.config.ts", "vitest.config.ts", "playwright.config.ts", "aliases.ts", "worker"],
+  "include": ["packages", "apps/web/src", "mcp", "tests", "apps/web/vite.config.ts", "vitest.config.ts", "playwright.config.ts", "aliases.ts"],
   "exclude": ["node_modules", "dist", "apps/web/dist"]
 }

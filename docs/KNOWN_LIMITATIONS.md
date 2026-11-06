@@ -30,4 +30,6 @@ Honest list of what is not done or not verified in this version.
 - No debugger, breakpoints or in-editor execution.
 - Canvas keyboard navigation is limited to React Flow's built-ins; the app is designed for mouse/trackpad on desktop, not touch.
 - The code view bundles Monaco (~3.6 MB, loaded lazily when the code tab is first shown).
-- Only one browser tab can be connected to Claude Code at a time (by design).
+- Only one browser tab can be connected to Claude at a time per link (by design).
+- Claude connector on a phone: the editor tab must stay visible (split screen works). Phones pause background tabs; the tab reconnects automatically when shown again, and requests made meanwhile time out with a message saying so.
+- The connector cannot write exported files to disk (it runs in the cloud); it returns the contents instead.

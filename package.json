@@ -8,7 +8,7 @@
     "dev": "vite --config apps/web/vite.config.ts",
     "build": "vite build --config apps/web/vite.config.ts",
     "preview": "vite preview --config apps/web/vite.config.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p worker/tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -38,6 +38,7 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261106.1",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "^4.3.3",

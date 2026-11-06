@@ -12,9 +12,10 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { BRIDGE_MAX_PAYLOAD, BRIDGE_PROTOCOL_VERSION, type BridgeError, type BridgeMessage, type BridgeMethod, type BridgeWelcome } from '@cs/shared-protocol';
+import { BRIDGE_MAX_PAYLOAD, BRIDGE_PROTOCOL_VERSION, type BridgeMessage, type BridgeMethod, type BridgeWelcome } from '@cs/shared-protocol';
+import { BridgeRequestError, errorPayload, SERVER_VERSION } from './errors';
+export { BridgeRequestError, errorPayload, SERVER_VERSION };
 
-export const SERVER_VERSION = '0.1.0';
 export const log = (...a: unknown[]) => console.error('[coding-studio-mcp]', ...a);
 
 export function parseOrigins(env: string | undefined): string[] {
@@ -30,15 +31,6 @@ export function isAllowedOrigin(origin: string | undefined, extra: string[]): bo
   return extra.includes(origin.replace(/\/+$/, ''));
 }
 
-export class BridgeRequestError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly details?: unknown,
-  ) {
-    super(message);
-  }
-}
 
 interface Pending {
   resolve: (v: unknown) => void;
@@ -361,7 +353,3 @@ export class EditorBridge {
   }
 }
 
-export function errorPayload(e: unknown): BridgeError {
-  if (e instanceof BridgeRequestError) return { code: e.code, message: e.message, ...(e.details !== undefined ? { details: e.details } : {}) };
-  return { code: 'E_INTERNAL', message: e instanceof Error ? e.message : String(e) };
-}

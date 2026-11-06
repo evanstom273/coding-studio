@@ -1,8 +1,11 @@
 # Deploying to Cloudflare Workers
 
-The web app is deployed as a **Cloudflare Worker with Static Assets** (not Pages). There is no server-side code: the Worker serves the Vite build from `apps/web/dist`, with SPA fallback for client-side routes. Projects live in each user's browser; the MCP server and Godot companion run locally.
+The web app is deployed as a **Cloudflare Worker with Static Assets** (not Pages). Static assets serve the Vite build from `apps/web/dist`, with SPA fallback for client-side routes. The Worker script (`worker/index.ts`) only runs for `/mcp/*` and `/bridge/*`: the remote **Claude connector** (see [MCP.md](MCP.md)), backed by one SQLite Durable Object class (`BridgeRoom`), which the Workers Free plan supports. Projects live in each user's browser; the local MCP server and the Godot companion run on the user's PC.
 
 ## Configuration
+
+The first deploy after adding the connector creates the `BridgeRoom` Durable Object (migration `v1` in `wrangler.jsonc`); nothing to do by hand.
+
 
 `wrangler.jsonc`:
 

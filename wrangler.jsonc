@@ -1,15 +1,26 @@
 {
-  // Coding Studio is served as a Cloudflare Worker with Static Assets (not Pages).
-  // The Worker has no server-side code: it serves the Vite build and falls back to index.html
-  // for client-side routes. Projects stay in the browser (IndexedDB); MCP runs locally.
+  // Coding Studio: a Cloudflare Worker with Static Assets (not Pages).
+  //  - Static assets: the editor (Vite build), with SPA fallback for client-side routes.
+  //  - worker/index.ts: only handles /mcp/* (remote MCP connector for Claude) and /bridge/*
+  //    (the editor tab's WebSocket); everything else is served straight from the assets.
+  // Projects stay in each user's browser (IndexedDB). The local MCP server runs on the user's PC.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "coding-studio",
+  "main": "worker/index.ts",
   "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./apps/web/dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "html_handling": "auto-trailing-slash"
+    "html_handling": "auto-trailing-slash",
+    "run_worker_first": ["/mcp/*", "/bridge/*"]
   },
+  "durable_objects": {
+    "bindings": [{ "name": "BRIDGE", "class_name": "BridgeRoom" }]
+  },
+  // SQLite-backed Durable Objects are available on the Workers Free plan.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BridgeRoom"] }],
   "observability": { "enabled": false },
   "workers_dev": true
 }

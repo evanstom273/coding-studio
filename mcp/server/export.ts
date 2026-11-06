@@ -8,18 +8,11 @@
  *  - existing files are never overwritten unless overwrite=true AND the user approves in the
  *    editor; on conflict without approval nothing at all is written.
  */
+import { ExportError } from './errors';
+export { ExportError };
 import { existsSync, mkdirSync, realpathSync, writeFileSync, lstatSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
-export class ExportError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly details?: unknown,
-  ) {
-    super(message);
-  }
-}
 
 const SYSTEM_DIRS = ['/', '/bin', '/boot', '/dev', '/etc', '/lib', '/lib64', '/proc', '/root', '/sbin', '/sys', '/usr', '/var', '/System', '/Library', '/private', 'C:\\', 'C:\\Windows', 'C:\\Program Files', 'C:\\Program Files (x86)'];
 export const ALLOWED_EXTENSIONS = ['.gd', '.vproj.json'];

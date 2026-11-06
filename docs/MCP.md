@@ -1,4 +1,29 @@
-# Claude Code integration (MCP)
+# Claude integration (MCP)
+
+There are two ways to connect Claude, and you can use either or both:
+
+| | Claude connector (remote) | Local MCP server |
+| --- | --- | --- |
+| Works with | Claude on your phone, claude.ai, Claude desktop — anywhere connectors work | Claude Code and Claude desktop on the computer where it runs |
+| Setup | Switch on *Claude connector* in the editor, paste its link into Claude once | Register `coding-studio-mcp.mjs` with Claude |
+| Runs | In your Cloudflare Worker | On your PC |
+| Can write exported files to disk | No (returns the file contents) | Yes, with your approval for overwrites |
+
+## Claude connector (phone, claude.ai, anywhere)
+
+```
+Claude (any device) ──HTTPS──► <your site>/mcp/<secret key>  ─┐
+                                                               ├─ Durable Object (one per key) ─► your editor tab
+Coding Studio tab ──WebSocket─► <your site>/bridge/<same key> ─┘
+```
+
+1. Open your deployed site (e.g. `https://coding-studio.<you>.workers.dev`), tap the robot **MCP** button in the toolbar.
+2. Switch on **Claude connector**. Copy the link shown under it.
+3. In Claude: **claude.ai → Settings → Connectors → Add custom connector**. Paste the link as the URL, leave everything else empty. It is then available in the Claude apps on your phone and computer too.
+4. Keep the Coding Studio tab open while Claude works. On a phone use split screen (or keep it on your computer); phones pause background tabs, and the tab reconnects by itself when it's visible again.
+
+Security: the link contains a random 256-bit key generated in your browser. Anyone with the link can edit projects in a tab where the connector is switched on, so treat it like a password; *Make a new link* in the same dialog invalidates the old one. The editor's WebSocket is only accepted from the site's own origin, and Durable Objects are named by a hash of the key. The connector has the same tools as the local server; `export_script` / `export_project` return the files' contents instead of writing them, and `open_editor` returns the site address.
+
 
 ```
 Claude Code ──stdio (MCP)──► dist/mcp/coding-studio-mcp.mjs ──ws://127.0.0.1:47831──► Coding Studio tab
