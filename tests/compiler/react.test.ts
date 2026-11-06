@@ -109,3 +109,46 @@ describe('web app starter', () => {
     expect(b.css).toContain('@import "tailwindcss"');
   });
 });
+
+describe('Tailwind classes and the rules of hooks', () => {
+  it('Classes node joins always-on and conditional classes', async () => {
+    const p = createProject(tc.adapter, 'Cls', { template: 'empty', scriptName: 'Item' });
+    const r = applyOps(
+      p,
+      [
+        { op: 'add_function', ref: 'f', name: 'cls', params: [{ name: 'done', type: 'bool' }], returnType: 'string', exported: true },
+        { op: 'add_node', ref: 'c', graph: '$f', type: 'ts.classes', props: { classes: 'rounded  px-3', conditional: ['line-through text-slate-400'] } },
+        { op: 'add_node', ref: 'ret', graph: '$f', type: 'core.return' },
+        { op: 'connect', graph: '$f', from: { node: '$f.entry', port: 'done' }, to: { node: '$c', port: 'when_0' } },
+        { op: 'connect', graph: '$f', from: { node: '$f.entry', port: 'then' }, to: { node: '$ret', port: 'exec' } },
+        { op: 'connect', graph: '$f', from: { node: '$c', port: 'className' }, to: { node: '$ret', port: 'value' } },
+      ],
+      tc,
+    ).project;
+    const js = compileProject(tc, { ...r, scripts: r.scripts.map((s) => ({ ...s, settings: { output: 'js' } })) }).files[0].content;
+    expect(js).toContain("return ['rounded px-3', done ? 'line-through text-slate-400' : ''].filter(Boolean).join(' ');");
+    const mod = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`);
+    expect(mod.cls(true)).toBe('rounded px-3 line-through text-slate-400');
+    expect(mod.cls(false)).toBe('rounded px-3');
+  });
+
+  it('hooks inside a branch are an error', () => {
+    const p = createProject(tc.adapter, 'Hooks', { template: 'empty', scriptName: 'App' });
+    const r = applyOps(
+      p,
+      [
+        { op: 'add_function', ref: 'app', name: 'App', component: true, params: [{ name: 'show', type: 'bool', default: true }], returnType: 'void' },
+        { op: 'add_node', ref: 'br', graph: '$app', type: 'core.branch' },
+        { op: 'add_node', ref: 'eff', graph: '$app', type: 'ts.call', props: { module: 'react', name: 'useEffect', argTypes: ['any'], returnType: 'void' } },
+        { op: 'add_node', ref: 'nul', graph: '$app', type: 'core.null' },
+        { op: 'connect', graph: '$app', from: { node: '$app.entry', port: 'then' }, to: { node: '$br', port: 'exec' } },
+        { op: 'connect', graph: '$app', from: { node: '$app.entry', port: 'show' }, to: { node: '$br', port: 'condition' } },
+        { op: 'connect', graph: '$app', from: { node: '$br', port: 'true' }, to: { node: '$eff', port: 'exec' } },
+        { op: 'connect', graph: '$app', from: { node: '$nul', port: 'value' }, to: { node: '$eff', port: 'arg_0' } },
+      ],
+      tc,
+    ).project;
+    const d = compileProject(tc, r).diagnostics;
+    expect(d.some((x) => x.code === 'E_HOOK_RULES' && x.message.includes('useEffect'))).toBe(true);
+  });
+});

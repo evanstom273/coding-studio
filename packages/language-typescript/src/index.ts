@@ -4,7 +4,7 @@
  * become (optionally exported, optionally async) functions, enums become `enum`s.
  */
 import type { Diagnostic } from '@cs/graph-core';
-import { stmtExprs, walkExpr, walkStmts, type IRExpr } from '@cs/intermediate-representation';
+import { stmtExprs, walkExpr, walkStmts, type IRExpr, type IRStmt } from '@cs/intermediate-representation';
 import { allCapabilities, type LanguageAdapter, type ScriptTemplate } from '@cs/language-sdk';
 import { T } from '@cs/type-system';
 import { typescriptNodes, LANG } from './nodes';
@@ -101,6 +101,21 @@ export const typescriptAdapter: LanguageAdapter = {
   },
   validate(module) {
     const out: Diagnostic[] = [];
+    // Rules of hooks: use…() only at the top level of a component (not in a branch, loop or callback).
+    const hookName = (e: IRExpr): string | undefined => (e.k === 'invoke' && e.callee.k === 'import' && /^use[A-Z]/.test(e.callee.name) ? e.callee.name : undefined);
+    const nested = (stmts: IRStmt[], fnName: string, top: boolean) => {
+      for (const s of stmts) {
+        for (const e of stmtExprs(s))
+          walkExpr(e, (x) => {
+            const h = hookName(x);
+            if (h && !top) out.push({ severity: 'error', code: 'E_HOOK_RULES', message: `${fnName}: ${h}() is inside a branch, loop or try block. React needs hooks called in the same order on every render.`, suggestion: 'Move it to the start of the component.', scriptId: module.scriptId, ...(s.src?.graphId ? { graphId: s.src.graphId } : {}), ...(s.src?.nodeId ? { nodeId: s.src.nodeId } : {}) });
+            if (x.k === 'lambda') nested(x.body, fnName, false);
+          });
+        const blocks: IRStmt[][] = s.k === 'if' ? [s.then, s.else ?? []] : s.k === 'while' || s.k === 'for_range' || s.k === 'for_each' ? [s.body] : s.k === 'match' ? [...s.arms.map((a) => a.body), s.default ?? []] : s.k === 'try' ? [s.body, s.handler ?? [], s.finally ?? []] : [];
+        for (const b of blocks) nested(b, fnName, false);
+      }
+    };
+    for (const m of module.members) if (m.k === 'function' && (m.component || /^use[A-Z]/.test(m.name))) nested(m.body, m.name, true);
     for (const m of module.members) {
       if (m.k !== 'function') continue;
       walkStmts(m.body, (s) => {

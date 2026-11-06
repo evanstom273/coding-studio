@@ -432,6 +432,30 @@ const element: NodeDefinition = {
   ],
 };
 
+const classes: NodeDefinition = {
+  type: 'ts.classes',
+  title: 'Classes (Tailwind)',
+  category: 'React',
+  description: 'Build a className: classes that always apply, plus classes that apply only when their condition is true (e.g. "line-through text-slate-400" when done).',
+  keywords: ['tailwind', 'class', 'className', 'css', 'style', 'conditional', 'clsx'],
+  flavor: 'pure',
+  languages: L,
+  props: [
+    { key: 'classes', label: 'Always', kind: 'text', default: 'rounded px-3 py-2' },
+    { key: 'conditional', label: 'When true', kind: 'string_list', default: [] },
+  ],
+  ports: (n) => [...list(n.props.conditional).map((c, i) => data.in(`when_${i}`, c || `when ${i + 1}`, T.bool, { default: false })), data.out('className', 'className', T.string)],
+  lowerExpr: (_p, lc) => {
+    const always = str(lc.node.props.classes).trim().replace(/\s+/g, ' ');
+    const conds = list(lc.node.props.conditional);
+    if (!conds.length) return { k: 'lit', value: always, type: T.string };
+    // `${always} ${a ? 'x' : ''} …` without stray spaces: join the parts that are on.
+    const parts: IRExpr[] = conds.map((c, i) => ({ k: 'ternary', cond: lc.input(`when_${i}`), then: { k: 'lit', value: c, type: T.string }, else: { k: 'lit', value: '', type: T.string } }));
+    const arr: IRExpr = { k: 'array', items: [...(always ? [{ k: 'lit', value: always, type: T.string } as IRExpr] : []), ...parts] };
+    return { k: 'invoke', callee: { k: 'prop', target: { k: 'invoke', callee: { k: 'prop', target: arr, name: 'filter' }, args: [{ k: 'ref', name: 'Boolean' }] }, name: 'join' }, args: [{ k: 'lit', value: ' ', type: T.string }] };
+  },
+};
+
 const nullish: NodeDefinition = {
   type: 'ts.default_value',
   title: 'Value or Default (??)',
@@ -449,5 +473,5 @@ const nullish: NodeDefinition = {
 };
 
 export function typescriptNodes(): NodeDefinition[] {
-  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, newObject, nullish, element];
+  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, newObject, nullish, element, classes];
 }
