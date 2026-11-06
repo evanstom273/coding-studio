@@ -185,6 +185,7 @@ export function sanitizeProject(doc: Doc, issues: string[] = []): Project {
     scripts: scripts.filter(isObj).map((s, i) => sanitizeScript(s, i, issues)),
     createdAt: num(doc.createdAt, Date.now()),
     updatedAt: num(doc.updatedAt, Date.now()),
+    ...(isObj(doc.entry) && typeof doc.entry.scriptId === 'string' && typeof doc.entry.functionId === 'string' ? { entry: { scriptId: doc.entry.scriptId, functionId: doc.entry.functionId, ...(typeof doc.entry.host === 'string' ? { host: doc.entry.host } : {}) } } : {}),
     ...(isObj(doc.editor) ? { editor: { activeScriptId: typeof doc.editor.activeScriptId === 'string' ? doc.editor.activeScriptId : undefined, activeFunctionId: typeof doc.editor.activeFunctionId === 'string' ? doc.editor.activeFunctionId : undefined } } : {}),
   };
   if (scripts.length !== out.scripts.length) issues.push(`${scripts.length - out.scripts.length} unreadable script entr(ies) were skipped.`);

@@ -10,6 +10,7 @@ import { T } from '@cs/type-system';
 import { typescriptNodes, LANG } from './nodes';
 import { IDENT, TSPrinter, type OutputMode } from './printer';
 import { typescriptTypes } from './types';
+import { typescriptEntry } from './entry';
 
 export { relativeModule, templateFields } from './nodes';
 export { tsType, normalize as normalizeTsType } from './types';
@@ -20,9 +21,9 @@ const RESERVED = new Set(
 );
 
 export const TS_TEMPLATES: ScriptTemplate[] = [
-  { id: 'web-app', name: 'Web app (React + Tailwind + Dexie)', description: 'A Vite project: the App component as a graph, a Dexie database and a todo list. Runs in Preview.', settings: { output: 'ts' }, events: [] },
   { id: 'module', name: 'Module', description: 'A module with an exported main() function.', settings: { output: 'ts' }, events: [], functions: [{ name: 'main', exported: true }] },
   { id: 'async-module', name: 'Async module', description: 'A module with an exported async main() (use Await, fetch…).', settings: { output: 'ts' }, events: [], functions: [{ name: 'main', exported: true, async: true }] },
+  { id: 'web-app', name: 'Web app (React + Tailwind + Dexie)', description: 'A Vite project: the App component as a graph, a Dexie database and a todo list. Runs in Preview.', settings: { output: 'ts' }, events: [] },
   { id: 'empty', name: 'Empty module', description: 'No functions yet.', settings: { output: 'ts' }, events: [] },
 ];
 
@@ -68,6 +69,7 @@ export const typescriptAdapter: LanguageAdapter = {
   ],
   events: [],
   templates: TS_TEMPLATES,
+  entryPoint: typescriptEntry,
   registerNodes(registry) {
     registry.registerAll(typescriptNodes());
   },

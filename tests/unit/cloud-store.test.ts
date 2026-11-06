@@ -368,7 +368,7 @@ describe('npm dependencies through the connector', () => {
     }) as typeof fetch;
     try {
       const cloud = new CloudService(kv(), backend(), () => undefined, 'https://site', () => 0);
-      await cloud.handle('create_project', { name: 'Todo App', language: 'typescript' });
+      await cloud.handle('create_project', { name: 'Todo App', language: 'typescript', template: 'module' });
       const r = (await cloud.handle('deps_add', { name: 'dexie' })) as { range: string };
       expect(r.range).toBe('^4.0.11');
       const pkg = JSON.parse(((await cloud.handle('read_files', { paths: ['package.json'] })) as { files: { text: string }[] }).files[0].text);

@@ -131,6 +131,8 @@ export class GDScriptPrinter {
         return this.builtin(e.op, e.args, e.type);
       case 'lang':
         return this.langExpr(e);
+      case 'await':
+        return [`await ${this.expr(e.expr, PREC.await)}`, PREC.await];
       default:
         // await / template / object / import / func_ref / optional_prop come from other languages' node packs.
         throw new Error(`GDScript can't express "${e.k}"`);

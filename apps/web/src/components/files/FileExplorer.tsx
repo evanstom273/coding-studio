@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Cog, File, FileCode2, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Image, MoreHorizontal, Music, Upload, Workflow } from 'lucide-react';
 import { basename, CONFIG_PATH, dirname, GRAPH_EXT, joinPath, type WorkspaceOp } from '@cs/workspace';
 import { useEditor } from '@web/store/editor';
-import { useCompile } from '@web/compile/store';
+import { generatedFiles, useCompile } from '@web/compile/store';
 import { useUI } from '@web/store/ui';
 import { toast } from '@web/store/toasts';
 import { createBackup } from '@web/db/projects';
@@ -79,7 +79,8 @@ export function FileExplorer() {
   const ws = useEditor((s) => s.workspace)!;
   const project = useEditor((s) => s.project)!;
   const activeTab = useEditor((s) => s.activeTab);
-  const generated = useCompile((s) => s.lastGood);
+  const lastGood = useCompile((s) => s.lastGood);
+  const extras = useCompile((s) => s.extras);
   const compact = useCompact();
   const touch = useTouch();
   const tree = useMemo(() => buildTree(ws.files.keys()), [ws.files]);
@@ -220,7 +221,7 @@ export function FileExplorer() {
 
   const first = Math.max(0, Math.floor(scroll / ROW) - 10);
   const last = Math.min(rows.length, Math.ceil((scroll + height) / ROW) + 10);
-  const gen = Object.values(generated);
+  const gen = useMemo(() => generatedFiles({ lastGood, extras }).map(([, f]) => f), [lastGood, extras]);
   const targetDir = (n: TreeNode | null) => (n ? (n.dir ? n.path : dirname(n.path)) : '');
 
   return (

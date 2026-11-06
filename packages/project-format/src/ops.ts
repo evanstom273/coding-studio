@@ -35,7 +35,7 @@ export interface ParamInput {
 }
 
 export type EditOp =
-  | { op: 'update_project'; name?: string; description?: string; languageVersion?: string; compilerSettings?: Partial<Project['compilerSettings']> }
+  | { op: 'update_project'; name?: string; description?: string; languageVersion?: string; compilerSettings?: Partial<Project['compilerSettings']>; entry?: { function: string; script?: string; host?: string } | null }
   | { op: 'add_script'; ref?: string; name: string; path?: string; template?: string; settings?: Record<string, JsonValue>; description?: string }
   | { op: 'update_script'; script?: string; name?: string; path?: string; settings?: Record<string, JsonValue>; description?: string }
   | { op: 'delete_script'; script: string }
@@ -583,6 +583,15 @@ function applyOne(ctx: OpContext, op: EditOp, warnings: string[]): [string | und
         if (!Number.isInteger(c.indentSize) || c.indentSize < 1 || c.indentSize > 8) throw new OpError('compilerSettings.indentSize must be 1–8');
         d.project.compilerSettings = { indent: c.indent, indentSize: c.indentSize, header: !!c.header, comments: !!c.comments };
       }
+      if (op.entry === null) delete d.project.entry;
+      else if (op.entry !== undefined) {
+        const ep = tc.adapter.entryPoint;
+        if (!ep) throw new OpError(`${tc.adapter.name} has no program entry points`, undefined, 'E_UNSUPPORTED_FEATURE');
+        const { s, f } = ctx.scriptOfFunction(op.entry.function, op.entry.script);
+        if (f.kind === 'lambda') throw new OpError(`${f.name} is an inline function; the entry point must be a script function`);
+        if (op.entry.host !== undefined && !ep.hosts.some((h) => h.id === op.entry!.host)) throw new OpError(`host must be one of ${ep.hosts.map((h) => h.id).join(', ')}`);
+        d.project.entry = { scriptId: s.id, functionId: f.id, host: op.entry.host ?? ep.defaultHost(s, f) };
+      }
       return [];
     }
     case 'add_script': {
@@ -616,6 +625,7 @@ function applyOne(ctx: OpContext, op: EditOp, warnings: string[]): [string | und
     case 'delete_script': {
       const s = ctx.script(op.script);
       d.project.scripts = d.project.scripts.filter((x) => x.id !== s.id);
+      if (d.project.entry?.scriptId === s.id) delete d.project.entry;
       return [];
     }
     case 'add_function': {
@@ -676,6 +686,10 @@ function applyOne(ctx: OpContext, op: EditOp, warnings: string[]): [string | und
         }
       }
       s.functions = s.functions.filter((x) => !gone.has(x.id));
+      if (d.project.entry && gone.has(d.project.entry.functionId)) {
+        delete d.project.entry;
+        warnings.push(`${f.name} was the program's entry point; no function is now.`);
+      }
       const users = s.functions.filter((g) => g.graph.nodes.some((n) => Object.values(n.props).includes(f.id)));
       if (users.length) warnings.push(`Nodes in ${users.map((u) => u.name).join(', ')} still refer to ${f.name}; they will show errors until updated.`);
       return [];

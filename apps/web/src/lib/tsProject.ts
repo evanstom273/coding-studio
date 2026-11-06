@@ -9,7 +9,7 @@ import { useTsCheck, type FileProblem } from './tsCheckStore';
 import type { Workspace } from '@cs/workspace';
 import { monaco, tsLanguage, type TsDiagnostic } from './monaco';
 import { useEditor } from '@web/store/editor';
-import { useCompile } from '@web/compile/store';
+import { generatedFiles, useCompile } from '@web/compile/store';
 
 const TS_FILE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/i;
 const MAX_SIZE = 2 * 1024 * 1024;
@@ -94,7 +94,7 @@ export async function runCheck() {
       const files: FileProblem[] = [];
       const nodes: Diagnostic[] = [];
       const project = useEditor.getState().project;
-      const lastGood = Object.entries(useCompile.getState().lastGood);
+      const lastGood = generatedFiles();
       for (let i = 0; i < paths.length; i++) {
         const path = paths[i];
         const model = monaco.editor.getModel(uris[i]);
@@ -127,14 +127,14 @@ export async function runCheck() {
 
 /** Keep models in sync while a project is open. Returns a stop function. */
 export function startTsProject(): () => void {
-  const generated = () => Object.values(useCompile.getState().lastGood).map((f) => ({ path: f.path, content: f.content }));
+  const generated = () => generatedFiles().map(([, f]) => ({ path: f.path, content: f.content }));
   const sync = () => syncModels(useEditor.getState().workspace, generated());
   sync();
   const a = useEditor.subscribe((s, p) => {
     if (s.workspace !== p.workspace) sync();
   });
   const b = useCompile.subscribe((s, p) => {
-    if (s.lastGood !== p.lastGood) sync();
+    if (s.lastGood !== p.lastGood || s.extras !== p.extras) sync();
   });
   // Go to definition / references in another file: open it in a tab.
   const opener = monaco.editor.registerEditorOpener({

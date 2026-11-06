@@ -12,7 +12,7 @@ import '@web/lib/monaco';
 import type { editor } from 'monaco-editor';
 import { Download, Workflow } from 'lucide-react';
 import { useEditor } from '@web/store/editor';
-import { useCompile } from '@web/compile/store';
+import { generatedFiles, useCompile } from '@web/compile/store';
 import { toast } from '@web/store/toasts';
 import { downloadBytes } from '@web/lib/files';
 import { DIFF_PREFIX, formatSize, GEN_PREFIX, mimeType, monacoLanguage, previewKind } from '@web/lib/fileTypes';
@@ -198,7 +198,8 @@ export function BinaryFileView({ path }: { path: string }) {
 export function GeneratedFileView({ id }: { id: string }) {
   const path = id.slice(GEN_PREFIX.length);
   const lastGood = useCompile((s) => s.lastGood);
-  const entry = useMemo(() => Object.entries(lastGood).find(([, f]) => f.path === path), [lastGood, path]);
+  const extras = useCompile((s) => s.extras);
+  const entry = useMemo(() => generatedFiles({ lastGood, extras }).find(([, f]) => f.path === path), [lastGood, extras, path]);
   if (!entry) return <Empty>{path} hasn't been generated (yet). Fix any errors in its graph first.</Empty>;
   const [scriptId, file] = entry;
   return (

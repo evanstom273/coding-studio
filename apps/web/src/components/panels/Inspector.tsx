@@ -283,6 +283,43 @@ function VariableEditor({ v, script, fn }: { v: VariableDecl; script: ScriptDoc;
   );
 }
 
+/** "Program starts here": the project's entry point, its host, and how to run it. */
+function EntryPointEditor({ fn }: { fn: FunctionDecl }) {
+  const project = useEditor((s) => s.project)!;
+  const result = useCompile((s) => s.result);
+  const ep = toolchainFor(project.language).adapter.entryPoint;
+  if (!ep) return null;
+  const isEntry = project.entry?.functionId === fn.id;
+  const info = isEntry ? result?.scripts.find((s) => s.entry?.functionId === fn.id)?.entry : undefined;
+  const host = project.entry?.host;
+  return (
+    <div className={`mb-3 rounded border px-2.5 py-2 text-[12px] ${isEntry ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-border'}`} data-testid="entry-point">
+      <label className="flex items-center gap-1.5 font-medium">
+        <input type="checkbox" checked={isEntry} data-testid="entry-toggle" onChange={(e) => d([{ op: 'update_project', entry: e.target.checked ? { function: fn.id } : null } as EditOp], e.target.checked ? `Start the program at ${fn.name}` : 'No entry point')} />
+        ▶ Program starts here
+      </label>
+      {isEntry && (
+        <>
+          <select className={`${inputCls} mt-2`} value={host} onChange={(e) => d([{ op: 'update_project', entry: { function: fn.id, host: e.target.value } } as EditOp], 'Change where the program runs')} data-testid="entry-host">
+            {ep.hosts.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-muted">{ep.hosts.find((h) => h.id === host)?.description}</p>
+          {info?.instructions.map((t, i) => (
+            <p key={i} className="mt-1 text-[11px] text-emerald-200" data-testid="entry-instructions">
+              {t}
+            </p>
+          ))}
+        </>
+      )}
+      {!isEntry && project.entry && <p className="mt-1 text-[11px] text-muted">The program currently starts at {project.scripts.flatMap((s) => s.functions).find((f) => f.id === project.entry!.functionId)?.name ?? '(missing)'}.</p>}
+    </div>
+  );
+}
+
 function FunctionEditor({ fn, script }: { fn: FunctionDecl; script: ScriptDoc }) {
   const isEvent = fn.kind === 'event';
   const project = useEditor((s) => s.project)!;
@@ -291,6 +328,7 @@ function FunctionEditor({ fn, script }: { fn: FunctionDecl; script: ScriptDoc })
   return (
     <div data-testid="function-inspector">
       <div className="mb-3 text-[14px] font-semibold">{isEvent ? `Event ${fn.name}` : `Function ${fn.name}`}</div>
+      {fn.kind !== 'lambda' && <EntryPointEditor fn={fn} />}
       {isEvent ? (
         <p className="mb-3 text-[12px] text-[#c3c9d4]">{ev?.description} The engine calls it with a fixed signature.</p>
       ) : (

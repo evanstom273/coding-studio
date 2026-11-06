@@ -75,7 +75,7 @@ Operations (fields in brackets are optional; script/graph default to the active 
 - add_variable {name, type, [default], [exported], [constant], [description], [attributes {onreadyPath}], [function → local variable]} · update_variable {variable, …} · delete_variable {variable}
 - add_signal {name, [params]} · update_signal · delete_signal · add_enum {name, members[]} · update_enum · delete_enum
 - add_script {name, [path], [template], [settings {extends, class_name, tool}]} · update_script {script, …} · delete_script {script}
-- update_project {[name], [languageVersion], [compilerSettings]}
+- update_project {[name], [languageVersion], [compilerSettings], [entry: {function, [script], [host]} | null]}  (entry = where the program starts; see set_entry_point)
 - add_interface {name, fields [{name, type, optional?}], [exported], [description], [ref]} · update_interface {interface, …} · delete_interface {interface}  (TypeScript type declarations; use the name as a type anywhere)
 Node props that reference variables/functions/signals/enums accept their id or name.
 TypeScript nodes: ts.call {module (npm package) | scriptPath (another script of the project) | neither (globals like fetch, JSON.parse), name, argNames[], argTypes[], returnType, await} · ts.call_method {name, argTypes[], returnType, await, optional} · ts.await {type} · ts.try (exec outs try/catch/finally/then, data out error) · ts.throw · ts.template {template "Hi {name}"} · ts.object {keys[]} · ts.get_field / ts.set_field {name, optional} · ts.function_ref {function} · ts.default_value (??) · ts.closure {function} (an inline arrow function). Imports are written automatically.
@@ -211,6 +211,16 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
   );
   server.registerTool('delete_function', { title: 'Delete function', description: 'Delete a function and its graph.', inputSchema: { project, expected_revision: revision, function: z.string() }, annotations: { destructiveHint: true } }, (a) => batch(a, [{ op: 'delete_function', function: a.function }]));
   server.registerTool('create_signal', { title: 'Create signal', description: 'Declare a signal on a script.', inputSchema: { project, expected_revision: revision, script, name: z.string(), params: z.array(param).optional(), description: z.string().optional() } }, (a) => batch(a, [{ op: 'add_signal', ref: 'signal', script: a.script, name: a.name, params: a.params, description: a.description }]));
+
+  server.registerTool(
+    'set_entry_point',
+    {
+      title: 'Set the program entry point',
+      description: 'Make a function the place the program starts (or clear it with function: null). Each language generates the startup it needs: TypeScript/JavaScript a launcher module (<script>.entry.ts) that calls it — awaited if async — or renders it if it is a React component; GDScript a call from _ready() plus a main scene (<script>.tscn), or an Autoload setup. host: typescript "browser" | "node"; gdscript "scene" | "autoload". compile_project then includes how to run it.',
+      inputSchema: { project, function: z.string().nullable().describe('Function id or name; null clears the entry point'), script, host: z.string().optional() },
+    },
+    (a) => batch({ project: a.project }, [{ op: 'update_project', entry: a.function === null ? null : { function: a.function, ...(a.script ? { script: a.script } : {}), ...(a.host ? { host: a.host } : {}) } }]),
+  );
 
   // --- compilation ------------------------------------------------------------------------------
   server.registerTool('validate_graph', { title: 'Validate', description: 'Compile and return diagnostics (with node and port ids) for one graph, or the whole project when graph is omitted.', inputSchema: { project, graph: z.string().optional(), script }, annotations: ro }, (a) => call('validate_graph', a));

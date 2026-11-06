@@ -60,6 +60,7 @@ export function describeProject(p: Project, active: { scriptId?: string; functio
     revision: projectRevision(p),
     activeScript: active.scriptId,
     activeGraph: active.functionId,
+    ...(p.entry ? { entry: { ...p.entry, function: p.scripts.flatMap((s) => s.functions).find((f) => f.id === p.entry!.functionId)?.name } } : {}),
     scripts: p.scripts.map((s) => ({
       id: s.id,
       name: s.name,
@@ -180,7 +181,8 @@ export function compileOne(p: Project, scriptRef: unknown, activeScriptId?: stri
 
 export function compileAll(p: Project) {
   const r = compileProject(toolchainFor(p.language), p);
-  return { ok: r.ok, files: r.files.map((f) => ({ path: f.path, content: f.content })), diagnostics: r.diagnostics };
+  const entry = r.scripts.find((s) => s.entry)?.entry;
+  return { ok: r.ok, files: r.files.map((f) => ({ path: f.path, content: f.content })), diagnostics: r.diagnostics, ...(entry ? { entry: { host: entry.host, how_to_run: entry.instructions } } : {}) };
 }
 
 export function exportFiles(p: Project, scriptRef?: unknown, includeProject = false) {

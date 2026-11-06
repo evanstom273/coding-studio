@@ -8,6 +8,12 @@ import { DEFAULT_COMPILER_SETTINGS, type CompilerSettings, type LanguageAdapter 
 export const PROJECT_FORMAT = 'coding-studio-project';
 export const PROJECT_SCHEMA_VERSION = 1;
 
+export interface ProjectEntry {
+  scriptId: string;
+  functionId: string;
+  host?: string;
+}
+
 export interface Project {
   format: typeof PROJECT_FORMAT;
   schemaVersion: number;
@@ -23,6 +29,8 @@ export interface Project {
   updatedAt: number;
   /** Persisted editor layout: which script/graph was open. Not part of the revision hash. */
   editor?: { activeScriptId?: string; activeFunctionId?: string };
+  /** Where the program starts: a function, and the host it runs in (see the language's entry hosts). */
+  entry?: ProjectEntry;
 }
 
 /** Revision used for optimistic concurrency: covers the editable content only. */

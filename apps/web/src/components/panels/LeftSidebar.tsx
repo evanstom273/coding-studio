@@ -243,7 +243,7 @@ function ProjectExplorer() {
             {script.functions
               .filter((f) => f.kind === 'event')
               .map((f) => (
-                <Row key={f.id} testId="function-row" active={f.id === activeFunctionId} errors={errorsIn(f.id)} icon={<Zap size={13} className="text-red-300" />} label={f.name} onClick={() => openGraph(script.id, f.id)} onDelete={() => void del(`event ${f.name}`, [{ op: 'delete_function', function: f.id }])} />
+                <Row key={f.id} testId="function-row" active={f.id === activeFunctionId} errors={errorsIn(f.id)} icon={<Zap size={13} className="text-red-300" />} label={project.entry?.functionId === f.id ? `▶ ${f.name}` : f.name} onClick={() => openGraph(script.id, f.id)} onDelete={() => void del(`event ${f.name}`, [{ op: 'delete_function', function: f.id }])} />
               ))}
           </Section>
           <Section
@@ -267,7 +267,7 @@ function ProjectExplorer() {
                   active={f.id === activeFunctionId}
                   errors={errorsIn(f.id)}
                   icon={<FunctionSquare size={13} className="text-blue-300" />}
-                  label={f.name}
+                  label={project.entry?.functionId === f.id ? `▶ ${f.name}` : f.name}
                   sub={`(${f.params.map((p) => p.name).join(', ')})`}
                   draggablePayload={{ type: 'core.call_function', props: { function: f.id } }}
                   onClick={() => {

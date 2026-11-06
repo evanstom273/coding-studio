@@ -17,13 +17,20 @@ interface CompileState {
   diagnostics: Diagnostic[];
   /** scriptId → last good file (may be stale). */
   lastGood: Record<string, GeneratedFile>;
+  /** scriptId → further files from the last good build (entry launcher, Godot scene…). */
+  extras: Record<string, GeneratedFile[]>;
   stale: Record<string, boolean>;
   running: boolean;
   ms: number;
   error?: string;
 }
 
-export const useCompile = create<CompileState>()(() => ({ result: null, diagnostics: [], lastGood: {}, stale: {}, running: false, ms: 0 }));
+export const useCompile = create<CompileState>()(() => ({ result: null, diagnostics: [], lastGood: {}, extras: {}, stale: {}, running: false, ms: 0 }));
+
+/** Every generated file: [scriptId, file] pairs, main files first. */
+export function generatedFiles(s: Pick<CompileState, 'lastGood' | 'extras'> = useCompile.getState()): [string, GeneratedFile][] {
+  return [...Object.entries(s.lastGood), ...Object.entries(s.extras).flatMap(([id, fs]) => fs.map((f) => [id, f] as [string, GeneratedFile]))];
+}
 
 let worker: Worker | null = null;
 let seq = 0;
@@ -32,17 +39,22 @@ let lastProjectId: string | null = null;
 
 function apply(project: Project, r: ProjectCompileResult, ms: number) {
   const prev = lastProjectId === project.id ? useCompile.getState().lastGood : {};
+  const prevExtras = lastProjectId === project.id ? useCompile.getState().extras : {};
+  const extras: Record<string, GeneratedFile[]> = {};
   lastProjectId = project.id;
   const lastGood: Record<string, GeneratedFile> = {};
   const stale: Record<string, boolean> = {};
   for (const s of r.scripts) {
-    if (s.ok && s.files[0]) lastGood[s.scriptId] = s.files[0];
+    if (s.ok && s.files[0]) {
+      lastGood[s.scriptId] = s.files[0];
+      if (s.files.length > 1) extras[s.scriptId] = s.files.slice(1);
+    } else if (prevExtras[s.scriptId] && !s.ok) extras[s.scriptId] = prevExtras[s.scriptId];
     else if (prev[s.scriptId]) {
       lastGood[s.scriptId] = prev[s.scriptId];
       stale[s.scriptId] = true;
     }
   }
-  useCompile.setState({ result: r, diagnostics: r.diagnostics, lastGood, stale, running: false, ms, error: undefined });
+  useCompile.setState({ result: r, diagnostics: r.diagnostics, lastGood, extras, stale, running: false, ms, error: undefined });
 }
 
 function ensureWorker(): Worker | null {

@@ -100,6 +100,44 @@ export interface GeneratedFile {
   sourceMap: SourceMapEntry[];
 }
 
+/**
+ * Program entry points. A project can name one function as where the program starts; each
+ * language decides what that means for its runtime (call it at module load, render it, call it
+ * from a lifecycle callback…) and which hosts it can target. Languages that compile to a classic
+ * `main` (Java, C#…) implement the same interface by generating that method.
+ */
+export interface EntryHost {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface EntryRequest {
+  script: ScriptDoc;
+  fn: FunctionDecl;
+  /** One of `hosts[].id`. */
+  host: string;
+  /** The function returns a promise / is a coroutine. */
+  isAsync: boolean;
+}
+
+export interface EntryResult {
+  /** The entry script's module, adjusted (e.g. a lifecycle callback calls the function). */
+  module: IRModule;
+  /** Extra files: a launcher module, a scene… */
+  files?: GeneratedFile[];
+  diagnostics?: Omit<Diagnostic, 'scriptId'>[];
+  /** How to run it in the chosen host (shown to the user, returned to MCP). */
+  instructions?: string[];
+}
+
+export interface EntryPointSupport {
+  hosts: EntryHost[];
+  /** Best host for this function when the user hasn't chosen one. */
+  defaultHost(script: ScriptDoc, fn: FunctionDecl): string;
+  apply(module: IRModule, req: EntryRequest, ctx: CompilationContext): EntryResult;
+}
+
 export interface LanguageAdapter {
   id: string;
   name: string;
@@ -122,6 +160,8 @@ export interface LanguageAdapter {
   /** Build a literal expression for a JSON value of a type (fallback: compiler-core's generic rules). */
   literal?(value: JsonValue, type: TypeRef): IRExpr | undefined;
   /** Final language-specific checks on the IR (unsupported constructs, naming conflicts…). */
+  /** Where programs start (see EntryPointSupport). Languages without it report the entry as unsupported. */
+  entryPoint?: EntryPointSupport;
   validate(module: IRModule, ctx: CompilationContext): Diagnostic[];
   generate(module: IRModule, ctx: CompilationContext): GeneratedFile[];
 }

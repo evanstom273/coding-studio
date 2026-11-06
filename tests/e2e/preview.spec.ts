@@ -62,6 +62,7 @@ test('the Web app starter: graph component, files, packages', async ({ page }) =
   await page.getByTestId('new-project').click();
   await page.getByTestId('project-name').fill('Todo Demo');
   await page.getByTestId('project-language').selectOption('typescript');
+  await page.locator('button', { hasText: 'Web app (React' }).click();
   await page.getByTestId('create-project').click();
   await expect(page.getByTestId('project-title')).toHaveText('Todo Demo');
   await page.getByTestId('left-tab-files').click();
@@ -81,6 +82,7 @@ test('live: the Web app starter runs in the preview (React, Tailwind, Dexie from
   await page.getByTestId('new-project').click();
   await page.getByTestId('project-name').fill('Live Todos');
   await page.getByTestId('project-language').selectOption('typescript');
+  await page.locator('button', { hasText: 'Web app (React' }).click();
   await page.getByTestId('create-project').click();
   await expect(page.getByTestId('project-title')).toHaveText('Live Todos');
   await page.getByTestId('open-preview').click();

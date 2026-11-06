@@ -39,6 +39,8 @@ export interface WorkspaceConfig {
   language: string;
   languageVersion: string;
   compiler: CompilerSettings;
+  /** Program entry point: script + function ids, and the host it runs in. */
+  entry?: { scriptId: string; functionId: string; host?: string };
 }
 
 export interface WorkspaceMeta {
@@ -120,6 +122,9 @@ export function parseConfig(text: string | undefined, fallbackName = 'Untitled')
       header: cs.header !== false,
       comments: cs.comments !== false,
     },
+    ...(raw.entry && typeof raw.entry === 'object' && typeof (raw.entry as Record<string, unknown>).scriptId === 'string' && typeof (raw.entry as Record<string, unknown>).functionId === 'string'
+      ? { entry: { scriptId: String((raw.entry as Record<string, unknown>).scriptId), functionId: String((raw.entry as Record<string, unknown>).functionId), ...(typeof (raw.entry as Record<string, unknown>).host === 'string' ? { host: String((raw.entry as Record<string, unknown>).host) } : {}) } }
+      : {}),
   };
 }
 

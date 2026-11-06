@@ -6,6 +6,7 @@ import type { IRExpr, IRField } from '@cs/intermediate-representation';
 import { allCapabilities, type EventTemplate, type LanguageAdapter, type ScriptTemplate } from '@cs/language-sdk';
 import { T } from '@cs/type-system';
 import { GDScriptPrinter } from './generator';
+import { gdscriptEntry } from './entry';
 import { godotNodes, LANG } from './nodes';
 import { CLASS_PARENTS, gdscriptTypes, universe, VALUE_TYPES } from './types';
 
@@ -99,6 +100,7 @@ export const gdscriptAdapter: LanguageAdapter = {
   ],
   events: GDSCRIPT_EVENTS,
   templates: GDSCRIPT_TEMPLATES,
+  entryPoint: gdscriptEntry,
   registerNodes(registry) {
     registry.registerAll(godotNodes());
   },

@@ -20,11 +20,15 @@ export interface ScriptCompileResult {
   /** Only present when ok. */
   files: GeneratedFile[];
   module?: IRModule;
+  /** Entry point applied to this script: host and how to run it. */
+  entry?: { functionId: string; host: string; instructions: string[] };
 }
 
 export interface CompileOptions {
   languageVersion?: string;
   settings?: Partial<CompilerSettings>;
+  /** This script holds the program's entry point. */
+  entry?: { functionId: string; host?: string };
 }
 
 export function compileScript(tc: Toolchain, script: ScriptDoc, opts: CompileOptions = {}): ScriptCompileResult {
@@ -103,27 +107,55 @@ export function compileScript(tc: Toolchain, script: ScriptDoc, opts: CompileOpt
     settings: { ...DEFAULT_COMPILER_SETTINGS, ...opts.settings },
   };
 
+  // Program entry point: the language adjusts the module and may add a launcher / scene.
+  let entryModule = module;
+  let entryFiles: GeneratedFile[] = [];
+  let entryInfo: ScriptCompileResult['entry'];
+  if (opts.entry) {
+    const fn = script.functions.find((f) => f.id === opts.entry!.functionId);
+    const ep = tc.adapter.entryPoint;
+    const at = fn ? { functionId: fn.id, graphId: fn.graph.id } : {};
+    if (!fn) report({ severity: 'error', code: 'E_ENTRY_MISSING', message: 'The program entry point refers to a function that no longer exists.', suggestion: 'Choose another entry point (function inspector → "Program starts here").' });
+    else if (!ep) report({ severity: 'error', code: 'E_ENTRY_UNSUPPORTED', message: `${tc.adapter.name} has no program entry points yet.`, ...at });
+    else if (fn.kind === 'lambda') report({ severity: 'error', code: 'E_ENTRY_INVALID', message: `${fn.name} is an inline function and can't be the entry point.`, ...at });
+    else if (fn.params.some((p) => p.default === undefined)) report({ severity: 'error', code: 'E_ENTRY_PARAMS', message: `${fn.name} is the entry point, so nothing can pass it arguments: give its parameters default values or remove them.`, ...at });
+    else if (!diags.some((d) => d.severity === 'error') && members.some((m) => m.k === 'function' && m.name === fn.name)) {
+      const host = opts.entry.host && ep.hosts.some((h) => h.id === opts.entry!.host) ? opts.entry.host : ep.defaultHost(script, fn);
+      const irFn = members.find((m) => m.k === 'function' && m.name === fn.name) as Extract<IRMember, { k: 'function' }>;
+      try {
+        const r = ep.apply(module, { script, fn, host, isAsync: !!irFn.isAsync }, cctx);
+        entryModule = r.module;
+        entryFiles = r.files ?? [];
+        for (const d of r.diagnostics ?? []) report({ ...d, scriptId: script.id } as Diagnostic);
+        entryInfo = { functionId: fn.id, host, instructions: r.instructions ?? [] };
+      } catch (e) {
+        report({ severity: 'error', code: 'E_BACKEND', message: `Couldn't set up the entry point: ${e instanceof Error ? e.message : String(e)}`, ...at });
+      }
+    }
+  }
+
   if (!diags.some((d) => d.severity === 'error')) {
-    for (const d of tc.adapter.validate(module, cctx)) report(d);
+    for (const d of tc.adapter.validate(entryModule, cctx)) report(d);
   }
   const ok = !diags.some((d) => d.severity === 'error');
   let files: GeneratedFile[] = [];
   if (ok) {
     try {
-      files = tc.adapter.generate(module, cctx);
+      files = [...tc.adapter.generate(entryModule, cctx), ...entryFiles];
     } catch (e) {
       report({ severity: 'error', code: 'E_BACKEND', message: `The ${tc.adapter.name} backend failed: ${e instanceof Error ? e.message : String(e)}` });
       files = [];
     }
   }
   const okFinal = !diags.some((d) => d.severity === 'error');
-  return { scriptId: script.id, ok: okFinal, diagnostics: sortDiagnostics(diags), files: okFinal ? files : [], module };
+  return { scriptId: script.id, ok: okFinal, diagnostics: sortDiagnostics(diags), files: okFinal ? files : [], module: entryModule, ...(entryInfo ? { entry: entryInfo } : {}) };
 }
 
 export interface ProjectLike {
   scripts: ScriptDoc[];
   languageVersion?: string;
   compilerSettings?: Partial<CompilerSettings>;
+  entry?: { scriptId: string; functionId: string; host?: string };
 }
 
 export interface ProjectCompileResult {
@@ -134,8 +166,9 @@ export interface ProjectCompileResult {
 }
 
 export function compileProject(tc: Toolchain, project: ProjectLike): ProjectCompileResult {
-  const scripts = project.scripts.map((s) => compileScript(tc, s, { languageVersion: project.languageVersion, settings: project.compilerSettings }));
+  const scripts = project.scripts.map((s) => compileScript(tc, s, { languageVersion: project.languageVersion, settings: project.compilerSettings, ...(project.entry?.scriptId === s.id ? { entry: { functionId: project.entry.functionId, host: project.entry.host } } : {}) }));
   const diagnostics = scripts.flatMap((s) => s.diagnostics);
+  if (project.entry && !project.scripts.some((s) => s.id === project.entry!.scriptId)) diagnostics.push({ severity: 'error', code: 'E_ENTRY_MISSING', message: 'The program entry point is in a script that no longer exists.', scriptId: project.entry.scriptId });
   // Cross-script checks: unique output paths and unique global class names.
   const paths = new Map<string, string>();
   for (const s of project.scripts) {

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { useEditor } from '@web/store/editor';
-import { useCompile } from '@web/compile/store';
+import { generatedFiles, useCompile } from '@web/compile/store';
 import type { PreviewBuild } from '@cs/preview';
 import { Button, cx } from '../ui/primitives';
 
@@ -29,7 +29,7 @@ export function PreviewView() {
     setBusy(true);
     try {
       const { buildPreview } = await import('@web/lib/previewRunner');
-      const r = await buildPreview(useEditor.getState().workspace!, Object.values(useCompile.getState().lastGood).map((f) => ({ path: f.path, content: f.content })));
+      const r = await buildPreview(useEditor.getState().workspace!, generatedFiles().map(([, f]) => ({ path: f.path, content: f.content })));
       setBuild(r.build);
       if (!r.build.errors.length) {
         setLogs([]);

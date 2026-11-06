@@ -59,6 +59,7 @@ export function deriveProject(ws: Workspace): DerivedProject {
     language: config.language,
     languageVersion: config.languageVersion,
     compilerSettings: config.compiler,
+    ...(config.entry ? { entry: config.entry } : {}),
     scripts,
     createdAt: ws.meta.createdAt,
     updatedAt: ws.meta.updatedAt,
@@ -68,7 +69,7 @@ export function deriveProject(ws: Workspace): DerivedProject {
 }
 
 function configFromProject(p: Project): WorkspaceConfig {
-  return { version: 1, name: p.name, ...(p.description ? { description: p.description } : {}), language: p.language, languageVersion: p.languageVersion, compiler: { ...p.compilerSettings } };
+  return { version: 1, name: p.name, ...(p.description ? { description: p.description } : {}), language: p.language, languageVersion: p.languageVersion, compiler: { ...p.compilerSettings }, ...(p.entry ? { entry: { ...p.entry } } : {}) };
 }
 
 export class WorkspaceConflict extends Error {
