@@ -46,7 +46,14 @@ const PAGE_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; frame-ancestors 'none'; base-uri 'self'; form-action 'none'",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://registry.npmjs.org https://data.jsdelivr.com https://cdn.jsdelivr.net; frame-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'",
+};
+
+/** The Preview's frame page runs the user's app: its own CSP, and only our pages may frame it. */
+const PREVIEW_FRAME_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://esm.sh https://cdn.jsdelivr.net https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https:; img-src * data: blob:; font-src * data:; media-src * data: blob:; connect-src *; worker-src 'self' blob:; frame-ancestors 'self'; base-uri 'self'",
 };
 
 /** Serve the bundled editor. Only GET/HEAD; unknown routes fall back to index.html (client-side routing). */
@@ -65,10 +72,11 @@ export function serveEditor(assets: EditorAssets, port: number, req: IncomingMes
     return void res.end('This build of the Coding Studio MCP server does not include the editor. Rebuild it with "npm run build:mcp".');
   }
   let key = path.replace(/^\/+/, '');
+  if (!assets[key] && assets[`${key}.html`]) key = `${key}.html`; // /preview-frame → preview-frame.html (as Cloudflare does)
   if (!assets[key]) key = 'index.html';
   const ext = key.split('.').pop() ?? '';
   const body = Buffer.from(assets[key], 'base64');
-  res.writeHead(200, { 'Content-Type': MIME[ext] ?? 'application/octet-stream', 'Content-Length': body.length, 'Cache-Control': key.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache', ...PAGE_HEADERS });
+  res.writeHead(200, { 'Content-Type': MIME[ext] ?? 'application/octet-stream', 'Content-Length': body.length, 'Cache-Control': key.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache', ...(key === 'preview-frame.html' ? PREVIEW_FRAME_HEADERS : PAGE_HEADERS) });
   res.end(req.method === 'HEAD' ? undefined : body);
 }
 

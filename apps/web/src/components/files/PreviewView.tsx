@@ -24,6 +24,8 @@ export function PreviewView() {
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [nonce, setNonce] = useState(0);
   const frame = useRef<HTMLIFrameElement>(null);
+  const htmlRef = useRef<string | null>(null);
+  htmlRef.current = html;
 
   const run = useCallback(async () => {
     setBusy(true);
@@ -51,7 +53,13 @@ export function PreviewView() {
 
   useEffect(() => {
     const on = (e: MessageEvent) => {
-      if (e.source !== frame.current?.contentWindow || e.data?.source !== 'coding-studio-preview') return;
+      if (e.source !== frame.current?.contentWindow) return;
+      // The frame page is ready: hand it the app (it runs under the frame's own, looser CSP).
+      if (e.data?.source === 'coding-studio-preview-frame' && htmlRef.current !== null) {
+        frame.current?.contentWindow?.postMessage({ source: 'coding-studio-editor', html: htmlRef.current }, window.location.origin);
+        return;
+      }
+      if (e.data?.source !== 'coding-studio-preview') return;
       setLogs((l) => [...l.slice(-499), { level: String(e.data.level), text: (e.data.args as string[]).join(' ') }]);
     };
     window.addEventListener('message', on);
@@ -87,7 +95,7 @@ export function PreviewView() {
         </div>
       )}
       <div className="min-h-0 flex-1 bg-white">
-        {html !== null && <iframe key={nonce} ref={frame} title="Preview" srcDoc={html} sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin" className="h-full w-full border-0" data-testid="preview-frame" />}
+        {html !== null && <iframe key={nonce} ref={frame} title="Preview" src="/preview-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin" className="h-full w-full border-0" data-testid="preview-frame" />}
       </div>
       <div className="flex h-[28%] min-h-[80px] shrink-0 flex-col border-t border-border bg-[#0f1218]">
         <div className="flex items-center gap-2 px-3 py-0.5 text-[11px] text-muted">

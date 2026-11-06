@@ -71,7 +71,7 @@ describe('type acquisition', () => {
       ['react', 'definitelytyped', '@types/react'],
       ['csstype', 'bundled', undefined],
     ]);
-    expect(react[0].files.map((f) => f.path)).toEqual(['node_modules/@types/react/package.json', 'node_modules/@types/react/index.d.ts', 'node_modules/@types/react/global.d.ts']);
+    expect(react[0].files.map((f) => f.path)).toEqual(['node_modules/react/package.json', 'node_modules/react/index.d.ts', 'node_modules/react/global.d.ts']);
     expect(react[0].dependencies).toEqual(['csstype']);
 
     const none = await acquireTypes(net.fetchJson, net.fetchText, 'untyped', '1.0.0');

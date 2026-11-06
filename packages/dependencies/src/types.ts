@@ -34,6 +34,13 @@ export interface AcquireOptions {
 
 const DTS = /\.d\.(ts|mts|cts)$/;
 
+/** "@types/react" → "react", "@types/scope__pkg" → "@scope/pkg"; other names unchanged. */
+export function untyped(name: string): string {
+  if (!name.startsWith('@types/')) return name;
+  const n = name.slice('@types/'.length);
+  return n.includes('__') ? `@${n.replace('__', '/')}` : n;
+}
+
 interface PkgJson {
   name: string;
   version: string;
@@ -65,7 +72,12 @@ export function importedPackages(dts: string): string[] {
   return [...out];
 }
 
-async function filesOf(fetchJson: FetchJson, fetchText: FetchText, name: string, version: string, opts: Required<Pick<AcquireOptions, 'maxFiles' | 'maxBytes'>>): Promise<TypeFile[]> {
+/**
+ * `installAs`: the folder the files go in. DefinitelyTyped packages are installed under the name of
+ * the package they describe (node_modules/react, not node_modules/@types/react): the editor's
+ * TypeScript service resolves `import … from 'react'` there, and it never holds two copies.
+ */
+async function filesOf(fetchJson: FetchJson, fetchText: FetchText, name: string, version: string, opts: Required<Pick<AcquireOptions, 'maxFiles' | 'maxBytes'>>, installAs = name): Promise<TypeFile[]> {
   const flat = (await fetchJson(`${JSDELIVR_DATA}/package/npm/${name}@${version}/flat`)) as { files: { name: string; size: number }[] };
   const dts = flat.files.filter((f) => DTS.test(f.name) && !/\/(test|tests|__tests__|ts\d\.\d+)\//.test(f.name)).sort((a, b) => a.name.length - b.name.length);
   const picked: typeof dts = [];
@@ -75,8 +87,8 @@ async function filesOf(fetchJson: FetchJson, fetchText: FetchText, name: string,
     picked.push(f);
     bytes += f.size;
   }
-  const out: TypeFile[] = [{ path: `node_modules/${name}/package.json`, content: await fetchText(`${JSDELIVR_CDN}/${name}@${version}/package.json`) }];
-  const results = await Promise.all(picked.map(async (f) => ({ path: `node_modules/${name}${f.name}`, content: await fetchText(`${JSDELIVR_CDN}/${name}@${version}${f.name}`) })));
+  const out: TypeFile[] = [{ path: `node_modules/${installAs}/package.json`, content: await fetchText(`${JSDELIVR_CDN}/${name}@${version}/package.json`) }];
+  const results = await Promise.all(picked.map(async (f) => ({ path: `node_modules/${installAs}${f.name}`, content: await fetchText(`${JSDELIVR_CDN}/${name}@${version}${f.name}`) })));
   return [...out, ...results];
 }
 
@@ -96,14 +108,14 @@ export async function acquireTypes(fetchJson: FetchJson, fetchText: FetchText, n
   let result: AcquiredTypes;
   let files: TypeFile[];
   if (hasTypesField(pkg) || name.startsWith('@types/')) {
-    files = await filesOf(fetchJson, fetchText, name, version, opts);
+    files = await filesOf(fetchJson, fetchText, name, version, opts, untyped(name));
     result = { name, version, source: 'bundled', files, dependencies: [] };
   } else {
     const tp = typesPackageFor(name);
     const major = version.split('.')[0];
     const tv = (await resolveVersion(fetchJson, tp, `^${major}`)) ?? (await resolveVersion(fetchJson, tp, 'latest'));
     if (tv) {
-      files = await filesOf(fetchJson, fetchText, tp, tv, opts);
+      files = await filesOf(fetchJson, fetchText, tp, tv, opts, name);
       result = { name, version, source: 'definitelytyped', typesPackage: tp, files, dependencies: [] };
       seen.add(tp);
     } else {

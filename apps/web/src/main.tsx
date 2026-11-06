@@ -8,7 +8,7 @@ import { useEditor } from './store/editor';
 import { useCatalog } from './lib/catalogStore';
 
 // Handle for debugging from the browser console (and for end-to-end tests).
-(window as unknown as { codingStudio: unknown }).codingStudio = { editor: useEditor, catalog: useCatalog, probeExports: (pkg: string) => import('./lib/apiCatalog').then((m) => m.probeExports(pkg)) };
+(window as unknown as { codingStudio: unknown }).codingStudio = { editor: useEditor, catalog: useCatalog, probeExports: (pkg: string) => import('./lib/apiCatalog').then((m) => m.probeExports(pkg)), typeLibs: () => import('./lib/monaco').then((m) => Object.keys((m.tsLanguage.typescriptDefaults as unknown as { getExtraLibs(): Record<string, unknown> }).getExtraLibs())) };
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

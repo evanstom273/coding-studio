@@ -153,6 +153,16 @@ export function startTsProject(): () => void {
       return false;
     },
   });
+  // New dependency types reach the worker asynchronously: check again once they have.
+  const libs = (tsLanguage.typescriptDefaults as unknown as { onDidExtraLibsChange(cb: () => void): { dispose(): void } }).onDidExtraLibsChange(() => {
+    scheduleCheck(400);
+    scheduleLater();
+  });
+  let later: ReturnType<typeof setTimeout> | undefined;
+  const scheduleLater = () => {
+    if (later) clearTimeout(later);
+    later = setTimeout(() => void runCheck(), 2500);
+  };
   let stopTypes: (() => void) | undefined;
   let dead = false;
   void import('./typeAcquisition').then((m) => {
@@ -160,6 +170,8 @@ export function startTsProject(): () => void {
   });
   return () => {
     dead = true;
+    libs.dispose();
+    if (later) clearTimeout(later);
     stopTypes?.();
     a();
     b();

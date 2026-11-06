@@ -4,7 +4,7 @@
  * TypeScript service as node_modules/<name>/… — imports, completions and graph nodes then know
  * the library without installing anything.
  */
-import { acquireTypes, parseManifest, type AcquiredTypes } from '@cs/dependencies';
+import { acquireTypes, parseManifest, untyped, type AcquiredTypes } from '@cs/dependencies';
 import { getSetting, setSetting } from '@web/db/projects';
 import { useEditor } from '@web/store/editor';
 import { tsLanguage } from './monaco';
@@ -72,8 +72,14 @@ export async function refreshTypes(force = false) {
   }
   const prev = new Map(useDeps.getState().deps.map((d) => [d.name, d]));
   useDeps.setState({ deps: wanted.map((w) => (loaded.get(w.name)?.range === w.range && prev.get(w.name) ? { ...prev.get(w.name)!, dev: w.dev } : w)) });
+  // `@types/x` next to `x`: one copy of x's types (they install to the same place).
+  const declared = new Set(wanted.map((w) => w.name));
   await Promise.all(
     wanted.map(async (w) => {
+      if (w.name.startsWith('@types/') && declared.has(untyped(w.name))) {
+        patch(w.name, { state: 'types', source: 'definitelytyped', message: `Loaded with ${untyped(w.name)}` });
+        return;
+      }
       if (loaded.get(w.name)?.range === w.range) return;
       try {
         const types = await typesFor(w.name, w.range);
