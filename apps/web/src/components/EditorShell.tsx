@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { loadProject } from '@web/db/projects';
+import { loadWorkspace } from '@web/db/projects';
 import { useEditor } from '@web/store/editor';
 import { useUI } from '@web/store/ui';
 import { startCompileLoop, compileNow } from '@web/compile/store';
-import { saveNow, useAutosave } from '@web/hooks/useAutosave';
+import { markSaved, saveNow, useAutosave } from '@web/hooks/useAutosave';
 import { useShortcuts } from '@web/hooks/useShortcuts';
 import { useCompact } from '@web/hooks/useLayout';
 import { navigate } from '@web/lib/router';
@@ -43,15 +43,16 @@ export default function EditorShell({ projectId }: { projectId: string }) {
     void (async () => {
       await saveNow();
       try {
-        const l = await loadProject(projectId);
+        const l = await loadWorkspace(projectId);
         if (cancelled) return;
         if (!l) {
           setError('This project does not exist in this browser.');
           return;
         }
-        useEditor.getState().open(l.project, l.issues);
-        compileNow(l.project);
-        if (l.migratedFrom !== undefined) toast('info', `Project upgraded from schema ${l.migratedFrom}; it is saved in the new format on the next change.`);
+        markSaved(l.workspace);
+        useEditor.getState().open(l.workspace, l.issues);
+        compileNow(useEditor.getState().project!);
+        if (l.migratedFrom !== undefined) toast('info', 'Project upgraded to the file-based format (the original was kept as a backup).');
         if (l.issues.length) toast('warning', `${l.issues.length} problem(s) were repaired while loading: ${l.issues[0]}`);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));

@@ -21,7 +21,7 @@ export async function deleteSelection() {
   const nodes = s.selection.nodes.filter((id) => f.graph.nodes.some((n) => n.id === id && n.type !== 'core.entry'));
   const edges = s.selection.edges.filter((id) => f.graph.edges.some((e) => e.id === id && !nodes.includes(e.from.node) && !nodes.includes(e.to.node)));
   if (!nodes.length && !edges.length) return;
-  if (nodes.length >= 8 && s.project) await createBackup(s.project, `Before deleting ${nodes.length} nodes`);
+  if (nodes.length >= 8 && s.workspace) await createBackup(s.workspace, `Before deleting ${nodes.length} nodes`);
   const ops = [...(nodes.length ? [{ op: 'delete_nodes' as const, nodes }] : []), ...(edges.length ? [{ op: 'disconnect' as const, edges }] : [])];
   if (s.tryDispatch(ops, nodes.length ? `Delete ${nodes.length} node(s)` : 'Delete connection')) s.select([]);
 }

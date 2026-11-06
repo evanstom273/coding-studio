@@ -51,7 +51,7 @@ function b64decode(s: string): Uint8Array {
   return out;
 }
 
-const dec = new TextDecoder('utf-8', { fatal: true });
+const dec = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
 
 function contentRecord(path: string, content: string | Uint8Array, now: number): FileRecord {
   const kind: FileKind = kindForPath(path);

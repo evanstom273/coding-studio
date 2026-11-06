@@ -2,8 +2,8 @@
  * One BridgeRoom per connector key: the cloud copy of that user's projects.
  *
  *   /mcp           Claude's MCP endpoint (tools edit the stored projects directly)
- *   /bridge        WebSocket for open editors: live "project-updated" notices, active project
- *   /sync/...      the editor's sync API (list / get / put / delete projects)
+ *   /bridge        WebSocket for open editors: live "workspace-updated" notices, active project
+ *   /sync/...      the editor's per-file sync API (list / index / read / apply / delete)
  *
  * Runs inside the Durable Object (not the Worker) so compiling and editing get the Durable
  * Object's generous CPU limit. Editor sockets use hibernation, so idle tabs cost nothing.
@@ -12,11 +12,18 @@ import { DurableObject } from 'cloudflare:workers';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { BRIDGE_MAX_PAYLOAD, BRIDGE_PROTOCOL_VERSION } from '../packages/shared-protocol/src/index';
 import { buildServer, type ToolHost } from '../mcp/server/tools';
-import { CloudService } from './cloud-service';
+import { CloudService, type KvLike } from './cloud-service';
+import type { SqlLike } from './cloud-store';
 
 export interface Env {
   BRIDGE: DurableObjectNamespace<BridgeRoom>;
   ASSETS: Fetcher;
+}
+
+function toBase64(u: Uint8Array) {
+  let s = '';
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000));
+  return btoa(s);
 }
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -38,7 +45,8 @@ export class BridgeRoom extends DurableObject<Env> {
 
   private service(site: string) {
     return new CloudService(
-      this.ctx.storage,
+      this.ctx.storage as unknown as KvLike,
+      { sql: this.ctx.storage.sql as unknown as SqlLike, transaction: (fn) => this.ctx.storage.transactionSync(fn) },
       (msg) => {
         const text = JSON.stringify(msg);
         for (const ws of this.ctx.getWebSockets()) {
@@ -74,22 +82,28 @@ export class BridgeRoom extends DurableObject<Env> {
       return new Response(null, { status: 101, webSocket: client });
     }
 
-    const m = /^\/sync\/projects(?:\/([A-Za-z0-9_-]+))?$/.exec(url.pathname);
+    // Editor sync API (per file).
+    const m = /^\/sync\/workspaces(?:\/([A-Za-z0-9_-]+)(\/read|\/apply)?)?$/.exec(url.pathname);
     if (m) {
-      const id = m[1];
-      if (!id && request.method === 'GET') return json(200, { projects: await cloud.list(), tombstones: await cloud.tombstones() });
-      if (id && request.method === 'GET') {
-        const p = await cloud.get(id);
-        return p ? json(200, p) : json(404, { error: 'not found' });
+      await cloud.migrate();
+      const [, id, action] = m;
+      if (!id && request.method === 'GET') return json(200, { workspaces: cloud.list(), tombstones: await cloud.tombstones() });
+      if (id && !action && request.method === 'GET') {
+        const w = cloud.store.get(id);
+        return w ? json(200, { ...w, files: cloud.store.index(id) }) : json(404, { error: 'not found' });
       }
-      if (id && request.method === 'PUT') {
+      if (id && action === '/read' && request.method === 'POST') {
+        const { paths } = (await request.json()) as { paths: string[] };
+        const files = cloud.store.readPaths(id, Array.isArray(paths) ? paths : []).map((f) => (f.kind === 'binary' ? { path: f.path, kind: f.kind, hash: f.hash, mtime: f.mtime, base64: toBase64(f.data!) } : { path: f.path, kind: f.kind, hash: f.hash, mtime: f.mtime, text: f.text }));
+        return json(200, { files });
+      }
+      if (id && action === '/apply' && request.method === 'POST') {
         const text = await request.text();
-        if (text.length > 4 * 1024 * 1024) return json(413, { error: 'Project too large' });
-        const body = JSON.parse(text) as { doc: unknown; baseRevision?: string };
-        const r = await cloud.put(body.doc, body.baseRevision);
+        if (text.length > 48 * 1024 * 1024) return json(413, { error: 'Request too large' });
+        const r = await cloud.apply(id, JSON.parse(text));
         return r.ok ? json(200, r) : json(409, r);
       }
-      if (id && request.method === 'DELETE') {
+      if (id && !action && request.method === 'DELETE') {
         await cloud.remove(id, 'editor');
         return json(200, { deleted: id });
       }

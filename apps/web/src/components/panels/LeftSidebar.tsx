@@ -171,7 +171,7 @@ function ProjectExplorer() {
 
   const del = async (what: string, ops: EditOp[]) => {
     if (!(await confirmDialog({ title: `Delete ${what}?`, message: `${what} will be removed. A backup is created first and you can also undo with Ctrl+Z.`, confirm: 'Delete', danger: true }))) return;
-    await createBackup(project, `Before deleting ${what}`);
+    await createBackup(useEditor.getState().workspace!, `Before deleting ${what}`);
     d(ops, `Delete ${what}`);
   };
 

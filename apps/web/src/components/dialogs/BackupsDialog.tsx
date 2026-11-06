@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createBackup, getBackup, listBackups } from '@web/db/projects';
+import { backupToWorkspace, createBackup, getBackup, listBackups } from '@web/db/projects';
 import { useEditor } from '@web/store/editor';
 import { toast } from '@web/store/toasts';
 import { Button, confirmDialog, Dialog } from '../ui/primitives';
@@ -17,7 +17,7 @@ export function BackupsDialog({ onClose }: { onClose: () => void }) {
       footer={
         <Button
           onClick={async () => {
-            await createBackup(useEditor.getState().project!, 'Manual backup', 'user');
+            await createBackup(useEditor.getState().workspace!, 'Manual backup', 'user');
             refresh();
             toast('success', 'Backup created');
           }}
@@ -42,8 +42,9 @@ export function BackupsDialog({ onClose }: { onClose: () => void }) {
               if (!(await confirmDialog({ title: 'Restore backup?', message: 'The current state is backed up first, and the restore can be undone with Ctrl+Z.', confirm: 'Restore' }))) return;
               const row = await getBackup(b.id!);
               if (!row) return;
-              await createBackup(useEditor.getState().project!, 'Before restoring a backup', 'auto');
-              useEditor.getState().replaceProject(row.doc, `Restore backup "${b.label}"`);
+              const ws = useEditor.getState().workspace!;
+              await createBackup(ws, 'Before restoring a backup', 'auto');
+              useEditor.getState().replaceWorkspace(backupToWorkspace(row.doc, ws.meta.id), `Restore backup "${b.label}"`);
               toast('success', 'Backup restored');
               onClose();
             }}

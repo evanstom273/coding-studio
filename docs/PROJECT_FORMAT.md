@@ -1,6 +1,28 @@
 # Project file format
 
-The project document is the **source of truth**. Generated code is derived from it and is never the only saved representation.
+A project is a **workspace**: a set of files at paths, the same shape in the browser, in the cloud copy and (later) in a Git repository. Visual graphs are files too. Generated code is derived from the graphs and is never the only saved representation.
+
+## Workspace (schema 2)
+
+| Path | Content |
+| --- | --- |
+| `codingstudio.json` | Project settings: `{ "version": 1, "name", "description?", "language", "languageVersion", "compiler": { indent, indentSize, header, comments } }`. Can't be deleted or moved. |
+| `<script path>.vgraph` | One visual script: `{ "format": "coding-studio-graph", "version": 1, "language", "script": <ScriptDoc> }` (the `script` object is exactly the schema-1 script below). `player/player.vgraph` compiles to `player/player.gd`. |
+| anything else | Ordinary text or binary files (kept byte-exact). Empty folders are kept with a `.gitkeep` file. |
+
+- Every file has a git blob SHA-1 `hash`; writes can name the hash they were based on and are refused (nothing changes) if the file moved on. Batches of file operations are atomic.
+- The editor, compiler and MCP graph tools work on a *project view* derived from `codingstudio.json` and the `.vgraph` files; a graph edit rewrites only the `.vgraph` files it touched.
+- Editor layout (open graph, viewport) is not part of `codingstudio.json`; viewports live in the graph file, the rest in local metadata.
+
+### Storage
+
+- **Browser (IndexedDB, Dexie v2):** `workspaces` (metadata) and `files` (one row per file, keyed `[ws+path]`). Saves write only the files that changed. Schema-1 projects stored by older versions are converted the first time they're listed/opened; the original document is kept as a backup.
+- **Cloud copy (Claude connector, Durable Object SQLite):** one row per file plus content-addressed blobs (chunked, any size); Claude's undo steps store only the files they changed; backups are full file lists sharing content. Older whole-project entries are converted automatically on first use.
+- **Sync** is per file with a three-way check against the last agreed hash: changed only here → uploaded; changed only in the cloud → downloaded; changed on both sides → the cloud copy wins and you're told.
+
+## Single-file exports (schema 1)
+
+The `.vproj` / `.vproj.json` formats below are still how a project is exported and imported as one file (and what the Godot plugin reads); importing one creates a workspace.
 
 ## Files
 

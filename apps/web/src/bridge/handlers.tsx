@@ -9,7 +9,8 @@ import { createProject, OpError, projectRevision, projectToJson, type EditOp, ty
 import { toolchainFor, languages } from '@web/lib/toolchain';
 import * as svc from '@cs/project-service';
 import { navigate } from '@web/lib/router';
-import { createBackup, deleteProject, duplicateProject, getBackup, insertProject, listBackups, listProjects } from '@web/db/projects';
+import { backupToWorkspace, createBackup, deleteProject, duplicateProject, getBackup, insertProject, listBackups, listProjects } from '@web/db/projects';
+import { configOf } from '@cs/workspace';
 import { saveNow } from '@web/hooks/useAutosave';
 import { useEditor } from '@web/store/editor';
 import { compileNow } from '@web/compile/store';
@@ -93,7 +94,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       if (!tc.adapter.identifiers.isValid(scriptName)) throw new BridgeHandlerError('E_INVALID_IDENTIFIER', `script_name "${scriptName}" is not a valid identifier`);
       await saveNow();
       const p = await insertProject(createProject(tc.adapter, name, { template, scriptName }));
-      await openAndWait(p.id);
+      await openAndWait(p.meta.id);
       return describeProject(useEditor.getState().project!);
     }
     case 'open_project':
@@ -111,7 +112,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const id = await findProjectId(str(params.project) ?? useEditor.getState().project?.id ?? '');
       await saveNow();
       const copy = await duplicateProject(id, str(params.name));
-      return { id: copy.id, name: copy.name };
+      return { id: copy.meta.id, name: configOf(copy).name };
     }
     case 'delete_project': {
       const id = await findProjectId(str(params.project) ?? '');
@@ -152,7 +153,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       if (expected && expected !== current) {
         throw new BridgeHandlerError('E_REVISION_CONFLICT', `The project changed since revision ${expected} (now ${current}) — probably the user edited it. Nothing was applied. Re-read the graph (get_graph) and retry with the new revision.`, { expected, current });
       }
-      if (isSubstantial(ops as EditOp[])) await createBackup(p, `Before Claude batch (${ops.length} ops)`, 'mcp');
+      if (isSubstantial(ops as EditOp[])) await createBackup(useEditor.getState().workspace!, `Before Claude batch (${ops.length} ops)`, 'mcp');
       let res;
       try {
         res = useEditor.getState().dispatch(ops as EditOp[], `Claude: ${(ops as EditOp[]).length === 1 ? (ops as EditOp[])[0].op.replace(/_/g, ' ') : `${ops.length} edits`}`, {
@@ -200,8 +201,8 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const p = await ensureOpen(params.project);
       const row = await getBackup(Number(params.backup));
       if (!row || row.projectId !== p.id) throw new BridgeHandlerError('E_NOT_FOUND', `Backup ${String(params.backup)} not found for this project. Use list_backups.`);
-      await createBackup(p, 'Before restoring a backup (Claude)', 'mcp');
-      useEditor.getState().replaceProject(row.doc, `Claude: restore backup "${row.label}"`, 'mcp');
+      await createBackup(useEditor.getState().workspace!, 'Before restoring a backup (Claude)', 'mcp');
+      useEditor.getState().replaceWorkspace(backupToWorkspace(row.doc, p.id), `Claude: restore backup "${row.label}"`, 'mcp');
       return { restored: row.id, label: row.label, revision: projectRevision(useEditor.getState().project!) };
     }
     case 'confirm_overwrite': {

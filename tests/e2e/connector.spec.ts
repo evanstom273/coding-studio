@@ -109,5 +109,47 @@ test('the editor endpoints only accept this site and valid keys', async () => {
   expect(await tryWs(`ws://127.0.0.1:${PORT}/bridge/${KEY}`, 'https://evil.example')).toBe('403');
   expect(await tryWs(`ws://127.0.0.1:${PORT}/bridge/short`, SITE)).toBe('404');
   expect(await tryWs(`ws://127.0.0.1:${PORT}/bridge/${KEY}`, SITE)).toBe('open');
-  expect((await fetch(`${SITE}/sync/${KEY}/projects`, { headers: { Origin: 'https://evil.example' } })).status).toBe(403);
+  expect((await fetch(`${SITE}/sync/${KEY}/workspaces`, { headers: { Origin: 'https://evil.example' } })).status).toBe(403);
+});
+
+test('files sync one by one, including non-graph files, both ways', async ({ page }) => {
+  const { c, call } = await claude();
+  try {
+    const created = data(await call('create_project', { name: 'Per File' }));
+    await openWithConnector(page);
+    await page.getByTestId('project-card').filter({ hasText: 'Per File' }).click();
+    await expect(page.getByTestId('project-title')).toHaveText('Per File');
+
+    // A file written in the cloud (e.g. by another device) arrives in this browser's storage.
+    const sync = (path: string, init?: RequestInit) => fetch(`${SITE}/sync/${KEY}/workspaces${path}`, { ...init, headers: { 'Content-Type': 'application/json', Origin: SITE } });
+    const r = await sync(`/${created.id}/apply`, { method: 'POST', body: JSON.stringify({ changes: [{ path: 'notes/todo.md', base: null, text: '- ship it' }] }) });
+    expect(r.status).toBe(200);
+    const localFile = (path: string) =>
+      page.evaluate(
+        ([ws, p]) =>
+          new Promise<string | null>((resolve) => {
+            const req = indexedDB.open('coding-studio');
+            req.onsuccess = () => {
+              const g = req.result.transaction('files').objectStore('files').get([ws, p]);
+              g.onsuccess = () => resolve(g.result?.text ?? null);
+              g.onerror = () => resolve(null);
+            };
+          }),
+        [created.id, path],
+      );
+    await expect.poll(() => localFile('notes/todo.md'), { timeout: 10_000 }).toBe('- ship it');
+
+    // A graph edit here uploads only the graph file; the cloud keeps the note untouched.
+    await addNodeViaMenu(page, 'while', 'core.while');
+    await expect.poll(async () => (await (await sync(`/${created.id}`)).json()).files.map((f: { path: string }) => f.path), { timeout: 10_000 }).toContain('notes/todo.md');
+    const ready = created.scripts[0].functions[0].id;
+    await expect.poll(async () => data(await call('get_graph', { project: created.id, graph: ready })).nodes.some((n: { type: string }) => n.type === 'core.while'), { timeout: 10_000 }).toBe(true);
+
+    // A stale write is refused with the conflicting path.
+    const stale = await sync(`/${created.id}/apply`, { method: 'POST', body: JSON.stringify({ changes: [{ path: 'notes/todo.md', base: null, text: 'stale' }] }) });
+    expect(stale.status).toBe(409);
+    expect((await stale.json()).conflicts[0].path).toBe('notes/todo.md');
+  } finally {
+    await c.close();
+  }
 });

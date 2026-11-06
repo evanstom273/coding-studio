@@ -150,3 +150,26 @@ export function reidScript(s: ScriptDoc, language: string): ScriptDoc {
   const p: Project = { format: PROJECT_FORMAT, schemaVersion: PROJECT_SCHEMA_VERSION, id: 'tmp', name: 'tmp', language, languageVersion: '', compilerSettings: { indent: 'tab', indentSize: 4, header: true, comments: true }, scripts: [s], createdAt: 0, updatedAt: 0 };
   return reidProject(p).scripts[0];
 }
+
+/**
+ * Same files, a new workspace id and new script/node ids in every graph (a copy must never share
+ * ids with the original). Optionally renames the project.
+ */
+export function reidWorkspace(ws: Workspace, newId: string, name?: string, now = Date.now()): Workspace {
+  const files = new Map<string, FileRecord>();
+  const language = configOf(ws).language;
+  for (const f of ws.files.values()) {
+    if (f.kind === 'graph') {
+      try {
+        const s = reidScript(scriptFromRecord(f), language);
+        files.set(f.path, makeRecord(f.path, serializeGraph(s, parseGraph(f.text ?? '').language), now, 'graph'));
+        continue;
+      } catch {
+        /* unreadable graph: copied as is */
+      }
+    }
+    files.set(f.path, f);
+  }
+  if (name) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig({ ...configOf(ws), name }), now));
+  return { meta: { id: newId, schemaVersion: WORKSPACE_SCHEMA_VERSION, createdAt: now, updatedAt: now }, files };
+}
