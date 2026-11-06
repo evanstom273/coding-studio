@@ -1,0 +1,172 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FunctionDecl, JsonValue, ScriptDoc } from '@cs/graph-core';
+import { checkConnection, makeNodeContext, nodeInfo, type Toolchain } from '@cs/compiler-core';
+import { defaultProps, type NodeDefinition, type PortSpec } from '@cs/node-registry';
+import type { EditOp } from '@cs/project-format';
+import { toolchainFor } from '@web/lib/toolchain';
+import { useEditor } from '@web/store/editor';
+import { headerColor } from './model';
+
+export interface PendingConnection {
+  nodeId: string;
+  portId: string;
+  /** 'source' = dragged from an output, 'target' = dragged from an input */
+  handleType: 'source' | 'target';
+}
+
+export interface MenuEntry {
+  key: string;
+  title: string;
+  category: string;
+  description: string;
+  type: string;
+  props?: Record<string, JsonValue>;
+  def: NodeDefinition;
+}
+
+/** Palette entries for the active script: every node type plus shortcuts for its own variables, functions and signals. */
+export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl): MenuEntry[] {
+  const out: MenuEntry[] = [];
+  const reg = tc.registry;
+  const def = (t: string) => reg.get(t)!;
+  const vars = [...fn.params.map((p) => ({ ...p, scope: 'parameter' })), ...fn.locals.map((v) => ({ ...v, scope: 'local' })), ...script.variables.map((v) => ({ ...v, scope: v.constant ? 'constant' : 'member' }))];
+  for (const v of vars) {
+    out.push({ key: `get:${v.id}`, title: `Get ${v.name}`, category: 'Variables', description: `Read ${v.scope} ${v.name}: ${v.type}`, type: 'core.get_var', props: { variable: v.id }, def: def('core.get_var') });
+    if (v.scope !== 'constant') out.push({ key: `set:${v.id}`, title: `Set ${v.name}`, category: 'Variables', description: `Assign ${v.scope} ${v.name}: ${v.type}`, type: 'core.set_var', props: { variable: v.id }, def: def('core.set_var') });
+  }
+  for (const f of script.functions) {
+    if (f.kind === 'event') continue;
+    out.push({ key: `call:${f.id}`, title: `Call ${f.name}`, category: 'Functions', description: f.description ?? `Call ${f.name}()`, type: 'core.call_function', props: { function: f.id }, def: def('core.call_function') });
+  }
+  if (reg.get('godot.emit_signal') && tc.adapter.capabilities.signals) {
+    for (const s of script.signals) out.push({ key: `emit:${s.id}`, title: `Emit ${s.name}`, category: 'Godot/Signals', description: `Emit signal ${s.name}`, type: 'godot.emit_signal', props: { signal: s.id }, def: def('godot.emit_signal') });
+  }
+  for (const e of script.enums) for (const m of e.members) out.push({ key: `enum:${e.id}:${m.name}`, title: `${e.name}.${m.name}`, category: 'Variables', description: `Enum value`, type: 'core.enum_value', props: { enum: e.id, member: m.name }, def: def('core.enum_value') });
+  for (const d of reg.available(tc.adapter.id, tc.adapter.capabilities)) out.push({ key: d.type, title: d.title, category: d.category, description: d.description, type: d.type, def: d });
+  return out;
+}
+
+function score(e: MenuEntry, q: string): number {
+  if (!q) return 1;
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = `${e.title} ${e.category} ${e.type} ${(e.def.keywords ?? []).join(' ')}`.toLowerCase();
+  if (!words.every((w) => hay.includes(w))) return 0;
+  const t = e.title.toLowerCase();
+  return 1 + (t === q.toLowerCase() ? 100 : 0) + (t.startsWith(q.toLowerCase()) ? 40 : 0) + (t.includes(q.toLowerCase()) ? 15 : 0) + (e.key.includes(':') ? 5 : 0);
+}
+
+/** Which port of a would-be node accepts the pending connection, if any. */
+export function compatiblePort(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, e: MenuEntry, pending: PendingConnection): PortSpec | undefined {
+  const ctx = makeNodeContext(tc, script, fn);
+  const src = fn.graph.nodes.find((n) => n.id === pending.nodeId);
+  if (!src) return undefined;
+  const srcPort = nodeInfo(tc, ctx, src).ports.find((p) => p.id === pending.portId && p.direction === (pending.handleType === 'source' ? 'out' : 'in'));
+  if (!srcPort) return undefined;
+  const fake = { id: '__new', type: e.type, position: { x: 0, y: 0 }, props: { ...defaultProps(e.def), ...e.props }, inputs: {} };
+  const ports = nodeInfo(tc, ctx, fake).ports;
+  return ports.find((p) => {
+    if (pending.handleType === 'source') return p.direction === 'in' && checkConnection(tc, srcPort, p).severity !== 'error';
+    return p.direction === 'out' && checkConnection(tc, p, srcPort).severity !== 'error';
+  });
+}
+
+export function AddNodeMenu({ screen, flow, pending, onClose }: { screen: { x: number; y: number }; flow: { x: number; y: number }; pending?: PendingConnection; onClose: () => void }) {
+  const project = useEditor((s) => s.project)!;
+  const script = project.scripts.find((s) => s.id === useEditor.getState().activeScriptId)!;
+  const fn = script?.functions.find((f) => f.id === useEditor.getState().activeFunctionId);
+  const tc = toolchainFor(project.language);
+  const [q, setQ] = useState('');
+  const [active, setActive] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => inputRef.current?.focus(), []);
+
+  const all = useMemo(() => (script && fn ? paletteEntries(tc, script, fn) : []), [tc, script, fn]);
+  const contextual = useMemo(() => (pending && script && fn ? all.filter((e) => compatiblePort(tc, script, fn, e, pending)) : all), [all, pending, tc, script, fn]);
+  const results = useMemo(
+    () =>
+      contextual
+        .map((e) => ({ e, s: score(e, q) }))
+        .filter((x) => x.s > 0)
+        .sort((a, b) => b.s - a.s || a.e.category.localeCompare(b.e.category) || a.e.title.localeCompare(b.e.title))
+        .slice(0, 80)
+        .map((x) => x.e),
+    [contextual, q],
+  );
+  useEffect(() => setActive(0), [q]);
+  useEffect(() => {
+    listRef.current?.querySelector(`[data-idx="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
+
+  if (!script || !fn) return null;
+
+  const choose = (e: MenuEntry) => {
+    const ops: EditOp[] = [{ op: 'add_node', ref: 'n', type: e.type, position: { x: Math.round(flow.x), y: Math.round(flow.y) }, ...(e.props ? { props: e.props } : {}) }];
+    if (pending) {
+      const port = compatiblePort(tc, script, fn, e, pending);
+      if (port) ops.push(pending.handleType === 'source' ? { op: 'connect', from: { node: pending.nodeId, port: pending.portId }, to: { node: '$n', port: port.id } } : { op: 'connect', from: { node: '$n', port: port.id }, to: { node: pending.nodeId, port: pending.portId } });
+    }
+    const r = useEditor.getState().tryDispatch(ops, `Add ${e.title}`);
+    if (r) useEditor.getState().select([r.created.n]);
+    onClose();
+  };
+
+  const left = Math.min(screen.x, window.innerWidth - 340);
+  const top = Math.min(screen.y, window.innerHeight - 440);
+  let lastCat = '';
+  return (
+    <div className="fixed inset-0 z-40" onMouseDown={onClose} onContextMenu={(e) => e.preventDefault()}>
+      <div className="absolute flex w-[320px] flex-col rounded-md border border-border bg-panel shadow-2xl" style={{ left, top, maxHeight: 420 }} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label="Add node">
+        <div className="border-b border-border p-2">
+          <input
+            ref={inputRef}
+            data-testid="add-node-search"
+            className="w-full rounded border border-border bg-[#0f1218] px-2 py-1.5 text-[12px] focus:border-accent focus:outline-none"
+            placeholder={pending ? 'Search compatible nodes…' : 'Search nodes…'}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActive((a) => Math.min(results.length - 1, a + 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActive((a) => Math.max(0, a - 1));
+              } else if (e.key === 'Enter' && results[active]) {
+                e.preventDefault();
+                choose(results[active]);
+              } else if (e.key === 'Escape') onClose();
+            }}
+          />
+          {pending && <div className="mt-1 text-[10.5px] text-muted">Showing nodes that can connect to the dragged pin ({contextual.length})</div>}
+        </div>
+        <div ref={listRef} className="flex-1 overflow-auto py-1" role="listbox">
+          {results.length === 0 && <div className="px-3 py-2 text-muted">No matching nodes</div>}
+          {results.map((e, i) => {
+            const showCat = !q && e.category !== lastCat;
+            lastCat = e.category;
+            return (
+              <div key={e.key}>
+                {showCat && <div className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted">{e.category}</div>}
+                <button
+                  data-idx={i}
+                  role="option"
+                  aria-selected={i === active}
+                  data-testid="add-node-item"
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => choose(e)}
+                  className={`flex w-full items-center gap-2 px-3 py-1 text-left text-[12px] ${i === active ? 'bg-accent/20' : ''}`}
+                  title={e.description}
+                >
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: headerColor({ node: { id: '', type: e.type, position: { x: 0, y: 0 }, props: {}, inputs: {} }, def: e.def, ports: [], title: '' }) }} />
+                  <span className="truncate">{e.title}</span>
+                  {q && <span className="ml-auto shrink-0 text-[10px] text-muted">{e.category}</span>}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

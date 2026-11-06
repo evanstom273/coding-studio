@@ -1,0 +1,15 @@
+import { chromium } from '@playwright/test';
+const b = await chromium.launch();
+const p = await b.newPage({ viewport: { width: 1600, height: 950 } });
+const errs = [];
+p.on('pageerror', (e) => errs.push('pageerror ' + e.message));
+p.on('console', (m) => m.type() === 'error' && errs.push('console ' + m.text()));
+await p.goto('http://localhost:4173/');
+await p.waitForTimeout(800);
+await p.screenshot({ path: '/tmp/claude-0/shots/dash.png' });
+await p.click('[data-testid="example-jump-gravity"]');
+await p.waitForSelector('[data-testid="graph-node"]', { timeout: 10000 });
+await p.waitForTimeout(2500);
+await p.screenshot({ path: '/tmp/claude-0/shots/editor.png' });
+console.log(errs.join('\n') || 'no errors');
+await b.close();

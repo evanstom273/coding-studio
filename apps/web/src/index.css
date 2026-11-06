@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #0f1218;
+  --color-panel: #161a22;
+  --color-panel-2: #1c212b;
+  --color-border: #2a303c;
+  --color-muted: #8b93a4;
+  --color-text: #e3e6ec;
+  --color-accent: #4f8cff;
+  --color-accent-2: #3a6fd8;
+  --color-ok: #4ade80;
+  --color-warn: #fbbf24;
+  --color-err: #f87171;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  overflow: hidden;
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #39404e transparent;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+/* ---- React Flow, Blueprint style ---------------------------------------- */
+.react-flow {
+  --xy-background-color: #11141a;
+  --xy-minimap-background-color: #161a22;
+  --xy-controls-button-background-color: #1c212b;
+  --xy-controls-button-background-color-hover: #262c38;
+  --xy-controls-button-color: #cbd2de;
+  --xy-controls-button-border-color: #2a303c;
+  --xy-selection-background-color: rgba(79, 140, 255, 0.08);
+  --xy-selection-border: 1px dashed #4f8cff;
+  --xy-edge-stroke-selected: #ffffff;
+}
+.react-flow__node {
+  font-size: 12px;
+}
+.react-flow__node.selected > .bp-node,
+.react-flow__node:focus-visible > .bp-node {
+  box-shadow: 0 0 0 2px #f5a524, 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.react-flow__handle {
+  border: none;
+  min-width: 0;
+  min-height: 0;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.7));
+}
+.react-flow__attribution {
+  background: transparent;
+}
+.react-flow__attribution a {
+  color: #4b5262;
+}
+.bp-input {
+  background: #0d1016;
+  border: 1px solid #2f3644;
+  border-radius: 3px;
+  color: #e3e6ec;
+  font-size: 11px;
+  padding: 1px 4px;
+  height: 18px;
+}
+.bp-input:focus {
+  border-color: var(--color-accent);
+  outline: none;
+}
