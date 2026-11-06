@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@cs/type-system": ["packages/type-system/src/index.ts"],
+      "@cs/graph-core": ["packages/graph-core/src/index.ts"],
+      "@cs/intermediate-representation": ["packages/intermediate-representation/src/index.ts"],
+      "@cs/node-registry": ["packages/node-registry/src/index.ts"],
+      "@cs/node-registry/core-nodes": ["packages/node-registry/src/core-nodes.ts"],
+      "@cs/language-sdk": ["packages/language-sdk/src/index.ts"],
+      "@cs/compiler-core": ["packages/compiler-core/src/index.ts"],
+      "@cs/language-gdscript": ["packages/language-gdscript/src/index.ts"],
+      "@cs/toolchain": ["packages/toolchain/src/index.ts"],
+      "@cs/project-format": ["packages/project-format/src/index.ts"],
+      "@cs/shared-protocol": ["packages/shared-protocol/src/index.ts"],
+      "@cs/examples": ["packages/examples/src/index.ts"],
+      "@web/*": ["apps/web/src/*"]
+    }
+  },
+  "include": ["packages", "apps/web/src", "mcp", "tests", "apps/web/vite.config.ts", "vitest.config.ts", "playwright.config.ts", "aliases.ts", "worker"],
+  "exclude": ["node_modules", "dist", "apps/web/dist"]
+}

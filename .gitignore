@@ -1,0 +1,9 @@
+node_modules
+dist
+apps/web/dist
+.wrangler
+test-results
+playwright-report
+*.log
+.DS_Store
+tests/fixtures/godot-out
