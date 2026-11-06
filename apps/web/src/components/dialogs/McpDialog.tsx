@@ -37,6 +37,7 @@ export function McpDialog({ onClose }: { onClose: () => void }) {
         Let Claude Code inspect and edit your graphs through a local MCP server. Claude's edits use the same validated operations as yours: each batch is atomic, can be undone with Ctrl+Z, and is rejected if the project changed since Claude last read it.
         Nothing is sent to any server — the connection is between this tab and a process on your own machine (127.0.0.1).
       </p>
+      {b.servedByMcp && <p className="mb-3 rounded bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-200">This editor is being served by the Coding Studio MCP server on your computer, so it connects to Claude automatically. Nothing else to set up.</p>}
       <label className="mb-3 flex items-center gap-2 rounded border border-border bg-panel-2 p-2.5">
         <input type="checkbox" checked={b.enabled} onChange={(e) => b.setEnabled(e.target.checked)} data-testid="mcp-enable" />
         <span className="text-[13px] font-medium">Allow Claude Code to control this editor</span>

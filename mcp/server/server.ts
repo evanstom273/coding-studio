@@ -16,9 +16,10 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { spawn } from 'node:child_process';
 import { z } from 'zod';
 import { BRIDGE_DEFAULT_PORT, type BridgeMethod } from '@cs/shared-protocol';
-import { BridgeRequestError, EditorBridge, errorPayload, log, parseOrigins, SERVER_VERSION } from './bridge';
+import { BridgeRequestError, EditorBridge, errorPayload, log, parseOrigins, SERVER_VERSION, type EditorAssets } from './bridge';
 import { ExportError, parseRoots, planExport, writePlan } from './export';
 
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }] });
@@ -94,6 +95,23 @@ export function buildServer(bridge: EditorBridge, exportRoots: string[] = []): M
   server.registerTool('status', { title: 'Status', description: 'Check the connection to Coding Studio and see the open project, its revision and the active script/graph. Call this first.', inputSchema: {}, annotations: ro }, async () => {
     return call('status');
   });
+  server.registerTool(
+    'open_editor',
+    {
+      title: 'Open the editor',
+      description: `Open Coding Studio in the user's default browser. The editor is served by this MCP server itself (no website or install needed) at http://localhost:<port>, and connects to Claude automatically. Use this when status says Coding Studio isn't open.`,
+      inputSchema: {},
+    },
+    async () => {
+      const url = bridge.editorUrl;
+      try {
+        openInBrowser(url);
+        return text({ opened: url, note: 'Give the page a few seconds to load, then call status. If no browser window appeared, ask the user to open the URL themselves.' });
+      } catch (e) {
+        return fail(new BridgeRequestError('E_OPEN_FAILED', `Could not open a browser (${e instanceof Error ? e.message : String(e)}). Ask the user to open ${url} in any browser.`));
+      }
+    },
+  );
   server.registerTool('list_projects', { title: 'List projects', description: 'Projects saved in the Coding Studio browser storage.', inputSchema: {}, annotations: ro }, () => call('list_projects'));
   server.registerTool(
     'create_project',
@@ -243,10 +261,19 @@ export function buildServer(bridge: EditorBridge, exportRoots: string[] = []): M
   return server;
 }
 
-export async function main() {
+/** Open a URL in the user's default browser (fixed command per OS; the URL is always our own localhost address). */
+function openInBrowser(url: string) {
+  if (!/^http:\/\/localhost:\d+\/?$/.test(url)) throw new Error('refusing to open a non-local URL');
+  const [cmd, args] = process.platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+  const child = spawn(cmd, args as string[], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.on('error', (e) => log(`could not open browser: ${e.message}`));
+  child.unref();
+}
+
+export async function main(assets: EditorAssets = {}) {
   const port = Number(process.env.CODING_STUDIO_PORT) || BRIDGE_DEFAULT_PORT;
   const origins = parseOrigins(process.env.CODING_STUDIO_ORIGINS);
-  const bridge = new EditorBridge(port, origins);
+  const bridge = new EditorBridge(port, origins, assets);
   await bridge.start();
   const server = buildServer(bridge, parseRoots(process.env.CODING_STUDIO_EXPORT_ROOTS));
   await server.connect(new StdioServerTransport());

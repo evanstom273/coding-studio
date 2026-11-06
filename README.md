@@ -53,7 +53,7 @@ npm run build:mcp
 claude mcp add coding-studio -- node /absolute/path/to/coding-studio/dist/mcp/coding-studio-mcp.mjs
 ```
 
-In Coding Studio click the **MCP** indicator in the toolbar and enable *Allow Claude Code to control this editor*. Then ask Claude to "check the coding-studio status". Details, security model and troubleshooting: [docs/MCP.md](docs/MCP.md).
+The server file includes the editor: while Claude is running it, open **http://localhost:47831** in any browser (or ask Claude to "open Coding Studio") and it connects automatically. A hosted copy works too, with its origin in `CODING_STUDIO_ORIGINS` and the MCP toggle switched on. Details, security model and troubleshooting: [docs/MCP.md](docs/MCP.md).
 
 ## Godot plugin
 

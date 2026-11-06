@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test --trace off",
     "test:godot": "node scripts/validate-godot.mjs",
-    "build:mcp": "esbuild mcp/server/cli.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/mcp/coding-studio-mcp.mjs --external:bufferutil --external:utf-8-validate --banner:js=\"import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);\" --log-level=warning",
+    "build:mcp": "node scripts/build-mcp.mjs",
     "build:companion": "esbuild mcp/companion/cli.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/companion/coding-studio-companion.mjs --log-level=warning",
     "mcp": "node dist/mcp/coding-studio-mcp.mjs",
     "companion": "node dist/companion/coding-studio-companion.mjs",

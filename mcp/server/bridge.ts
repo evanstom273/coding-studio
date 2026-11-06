@@ -10,6 +10,7 @@
  *    over when its user clicks "Take over", and the previous owner is told it lost control;
  *  - message size is capped (BRIDGE_MAX_PAYLOAD); idle/dead sockets are dropped by heartbeat.
  */
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { BRIDGE_MAX_PAYLOAD, BRIDGE_PROTOCOL_VERSION, type BridgeError, type BridgeMessage, type BridgeMethod, type BridgeWelcome } from '@cs/shared-protocol';
 
@@ -45,8 +46,43 @@ interface Pending {
   timer: NodeJS.Timeout;
 }
 
+/** Built editor files (published path → base64), bundled into the server so it can serve the IDE itself. */
+export type EditorAssets = Record<string, string>;
+
+const MIME: Record<string, string> = { html: 'text/html; charset=utf-8', js: 'text/javascript; charset=utf-8', css: 'text/css; charset=utf-8', svg: 'image/svg+xml', png: 'image/png', ttf: 'font/ttf', woff2: 'font/woff2', json: 'application/json', wasm: 'application/wasm' };
+const PAGE_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; frame-ancestors 'none'; base-uri 'self'; form-action 'none'",
+};
+
+/** Serve the bundled editor. Only GET/HEAD; unknown routes fall back to index.html (client-side routing). */
+export function serveEditor(assets: EditorAssets, port: number, req: IncomingMessage, res: ServerResponse) {
+  // Only answer requests addressed to this machine by name (blocks DNS-rebinding pages).
+  const host = String(req.headers.host ?? '');
+  if (!new RegExp(`^(localhost|127\\.0\\.0\\.1)(:${port})?$`).test(host)) return void res.writeHead(403).end('Forbidden');
+  if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405).end();
+  const path = decodeURIComponent(new URL(req.url ?? '/', 'http://127.0.0.1').pathname);
+  if (path === '/__coding-studio/bridge') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return void res.end(JSON.stringify({ app: 'coding-studio-mcp', version: SERVER_VERSION, port }));
+  }
+  if (!Object.keys(assets).length) {
+    res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
+    return void res.end('This build of the Coding Studio MCP server does not include the editor. Rebuild it with "npm run build:mcp".');
+  }
+  let key = path.replace(/^\/+/, '');
+  if (!assets[key]) key = 'index.html';
+  const ext = key.split('.').pop() ?? '';
+  const body = Buffer.from(assets[key], 'base64');
+  res.writeHead(200, { 'Content-Type': MIME[ext] ?? 'application/octet-stream', 'Content-Length': body.length, 'Cache-Control': key.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache', ...PAGE_HEADERS });
+  res.end(req.method === 'HEAD' ? undefined : body);
+}
+
 export class EditorBridge {
   private wss: WebSocketServer | null = null;
+  private http: Server | null = null;
   private owner: { ws: WebSocket; sessionId: string; origin: string } | null = null;
   private pending = new Map<string, Pending>();
   private seq = 0;
@@ -56,7 +92,13 @@ export class EditorBridge {
   constructor(
     readonly port: number,
     readonly origins: string[],
+    readonly assets: EditorAssets = {},
   ) {}
+
+  /** Where the built-in editor is served. */
+  get editorUrl() {
+    return `http://localhost:${this.port}`;
+  }
 
   /** Relay link to the copy that owns the port, when this copy couldn't bind it. */
   private upstream: WebSocket | null = null;
@@ -65,9 +107,10 @@ export class EditorBridge {
 
   start(): Promise<void> {
     return new Promise((done) => {
+      // One port for both: HTTP serves the editor, WebSocket upgrades are the bridge.
+      const http = createServer((req, res) => serveEditor(this.assets, this.port, req, res));
       const wss = new WebSocketServer({
-        host: '127.0.0.1',
-        port: this.port,
+        server: http,
         maxPayload: BRIDGE_MAX_PAYLOAD,
         verifyClient: (info: { origin: string }, cb: (ok: boolean, code?: number, msg?: string) => void) => {
           // No Origin = a local non-browser process (another copy of this server). Browsers always
@@ -77,14 +120,16 @@ export class EditorBridge {
           cb(false, 403, 'Origin not allowed');
         },
       });
-      wss.on('listening', () => {
-        log(`waiting for Coding Studio on ws://127.0.0.1:${this.port}`);
+      http.on('listening', () => {
+        log(`editor available at ${this.editorUrl} (bridge on ws://127.0.0.1:${this.port})`);
         done();
       });
-      wss.on('error', (e: NodeJS.ErrnoException) => {
+      http.on('error', (e: NodeJS.ErrnoException) => {
         if (this.heartbeat) clearInterval(this.heartbeat);
         this.heartbeat = null;
         this.wss = null;
+        this.http = null;
+        wss.close();
         if (e.code === 'EADDRINUSE') {
           // Another copy (e.g. the same app started this server twice) owns the port: relay through it.
           void this.connectUpstream().then(done);
@@ -94,8 +139,10 @@ export class EditorBridge {
         log(this.startError);
         done();
       });
+      wss.on('error', () => undefined); // errors surface on the HTTP server
       wss.on('connection', (ws, req) => this.onConnection(ws, String(req.headers.origin ?? '')));
       this.wss = wss;
+      this.http = http;
       this.heartbeat = setInterval(() => {
         for (const c of wss.clients) {
           const alive = (c as WebSocket & { alive?: boolean }).alive;
@@ -106,6 +153,7 @@ export class EditorBridge {
           }
         }
       }, 15_000);
+      http.listen(this.port, '127.0.0.1');
     });
   }
 
@@ -284,7 +332,7 @@ export class EditorBridge {
       return Promise.reject(
         new BridgeRequestError(
           'E_NOT_CONNECTED',
-          `Coding Studio isn't connected. Ask the user to open Coding Studio, click the "MCP" indicator in the toolbar and enable "Allow Claude Code to control this editor" (port ${this.port}). If Coding Studio runs on a hosted URL, that origin must be listed in CODING_STUDIO_ORIGINS.`,
+          `Coding Studio isn't open. Call the open_editor tool to open it in the user's browser (it is served by this MCP server at ${this.editorUrl}), then retry. A hosted copy of the editor can be used instead if its origin is listed in CODING_STUDIO_ORIGINS and its MCP toggle is on.`,
         ),
       );
     }
@@ -309,6 +357,7 @@ export class EditorBridge {
     // ws doesn't drop open connections on close(); do it so relaying copies notice and take over.
     for (const c of this.wss?.clients ?? []) c.terminate();
     this.wss?.close();
+    this.http?.close();
   }
 }
 

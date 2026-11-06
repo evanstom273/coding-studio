@@ -26,6 +26,8 @@ interface BridgeState {
   status: BridgeStatus;
   statusText: string;
   log: BridgeLogEntry[];
+  /** True when this page is served by the local MCP server. */
+  servedByMcp: boolean;
   setEnabled(on: boolean): void;
   setPort(port: number): void;
   takeOver(): void;
@@ -63,6 +65,7 @@ export const useBridge = create<BridgeState>()((set, get) => ({
   status: 'off',
   statusText: 'Claude Code access is off',
   log: [],
+  servedByMcp: false,
   setEnabled(enabled) {
     set({ enabled });
     persist();
@@ -212,4 +215,33 @@ function scheduleRetry() {
 /** Reconnect on load if the user enabled the bridge before. */
 export function initBridge() {
   if (useBridge.getState().enabled && !socket) connect(false);
+  void detectLocalServer();
+}
+
+/**
+ * When this page is served by the local MCP server itself (http://localhost:47831), opening it is
+ * the user's explicit choice to work with Claude, so the bridge is switched on automatically —
+ * unless the user turned it off on this origin before.
+ */
+async function detectLocalServer() {
+  if (!/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) return;
+  try {
+    const r = await fetch('/__coding-studio/bridge', { cache: 'no-store' });
+    if (!r.ok || !(r.headers.get('content-type') ?? '').includes('application/json')) return;
+    const info = (await r.json()) as { app?: string; port?: number };
+    if (info.app !== 'coding-studio-mcp' || !Number.isInteger(info.port)) return;
+    useBridge.setState({ servedByMcp: true });
+    let explicit = false;
+    try {
+      explicit = localStorage.getItem(KEY) !== null;
+    } catch {
+      /* storage unavailable */
+    }
+    if (explicit) return;
+    const s = useBridge.getState();
+    if (s.port !== info.port) s.setPort(info.port!);
+    if (!useBridge.getState().enabled) useBridge.getState().setEnabled(true);
+  } catch {
+    /* not served by the MCP server (dev server, Cloudflare): nothing to do */
+  }
 }

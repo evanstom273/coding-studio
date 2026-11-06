@@ -6,6 +6,12 @@ Claude Code ──stdio (MCP)──► dist/mcp/coding-studio-mcp.mjs ──ws:/
 
 The MCP server is a local Node process launched by Claude Code. It relays tool calls to the editor tab, which executes them with the **same edit operations as the mouse**: validated, atomic per batch, one undo step per batch, autosaved, and checked against `expected_revision`. The server keeps no project state and does not need any Cloudflare service.
 
+## The simplest setup: the server serves the editor
+
+The MCP server file contains the whole editor. Whenever Claude starts the server, the editor is available at **http://localhost:47831** in any browser (Firefox, Edge, Chrome…). Opened from there it connects to Claude automatically: no hosted site, no `npm install`, no toggle. Claude can also open it for you with the `open_editor` tool ("open Coding Studio").
+
+Projects are stored per address, so projects made on a hosted copy (e.g. Cloudflare) don't appear at localhost automatically: export them there (*Export → .vproj*) and import them here.
+
 ## Setup
 
 1. Build the server (once, and after updating the repository):
@@ -36,7 +42,7 @@ The MCP server is a local Node process launched by Claude Code. It relays tool c
 
 | Area | Tools |
 | --- | --- |
-| Connection & projects | `status`, `list_projects`, `create_project`, `open_project`, `get_project`, `save_project`, `duplicate_project`, `delete_project` |
+| Connection & projects | `status`, `open_editor`, `list_projects`, `create_project`, `open_project`, `get_project`, `save_project`, `duplicate_project`, `delete_project` |
 | Graphs | `list_graphs`, `create_graph`, `get_graph`, `rename_graph`, `delete_graph` |
 | Node discovery | `list_node_types`, `get_node_schema`, `search_nodes`, `list_language_capabilities` |
 | Editing | `add_node`, `update_node`, `delete_nodes`, `connect_nodes`, `disconnect_nodes`, `move_nodes`, `duplicate_nodes`, `batch_edit` |
