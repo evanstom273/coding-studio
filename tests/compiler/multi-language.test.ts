@@ -1,27 +1,26 @@
 /**
- * The compiler is not hard-wired to GDScript: a test-only JavaScript adapter reuses the core node
- * pack and the same pipeline, and its generated code is executed.
+ * The compiler is not hard-wired to GDScript: the TypeScript adapter reuses the core node pack
+ * and the same pipeline, and its JavaScript output is executed.
  */
 import { describe, expect, it } from 'vitest';
 import vm from 'node:vm';
-import { createToolchain } from '@cs/toolchain';
+import { toolchainFor } from '@cs/toolchain';
 import { compileScript } from '@cs/compiler-core';
 import { applyOps, createProject, OpError } from '@cs/project-format';
-import { jsReferenceAdapter } from '../fixtures/js-reference-adapter';
-
-const tc = createToolchain(jsReferenceAdapter);
+const tc = toolchainFor('typescript');
 
 function run(code: string, fn: string, args: unknown[] = []): { out: unknown[]; ret: unknown } {
   const out: unknown[] = [];
   const src = code.replace(/^export /gm, '') + `\n;__ret = ${fn}(...__args);`;
-  const ctx = vm.createContext({ print: (v: unknown) => out.push(v), __args: args, __ret: undefined });
+  const ctx = vm.createContext({ console: { log: (v: unknown) => out.push(v) }, __args: args, __ret: undefined });
   vm.runInContext(src, ctx);
   return { out, ret: ctx.__ret };
 }
 
-describe('test-only JavaScript reference adapter', () => {
+describe('the same core graphs in another language (TypeScript → JavaScript)', () => {
   it('compiles a core-node graph to JavaScript that runs', () => {
     let p = createProject(tc.adapter, 'JS', { template: 'module' });
+    p = { ...p, scripts: p.scripts.map((sc) => ({ ...sc, settings: { output: 'js' } })) };
     p = applyOps(p, [
       { op: 'add_variable', name: 'total', type: 'int', default: 0 },
       { op: 'add_function', ref: 'f', name: 'sumTo', params: [{ name: 'n', type: 'int' }], returnType: 'int' },
@@ -53,13 +52,17 @@ describe('test-only JavaScript reference adapter', () => {
     const { out, ret } = run(r.files[0].content, 'sumTo', [6]);
     expect(out).toEqual([2, 4, 6]);
     expect(ret).toBe(21);
-    expect(r.files[0].path).toBe('main.mjs');
+    expect(r.files[0].path).toBe('main.js');
   });
 
   it('rejects language-specific nodes from another language pack', () => {
     const p = createProject(tc.adapter, 'JS', { template: 'module' });
     expect(() => applyOps(p, [{ op: 'add_function', ref: 'f', name: 'go' }, { op: 'add_node', graph: '$f', type: 'godot.delay' }], tc)).toThrow(OpError);
-    expect(() => applyOps(p, [{ op: 'add_function', ref: 'f', name: 'go' }, { op: 'add_node', graph: '$f', type: 'core.self' }], tc)).toThrow(/not available/);
+    // `self` exists in the node set (objects need it) but a module has no `this`: compile error, no code.
+    const q = applyOps(p, [{ op: 'add_function', ref: 'f', name: 'go' }, { op: 'add_node', ref: 'me', graph: '$f', type: 'core.self' }, { op: 'add_node', ref: 'pr', graph: '$f', type: 'core.print' }, { op: 'connect', from: { node: '$f.entry', port: 'then' }, to: { node: '$pr', port: 'exec' } }, { op: 'connect', from: { node: '$me', port: 'self' }, to: { node: '$pr', port: 'value' } }], tc).project;
+    const r = compileScript(tc, q.scripts[0]);
+    expect(r.ok).toBe(false);
+    expect(r.diagnostics.some((d) => d.code === 'E_NO_THIS')).toBe(true);
   });
 
   it('reports unsupported capabilities instead of emitting code', () => {
@@ -68,6 +71,6 @@ describe('test-only JavaScript reference adapter', () => {
     const r = compileScript(tc, p.scripts[0]);
     expect(r.ok).toBe(false);
     expect(r.files).toEqual([]);
-    expect(r.diagnostics.some((d) => d.code === 'E_UNSUPPORTED_FEATURE')).toBe(true);
+    expect(r.diagnostics.some((d) => d.code === 'E_UNSUPPORTED_FEATURE' || d.code === 'E_UNSUPPORTED')).toBe(true);
   });
 });

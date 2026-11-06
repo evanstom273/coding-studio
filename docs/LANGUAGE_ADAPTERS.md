@@ -58,7 +58,7 @@ The new language now appears in *New project*, the core node pack is filtered by
 
 ## 4. Test it
 
-Copy the pattern of `tests/compiler/multi-language.test.ts`, which uses a small test-only JavaScript adapter (`tests/fixtures/js-reference-adapter.ts`): build graphs with `applyOps`, compile, and **run** the output with the real interpreter/compiler. Add golden files for representative programs.
+Copy the pattern of `tests/compiler/typescript.test.ts`: build graphs with `applyOps`, compile, check the output with the language's own compiler (`tsc --strict` there), and **run** it with the real runtime. Add golden files for representative programs. `packages/language-typescript` is a complete second adapter to read alongside GDScript: its own node pack (`ts.*`), an import manager, and two output modes (TypeScript / JavaScript).
 
 ## Boundaries
 

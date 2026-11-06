@@ -15,7 +15,7 @@ npm run test:e2e           # builds, serves on :4173 and runs Playwright (Chromi
 | --- | --- | --- |
 | Compiler golden files | `tests/compiler/examples.test.ts`, `tests/fixtures/golden/*.gd` | All 12 examples compile to the checked-in GDScript; determinism; source maps |
 | Diagnostics | `tests/compiler/diagnostics.test.ts` | Missing inputs, unavailable values, missing returns, cycles, type mismatches, dangling edges, unknown nodes, duplicates/reserved/shadowing, event signatures, target pins |
-| Multi-language | `tests/compiler/multi-language.test.ts` | A test-only JavaScript adapter (`tests/fixtures/js-reference-adapter.ts`) compiles core-node graphs; the output is executed |
+| Multi-language | `tests/compiler/multi-language.test.ts`, `tests/compiler/typescript.test.ts` | The same core-node graphs compile to JavaScript and run; TypeScript output passes `tsc --strict` and matches golden files |
 | Performance | `tests/compiler/performance.test.ts` | 600-node graph: build, compile, structured merges, fast single edits |
 | Unit | `tests/unit/*` | Type system, graph algorithms, edit operations (atomicity, sharing, validation, pruning, revisions), archives, migrations |
 | Integration | `tests/integration/*` | MCP bridge origin/session/takeover rules, export safety, companion service |
