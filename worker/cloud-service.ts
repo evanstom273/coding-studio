@@ -454,6 +454,20 @@ export class CloudService {
         await this.commit(before, r.workspace, 'claude', { label: `Claude: add workflow ${f.path}`, source: 'claude' });
         return { added: f.path, content: f.content, note: 'Commit it with git_commit to turn it on.' };
       }
+      case 'deps_list':
+      case 'deps_search':
+      case 'deps_add':
+      case 'deps_remove': {
+        const { project: p } = await this.resolve(params.project);
+        const recs = new Map(this.store.readPaths(p.id, ['package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock']).map((f) => [f.path, f]));
+        const r = await svc.depsCall(method, recs, params, async (u) => (await fetch(u, { headers: { 'User-Agent': 'coding-studio' } })).json(), p.name);
+        if (r.write) {
+          const before = this.store.read(p.id)!;
+          const next = applyWorkspaceOps(before, [{ op: 'write_file', path: r.write.path, content: r.write.content }]);
+          await this.commit(before, next.workspace, 'claude', { label: r.write.label, source: 'claude' });
+        }
+        return r.result;
+      }
       case 'confirm_overwrite':
         return { approved: false };
     }

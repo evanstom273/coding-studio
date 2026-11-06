@@ -54,6 +54,10 @@ export const BRIDGE_METHODS = [
   'ci_logs',
   'ci_rerun',
   'ci_add_workflow',
+  'deps_list',
+  'deps_search',
+  'deps_add',
+  'deps_remove',
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 

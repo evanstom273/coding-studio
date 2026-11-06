@@ -305,6 +305,16 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       useEditor.getState().applyFiles([{ op: 'write_file', path: f.path, content: f.content, expectedHash: null }], `Claude: add workflow ${f.path}`, { source: 'mcp' });
       return { added: f.path, content: f.content, note: 'Commit it with git_commit to turn it on.' };
     }
+    case 'deps_list':
+    case 'deps_search':
+    case 'deps_add':
+    case 'deps_remove': {
+      const p = await ensureOpen(params.project);
+      const ws = useEditor.getState().workspace!;
+      const r = await svc.depsCall(method, ws.files, params, async (u) => (await fetch(u)).json(), p.name);
+      if (r.write) useEditor.getState().applyFiles([{ op: 'write_file', path: r.write.path, content: r.write.content }], r.write.label, { source: 'mcp' });
+      return r.result;
+    }
     case 'confirm_overwrite': {
       const files = Array.isArray(params.files) ? (params.files as string[]) : [];
       const ok = await confirmDialog({

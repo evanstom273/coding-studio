@@ -3,6 +3,8 @@ import { Braces, ChevronDown, ChevronRight, FileCode2, Files, FunctionSquare, Li
 import { FileExplorer } from '../files/FileExplorer';
 import { SearchPanel } from '../files/SearchPanel';
 import { SourceControl } from '../files/SourceControl';
+import { PackagesPanel } from '../files/PackagesPanel';
+import { Package } from 'lucide-react';
 import { GitBranch } from 'lucide-react';
 import type { ScriptDoc } from '@cs/graph-core';
 import type { EditOp } from '@cs/project-format';
@@ -380,6 +382,7 @@ export function LeftSidebar() {
             ['nodes', 'Nodes', <Shapes key="n" size={13} />],
             ['search', 'Search', <Search key="s" size={13} />],
             ['git', 'Git', <GitBranch key="g" size={13} />],
+            ['deps', 'Packages', <Package key="d" size={13} />],
           ] as const
         ).map(([id, label, icon]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setUI({ leftTab: id })} title={label} className={cx('flex min-w-0 flex-1 items-center justify-center gap-1 py-2 text-[11.5px]', tab === id ? 'border-b-2 border-accent text-text' : 'text-muted hover:text-text')} data-testid={`left-tab-${id}`}>
@@ -387,7 +390,7 @@ export function LeftSidebar() {
           </button>
         ))}
       </div>
-      {tab === 'nodes' ? <NodeLibrary /> : tab === 'files' ? <FileExplorer /> : tab === 'search' ? <SearchPanel /> : tab === 'git' ? <SourceControl /> : <ProjectExplorer />}
+      {tab === 'nodes' ? <NodeLibrary /> : tab === 'files' ? <FileExplorer /> : tab === 'search' ? <SearchPanel /> : tab === 'git' ? <SourceControl /> : tab === 'deps' ? <PackagesPanel /> : <ProjectExplorer />}
     </div>
   );
 }

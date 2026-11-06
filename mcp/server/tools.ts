@@ -327,6 +327,16 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
   server.registerTool('ci_rerun', { title: 'Re-run CI', description: 'Re-run the failed jobs of a run (all=true re-runs everything).', inputSchema: { project, run_id: z.number().int(), all: z.boolean().optional() } }, (a) => call('ci_rerun', a, 60_000));
   server.registerTool('ci_add_workflow', { title: 'Add a CI workflow', description: 'Add a workflow file from a template: "ci" (install + typecheck/lint/test/build scripts from package.json) or "cloudflare" (deploy with wrangler; needs repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID). Commit it with git_commit to turn it on.', inputSchema: { project, template: z.enum(['ci', 'cloudflare']) } }, (a) => call('ci_add_workflow', a));
 
+  // --- npm dependencies ----------------------------------------------------------------------------
+  server.registerTool('deps_list', { title: 'List dependencies', description: 'Dependencies, devDependencies and scripts from package.json, and whether the lockfile is in sync.', inputSchema: { project }, annotations: ro }, (a) => call('deps_list', a));
+  server.registerTool('deps_search', { title: 'Search npm', description: 'Search the npm registry.', inputSchema: { query: z.string(), limit: z.number().int().min(1).max(30).optional(), project }, annotations: ro }, (a) => call('deps_search', a, 30_000));
+  server.registerTool(
+    'deps_add',
+    { title: 'Add a dependency', description: 'Add (or change) a package in package.json (created if missing). version: a version or range (default: ^latest). The editor then loads its TypeScript types; installing happens on a computer or in CI.', inputSchema: { project, name: z.string(), version: z.string().optional(), dev: z.boolean().optional() } },
+    (a) => call('deps_add', a, 30_000),
+  );
+  server.registerTool('deps_remove', { title: 'Remove a dependency', description: 'Remove a package from package.json.', inputSchema: { project, name: z.string() } }, (a) => call('deps_remove', a));
+
   // --- history ------------------------------------------------------------------------------------
   server.registerTool('undo', { title: 'Undo', description: 'Undo the latest edit in the editor (each batch is one step).', inputSchema: { project } }, (a) => call('undo', a));
   server.registerTool('redo', { title: 'Redo', description: 'Redo the latest undone edit.', inputSchema: { project } }, (a) => call('redo', a));

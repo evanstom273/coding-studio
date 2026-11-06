@@ -153,7 +153,14 @@ export function startTsProject(): () => void {
       return false;
     },
   });
+  let stopTypes: (() => void) | undefined;
+  let dead = false;
+  void import('./typeAcquisition').then((m) => {
+    if (!dead) stopTypes = m.startTypeAcquisition();
+  });
   return () => {
+    dead = true;
+    stopTypes?.();
     a();
     b();
     opener.dispose();

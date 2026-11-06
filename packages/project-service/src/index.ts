@@ -198,3 +198,4 @@ export function exportFiles(p: Project, scriptRef?: unknown, includeProject = fa
 }
 export * from './workspace';
 export * from './git';
+export * from './deps';

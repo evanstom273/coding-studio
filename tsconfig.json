@@ -33,6 +33,7 @@
       "@cs/project-service": ["packages/project-service/src/index.ts"],
       "@cs/workspace": ["packages/workspace/src/index.ts"],
       "@cs/git": ["packages/git/src/index.ts"],
+      "@cs/dependencies": ["packages/dependencies/src/index.ts"],
       "@cs/language-typescript": ["packages/language-typescript/src/index.ts"],
       "@web/*": ["apps/web/src/*"]
     }

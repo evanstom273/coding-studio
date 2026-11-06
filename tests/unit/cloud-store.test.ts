@@ -357,3 +357,32 @@ describe('TypeScript projects through the connector', () => {
     expect(r.files[0].content).toContain('let json_result = await fetch_result.json();');
   });
 });
+
+describe('npm dependencies through the connector', () => {
+  it('deps_add creates package.json with ^latest, deps_list reports the lockfile, deps_remove removes', async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (u: string) => {
+      const url = String(u);
+      const body = url.includes('/resolve/npm/dexie@') ? { version: '4.0.11' } : url.includes('/resolve/npm/') ? { version: null } : url.includes('/-/v1/search') ? { objects: [{ package: { name: 'dexie', version: '4.0.11' } }] } : {};
+      return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    try {
+      const cloud = new CloudService(kv(), backend(), () => undefined, 'https://site', () => 0);
+      await cloud.handle('create_project', { name: 'Todo App', language: 'typescript' });
+      const r = (await cloud.handle('deps_add', { name: 'dexie' })) as { range: string };
+      expect(r.range).toBe('^4.0.11');
+      const pkg = JSON.parse(((await cloud.handle('read_files', { paths: ['package.json'] })) as { files: { text: string }[] }).files[0].text);
+      expect(pkg).toMatchObject({ name: 'todo-app', dependencies: { dexie: '^4.0.11' } });
+      await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'package-lock.json', content: JSON.stringify({ packages: { '': { dependencies: { dexie: '^4.0.11' } } } }) }] });
+      expect(((await cloud.handle('deps_list', {})) as { lockfile: { status: string } }).lockfile.status).toBe('in-sync');
+      await expect(cloud.handle('deps_add', { name: 'nope-not-real' })).rejects.toMatchObject({ code: 'E_NOT_FOUND' });
+      await cloud.handle('deps_remove', { name: 'dexie' });
+      const l = (await cloud.handle('deps_list', {})) as { dependencies: Record<string, string>; lockfile: { status: string } };
+      expect(l.dependencies).toEqual({});
+      expect(l.lockfile.status).toBe('out-of-date');
+      expect(((await cloud.handle('deps_search', { query: 'dex' })) as { name: string }[])[0].name).toBe('dexie');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});
