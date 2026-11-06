@@ -131,3 +131,21 @@ export function prepareBatch(_p: Project, raw: unknown, active: { scriptId?: str
   });
   return { ops, destructive, touchesGraphs };
 }
+
+/** All project files (text or base64) plus generated files, for the local host's linked folder. */
+export function hostSnapshot(p: Project, files: Iterable<FileRecord>, generated: { path: string; content: string }[]) {
+  const out: { path: string; text?: string; base64?: string; generated?: boolean }[] = [];
+  const seen = new Set<string>();
+  for (const f of files) {
+    if (f.path.startsWith('.codingstudio/') || f.path.endsWith('/.gitkeep')) continue;
+    seen.add(f.path);
+    if (f.kind === 'binary') {
+      let s = '';
+      const d = f.data ?? new Uint8Array();
+      for (let i = 0; i < d.length; i += 0x8000) s += String.fromCharCode(...d.subarray(i, i + 0x8000));
+      out.push({ path: f.path, base64: btoa(s) });
+    } else out.push({ path: f.path, text: f.text ?? '' });
+  }
+  for (const g of generated) if (!seen.has(g.path)) out.push({ path: g.path, text: g.content, generated: true });
+  return { project: p.id, name: p.name, files: out };
+}

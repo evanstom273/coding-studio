@@ -20,10 +20,12 @@ import { BRIDGE_DEFAULT_PORT } from '@cs/shared-protocol';
 import { BridgeRequestError, EditorBridge, log, parseOrigins, type EditorAssets } from './bridge';
 import { buildServer as buildTools, type ToolHost } from './tools';
 import { ExportError, parseRoots, planExport, writePlan } from './export';
+import { LocalHost } from './host';
 
 /** The local server's host functions: open the built-in editor, write exports to disk safely. */
 export function localHost(bridge: EditorBridge, exportRoots: string[]): ToolHost {
   return {
+    local: new LocalHost((method, params, timeout) => bridge.request(method as never, params, timeout)),
     openEditorDescription: `Open Coding Studio in the user's default browser. The editor is served by this MCP server itself at http://localhost:<port> and connects to Claude automatically. Use this when status says Coding Studio isn't open.`,
     async openEditor() {
       const url = bridge.editorUrl;

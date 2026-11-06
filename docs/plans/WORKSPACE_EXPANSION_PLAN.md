@@ -402,7 +402,7 @@ Each phase ends with: typecheck, lint, all existing tests green (including the 1
 - Acceptance: a working todo app (React + Dexie + Tailwind) built visually, type-checks, previews in the browser, and builds with Vite on the host in phase 9.
 - Tests: golden TSX, rules-of-hooks enforcement tests, preview smoke test.
 
-### Phase 9 — Local execution host (optional, laptop)
+### Phase 9 — Local execution host (optional, laptop) — done: MCP tools `open_folder`, `link_folder`, `sync_folder`, `install`, `run_task`, `run_tests`, `dev_server`, `task_output` (see docs/MCP.md); no editor panel for it yet
 - Prereqs: 1, 3 (and 8 for the showcase).
 - Deliverables: single-file "Coding Studio host" (existing MCP server + companion merged): disk workspaces (open folder), file watching, install, run scripts, Vite dev server proxied into a preview tab, test runner integration with results linked to files/nodes, output console, wrangler deploy; command allow-list + confirmations; MCP tools `run_task`, `run_tests`, `dev_server`, `install`.
 - Acceptance: open an existing Vite repo from disk, install, run dev server, edit visually and see hot reload, run tests from the IDE.

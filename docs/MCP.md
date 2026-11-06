@@ -74,6 +74,8 @@ Projects are stored per address, so projects made on a hosted copy (e.g. Cloudfl
 | Files | `read_tree`, `read_files`, `search_files`, `workspace_batch`, `write_file`, `move_path`, `delete_path` |
 | GitHub | `git_repos`, `git_clone`, `git_status`, `git_commit`, `git_pull`, `git_create_pr` |
 | CI (GitHub Actions) | `ci_status`, `ci_run`, `ci_run_details`, `ci_logs`, `ci_rerun`, `ci_add_workflow` |
+| npm dependencies | `deps_list`, `deps_search`, `deps_add`, `deps_remove` |
+| This computer (local server only) | `open_folder`, `link_folder`, `sync_folder`, `install`, `run_task`, `run_tests`, `dev_server`, `task_output` |
 | History | `undo`, `redo`, `list_backups`, `restore_backup` |
 
 `batch_edit` is the workhorse: create nodes with `ref`, connect them with `"$ref"` in the same atomic batch (`add_function` also defines `"$<ref>.entry"`). Results contain created ids, the new revision, warnings and a diagnostics summary. Errors are structured: `{ "error": { "code", "message", "details" } }`, e.g. `E_REVISION_CONFLICT`, `E_TYPE_MISMATCH`, `E_UNKNOWN_NODE`, `E_NOT_CONNECTED`, `E_FILE_EXISTS`, `E_DECLINED`.
@@ -83,6 +85,8 @@ Projects are stored per address, so projects made on a hosted copy (e.g. Cloudfl
 **GitHub.** Connect GitHub once in the editor (Git tab, or “Open from GitHub” on the projects page) with a fine-grained personal access token (Contents + Pull requests: read and write). The token is stored only in your own Durable Object — never in the browser, in project files or in any response — and the editor reaches GitHub through `/github/<key>/api/…` on your Worker. A project opened from GitHub keeps its sync state in `.codingstudio/git.json` (never committed). `git_commit` pushes only changed files and refuses if GitHub moved on (`E_NOT_FAST_FORWARD`: pull first); `git_pull` merges text files line by line (conflict markers where both sides touched the same lines) and reports graph/binary files changed on both sides, keeping the local version.
 
 **CI.** `ci_add_workflow` adds a ready-made workflow (`ci`: install + the typecheck/lint/test/build scripts in package.json; `cloudflare`: deploy with wrangler using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`) — commit it to turn it on. `ci_logs` returns the problems found in failed jobs, linked to project files and lines where possible. In the editor the same lives in Git → Actions. Pushing workflow files needs the token's **Workflows** permission.
+
+**This computer.** The local server (not the cloud connector) can tie a project to a real folder. `link_folder` writes the project and its generated code there; `open_folder` turns an existing folder (say a Vite repo) into a project, leaving out `node_modules`, `.git` and build output. From then on the two stay in step: edits in the editor land in the folder within about a second (so a running Vite dev server hot-reloads), and edits made in the folder by another program come back into the project as one undo step. A local edit that hasn't come back yet is never overwritten. `install` runs the package manager (npm, pnpm or yarn, chosen from the lockfile); `run_task` / `run_tests` run a script **that package.json defines** and return its exit code and output; `dev_server start` runs `dev` and returns the local URL it prints, then keeps it running until `stop`. Deploying is just a script too (e.g. `"deploy": "wrangler deploy"` → `run_task deploy`). There is no shell: commands are always the package manager with fixed arguments, and an unknown script name is refused.
 
 ## Safety model
 
@@ -94,7 +98,8 @@ Projects are stored per address, so projects made on a hosted copy (e.g. Cloudfl
 - **Revision checks**: pass `expected_revision` to avoid overwriting the user's newer manual edits.
 - **Backups** before deletes, signature changes, project updates and batches of 15+ operations; restores back up first.
 - **Undo**: every Claude batch is one entry ("Claude: …") in the editor's history. The MCP Activity tab logs every call.
-- **Filesystem**: only `export_script` / `export_project` write files: absolute non-system destination, no `..`, symlinks may not escape, only `.gd` / `.vproj.json`, optional `CODING_STUDIO_EXPORT_ROOTS`. Existing files are never overwritten unless `overwrite: true` **and** the user clicks *Overwrite* in the editor. No shell access, no arbitrary reads.
+- **Linked folders** (local server only): writes stay inside the folder (no `..`); existing files with different content are only replaced with `overwrite: true` and the user's approval in the editor; only package-manager install and package.json scripts can run.
+- **Exports**: `export_script` / `export_project` write files: absolute non-system destination, no `..`, symlinks may not escape, only `.gd` / `.vproj.json`, optional `CODING_STUDIO_EXPORT_ROOTS`. Existing files are never overwritten unless `overwrite: true` **and** the user clicks *Overwrite* in the editor. No shell access, no arbitrary reads.
 - **Destructive project deletion** requires confirmation in the editor.
 - Payloads are capped at 8 MB; dead connections are dropped by heartbeat.
 

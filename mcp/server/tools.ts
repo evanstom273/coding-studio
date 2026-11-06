@@ -17,6 +17,18 @@ export interface ToolHost {
   openEditor(): Promise<unknown>;
   /** Local server only: write exported files to disk (with its safety checks). */
   writeFiles?(outputDir: string, files: Record<string, string>, overwrite: boolean, relay: Relay): Promise<Record<string, unknown>>;
+  /** Local server only: link projects to folders on this computer and run their tasks. */
+  local?: LocalTasks;
+}
+
+export interface LocalTasks {
+  open(dir: string, opts?: { name?: string; watch?: boolean }): Promise<unknown>;
+  link(dir: string, opts: { project?: string; overwrite?: boolean; watch?: boolean }): Promise<unknown>;
+  sync(project?: string): Promise<unknown>;
+  install(project?: string, wait?: boolean): Promise<unknown>;
+  run(script: string, opts?: { project?: string; wait?: boolean }): Promise<unknown>;
+  dev(action: 'start' | 'stop' | 'status', opts?: { project?: string; script?: string }): Promise<unknown>;
+  output(id: string | undefined, project?: string): Promise<unknown>;
 }
 
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }] });
@@ -347,6 +359,42 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     (a) => call('deps_add', a, 30_000),
   );
   server.registerTool('deps_remove', { title: 'Remove a dependency', description: 'Remove a package from package.json.', inputSchema: { project, name: z.string() } }, (a) => call('deps_remove', a));
+
+  // --- this computer (local server only) -----------------------------------------------------------
+  const local = host.local;
+  if (local) {
+    const run = async (f: () => Promise<unknown>) => {
+      try {
+        return text(await f());
+      } catch (e) {
+        return fail(e);
+      }
+    };
+    server.registerTool(
+      'link_folder',
+      { title: 'Link to a folder', description: 'Write the project (every file plus the generated code) into a folder on this computer, so it can be installed, run, tested and built there. Afterwards edits made in the folder (another editor, a formatter) come back into the project, and run_task / dev_server re-sync the folder first. Existing files with different content are only replaced with overwrite=true and the user\'s approval in the editor.', inputSchema: { project, folder: z.string().describe('Absolute path; created if missing'), overwrite: z.boolean().optional(), watch: z.boolean().optional().describe('Bring edits made in the folder back (default true)') } },
+      (a) => run(() => local.link(a.folder, { project: a.project, overwrite: a.overwrite, watch: a.watch })),
+    );
+    server.registerTool(
+      'open_folder',
+      { title: 'Open a folder', description: 'Open an existing folder on this computer (e.g. a Vite or Godot project) as a new Coding Studio project, linked to it: node_modules, .git and build output are left out, edits in either place reach the other, and install / run_task / dev_server run there.', inputSchema: { folder: z.string().describe('Absolute path'), name: z.string().optional(), watch: z.boolean().optional() } },
+      (a) => run(() => local.open(a.folder, { name: a.name, watch: a.watch })),
+    );
+    server.registerTool('sync_folder', { title: 'Sync folder', description: 'Write the project\'s current files into its linked folder (only what changed).', inputSchema: { project } }, (a) => run(() => local.sync(a.project)));
+    server.registerTool('install', { title: 'Install packages', description: 'Run the project\'s package manager install (npm, pnpm or yarn, chosen from the lockfile) in the linked folder. Waits for it unless wait=false.', inputSchema: { project, wait: z.boolean().optional() } }, (a) => run(() => local.install(a.project, a.wait !== false)));
+    server.registerTool(
+      'run_task',
+      { title: 'Run a script', description: 'Run a script from package.json (build, lint, typecheck…) in the linked folder and return its exit code and output. Only scripts package.json defines can run; there is no shell. dev/start/serve/preview start the dev server instead (see dev_server).', inputSchema: { project, script: z.string(), wait: z.boolean().optional().describe('false = return at once with the task id (read it with task_output)') } },
+      (a) => run(() => local.run(a.script, { project: a.project, wait: a.wait })),
+    );
+    server.registerTool('run_tests', { title: 'Run tests', description: 'Run the "test" script from package.json in the linked folder; returns pass/fail and the output.', inputSchema: { project } }, (a) => run(() => local.run('test', { project: a.project })));
+    server.registerTool(
+      'dev_server',
+      { title: 'Dev server', description: 'start: run the dev script (default "dev", e.g. Vite) in the linked folder and return its local URL once it prints one; it keeps running and reloads on changes. stop: stop it. status: is it running, and where.', inputSchema: { project, action: z.enum(['start', 'stop', 'status']), script: z.string().optional() } },
+      (a) => run(() => local.dev(a.action, { project: a.project, script: a.script })),
+    );
+    server.registerTool('task_output', { title: 'Task output', description: 'Output and state of a task (by id from install / run_task / dev_server), or a list of this project\'s tasks when id is omitted.', inputSchema: { project, id: z.string().optional() }, annotations: ro }, (a) => run(() => local.output(a.id, a.project)));
+  }
 
   // --- history ------------------------------------------------------------------------------------
   server.registerTool('undo', { title: 'Undo', description: 'Undo the latest edit in the editor (each batch is one step).', inputSchema: { project } }, (a) => call('undo', a));

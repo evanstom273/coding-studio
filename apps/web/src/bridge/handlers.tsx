@@ -11,7 +11,8 @@ import * as svc from '@cs/project-service';
 import { navigate } from '@web/lib/router';
 import { backupToWorkspace, createBackup, deleteProject, duplicateProject, getBackup, insertProject, insertWorkspace, listBackups, listProjects } from '@web/db/projects';
 import { buildWebStarter } from '@cs/examples';
-import { configOf, workspaceRevision, type Workspace } from '@cs/workspace';
+import { newId } from '@cs/graph-core';
+import { CONFIG_PATH, configOf, defaultConfig, makeRecord, serializeConfig, workspaceRevision, type FileRecord, type Workspace } from '@cs/workspace';
 import { readState } from '@cs/git';
 import { cloneRepo, commitOpen, github, pullOpen } from '@web/lib/git';
 import { saveNow } from '@web/hooks/useAutosave';
@@ -315,6 +316,31 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const r = await svc.depsCall(method, ws.files, params, async (u) => (await fetch(u)).json(), p.name);
       if (r.write) useEditor.getState().applyFiles([{ op: 'write_file', path: r.write.path, content: r.write.content }], r.write.label, { source: 'mcp' });
       return r.result;
+    }
+    case 'host_snapshot': {
+      // Every file of the project plus generated code, for writing into a folder on the user's computer.
+      const p = await ensureOpen(params.project);
+      await saveNow();
+      const ws = useEditor.getState().workspace!;
+      return svc.hostSnapshot(p, ws.files.values(), generatedFiles());
+    }
+    case 'host_revision': {
+      // Cheap poll for the local host: has the open project changed? Never switches projects.
+      const ws = useEditor.getState().workspace;
+      return ws && ws.meta.id === params.project ? { open: true, revision: workspaceRevision(ws) } : { open: false };
+    }
+    case 'host_import': {
+      // A folder from the user's computer becomes a new project (the local host reads it).
+      const list = Array.isArray(params.files) ? (params.files as { path: string; text?: string; base64?: string }[]) : [];
+      const now = Date.now();
+      const files = new Map<string, FileRecord>();
+      for (const f of list) files.set(f.path, makeRecord(f.path, f.base64 !== undefined ? Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0)) : (f.text ?? ''), now));
+      const name = str(params.name) ?? 'Folder';
+      if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(files.has('package.json') || files.has('tsconfig.json') ? defaultConfig(name, 'typescript', 'es2022') : defaultConfig(name)), now));
+      await saveNow();
+      const ws = await insertWorkspace({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files });
+      await openAndWait(ws.meta.id);
+      return { project: ws.meta.id, files: ws.files.size };
     }
     case 'confirm_overwrite': {
       const files = Array.isArray(params.files) ? (params.files as string[]) : [];

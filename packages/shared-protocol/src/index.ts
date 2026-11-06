@@ -58,6 +58,9 @@ export const BRIDGE_METHODS = [
   'deps_search',
   'deps_add',
   'deps_remove',
+  'host_snapshot',
+  'host_import',
+  'host_revision',
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 
