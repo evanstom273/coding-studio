@@ -5,8 +5,8 @@
  * See docs/LANGUAGE_ADAPTERS.md for a walkthrough of implementing a new language.
  */
 import type { Compatibility, TypeRef, TypeUniverse } from '@cs/type-system';
-import type { Diagnostic, JsonValue, ScriptDoc, ParamDecl } from '@cs/graph-core';
-import type { BinaryOp, IRExpr, IRModule } from '@cs/intermediate-representation';
+import type { Diagnostic, FunctionDecl, JsonValue, ScriptDoc, ParamDecl, VariableDecl } from '@cs/graph-core';
+import type { BinaryOp, IRExpr, IRModule, IRStmt } from '@cs/intermediate-representation';
 import type { LanguageCapabilities, NodeRegistry, PropSchema } from '@cs/node-registry';
 
 export type { LanguageCapabilities, CapabilityKey } from '@cs/node-registry';
@@ -117,6 +117,8 @@ export interface LanguageAdapter {
   registerNodes(registry: NodeRegistry): void;
   /** Validate script settings and language-specific attributes before lowering. */
   validateScript?(script: ScriptDoc, report: (d: Omit<Diagnostic, 'scriptId'>) => void): void;
+  /** How a function's local variable is declared, when the language has special kinds (React state). */
+  declareLocal?(local: VariableDecl, type: TypeRef, init: IRExpr | undefined, fn: FunctionDecl): IRStmt | undefined;
   /** Build a literal expression for a JSON value of a type (fallback: compiler-core's generic rules). */
   literal?(value: JsonValue, type: TypeRef): IRExpr | undefined;
   /** Final language-specific checks on the IR (unsupported constructs, naming conflicts…). */

@@ -312,6 +312,11 @@ function FunctionEditor({ fn, script }: { fn: FunctionDecl; script: ScriptDoc })
                   <input type="checkbox" checked={!!fn.async} onChange={(e) => upd({ async: e.target.checked }, e.target.checked ? 'Make async' : 'Make not async')} data-testid="fn-async" /> async
                 </label>
               )}
+              {project.language === 'typescript' && fn.kind === 'function' && (
+                <label className="flex items-center gap-1.5" title="A React component: parameters are its props, it returns elements.">
+                  <input type="checkbox" checked={!!fn.component} onChange={(e) => upd({ component: e.target.checked }, e.target.checked ? 'Make component' : 'Make plain function')} data-testid="fn-component" /> component
+                </label>
+              )}
               {toolchainFor(project.language).adapter.capabilities.modules && (
                 <label className="flex items-center gap-1.5" title="Other files (and other scripts' Call nodes) can import it.">
                   <input type="checkbox" checked={!!fn.exported} onChange={(e) => upd({ exported: e.target.checked }, e.target.checked ? 'Export function' : 'Stop exporting function')} data-testid="fn-exported" /> export
@@ -329,6 +334,11 @@ function FunctionEditor({ fn, script }: { fn: FunctionDecl; script: ScriptDoc })
             </summary>
             <div className="mt-2">
               <VariableEditor v={l} script={script} fn={fn} />
+              {project.language === 'typescript' && (fn.component || /^use[A-Z]/.test(fn.name)) && (
+                <label className="mb-2 flex items-center gap-1.5 text-[12px]" title="Remembered between renders; Set re-renders the component (useState).">
+                  <input type="checkbox" checked={l.attributes?.state === true} onChange={(e) => d([{ op: 'update_variable', variable: l.id, function: fn.id, attributes: { ...(l.attributes ?? {}), state: e.target.checked } }], e.target.checked ? 'Make React state' : 'Make plain variable')} data-testid="local-state" /> React state
+                </label>
+              )}
               <button className="mb-1 text-[11.5px] text-err hover:underline" onClick={() => d([{ op: 'delete_variable', variable: l.id, function: fn.id }], 'Delete local')}>
                 Delete local variable
               </button>

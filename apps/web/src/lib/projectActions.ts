@@ -1,7 +1,7 @@
 import { createProject, parseProjectFile } from '@cs/project-format';
 import { configOf, zipToWorkspace, type Workspace } from '@cs/workspace';
 import { newId } from '@cs/graph-core';
-import { exampleById } from '@cs/examples';
+import { buildWebStarter, exampleById } from '@cs/examples';
 import { insertProject, insertWorkspace } from '@web/db/projects';
 import { navigate } from './router';
 import { toolchainFor } from './toolchain';
@@ -9,6 +9,11 @@ import { toast } from '@web/store/toasts';
 
 export async function newProject(name: string, template: string, language = 'gdscript', scriptName = 'Main'): Promise<Workspace> {
   const tc = toolchainFor(language);
+  if (language === 'typescript' && template === 'web-app') {
+    const ws = await insertWorkspace(buildWebStarter(tc, name));
+    navigate({ name: 'project', id: ws.meta.id });
+    return ws;
+  }
   const p = await insertProject(createProject(tc.adapter, name, { template, scriptName }));
   navigate({ name: 'project', id: p.meta.id });
   return p;

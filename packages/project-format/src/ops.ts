@@ -39,8 +39,8 @@ export type EditOp =
   | { op: 'add_script'; ref?: string; name: string; path?: string; template?: string; settings?: Record<string, JsonValue>; description?: string }
   | { op: 'update_script'; script?: string; name?: string; path?: string; settings?: Record<string, JsonValue>; description?: string }
   | { op: 'delete_script'; script: string }
-  | { op: 'add_function'; ref?: string; script?: string; name?: string; kind?: 'function' | 'event' | 'lambda'; owner?: string; event?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean }
-  | { op: 'update_function'; function: string; script?: string; name?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean }
+  | { op: 'add_function'; ref?: string; script?: string; name?: string; kind?: 'function' | 'event' | 'lambda'; owner?: string; event?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean; component?: boolean }
+  | { op: 'update_function'; function: string; script?: string; name?: string; params?: ParamInput[]; returnType?: string; description?: string; async?: boolean; exported?: boolean; component?: boolean }
   | { op: 'delete_function'; function: string; script?: string }
   | { op: 'add_variable'; ref?: string; script?: string; function?: string; name: string; type: string; default?: JsonValue; exported?: boolean; constant?: boolean; description?: string; attributes?: Record<string, JsonValue> }
   | { op: 'update_variable'; variable: string; script?: string; function?: string; name?: string; type?: string; default?: JsonValue | null; exported?: boolean; constant?: boolean; description?: string; attributes?: Record<string, JsonValue> | null }
@@ -989,7 +989,13 @@ function applyVarFields(ctx: OpContext, s: ScriptDoc, v: VariableDecl, op: { def
 
 /** Convenience: graph lookup for read-only callers. */
 /** async / exported flags, where the language has them. */
-function applyModifiers(tc: Toolchain, f: FunctionDecl, op: { async?: unknown; exported?: unknown }) {
+function applyModifiers(tc: Toolchain, f: FunctionDecl, op: { async?: unknown; exported?: unknown; component?: unknown }) {
+  if (op.component !== undefined) {
+    if (typeof op.component !== 'boolean') throw new OpError('"component" must be true or false');
+    if (op.component && !tc.registry.get('ts.element')) throw new OpError(`${tc.adapter.name} has no React components`);
+    if (op.component) f.component = true;
+    else delete f.component;
+  }
   if (op.async !== undefined) {
     if (typeof op.async !== 'boolean') throw new OpError('"async" must be true or false');
     if (op.async && tc.adapter.id === 'gdscript') throw new OpError('GDScript functions can\'t be marked async (use await on signals instead)');

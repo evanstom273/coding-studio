@@ -652,3 +652,4 @@ export const EXAMPLES: ExampleInfo[] = [
 export function exampleById(id: string): ExampleInfo | undefined {
   return EXAMPLES.find((e) => e.id === id);
 }
+export { buildWebStarter } from './webStarter';

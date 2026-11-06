@@ -79,6 +79,7 @@ Operations (fields in brackets are optional; script/graph default to the active 
 - add_interface {name, fields [{name, type, optional?}], [exported], [description], [ref]} · update_interface {interface, …} · delete_interface {interface}  (TypeScript type declarations; use the name as a type anywhere)
 Node props that reference variables/functions/signals/enums accept their id or name.
 TypeScript nodes: ts.call {module (npm package) | scriptPath (another script of the project) | neither (globals like fetch, JSON.parse), name, argNames[], argTypes[], returnType, await} · ts.call_method {name, argTypes[], returnType, await, optional} · ts.await {type} · ts.try (exec outs try/catch/finally/then, data out error) · ts.throw · ts.template {template "Hi {name}"} · ts.object {keys[]} · ts.get_field / ts.set_field {name, optional} · ts.function_ref {function} · ts.default_value (??) · ts.closure {function} (an inline arrow function). Imports are written automatically.
+React (TypeScript): add_function {…, component:true} makes a component (params = props, returns elements); a local variable with attributes {state:true} is React state (Set Variable calls its setter); ts.element {tag, attributes[], children} builds JSX (inputs attr_<name>, child_<i>; tag can be a component; module/scriptPath imports it); handlers are ts.closure inline functions.
 Inline functions (closures, TypeScript): add_function {kind:"lambda", owner:<function>, name, params, returnType, [async], ref} creates a function whose graph can read/write the owner's params and locals (get_var/set_var by name); put a ts.closure {function:"$ref"} node in the owner's graph to use it as a value (callbacks, handlers, array.map…). Deleting the owner deletes its inline functions.
 Execution flow: connect exec output "then" (or "true"/"false", "body", "completed"…) to exec input "exec". Every function graph starts at its Entry node (output "then", plus one data output per parameter, keyed by parameter id or name).`;
 
@@ -118,7 +119,7 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     'create_project',
     {
       title: 'Create project',
-      description: 'Create a project with one script and open it in the editor. language: gdscript (Godot, default) or typescript (web; script setting output "js" writes plain JavaScript). Templates — GDScript: node, node2d, node3d, character2d, character3d, control, refcounted; TypeScript: module (exported main), async-module, empty.',
+      description: 'Create a project with one script and open it in the editor. language: gdscript (Godot, default) or typescript (web; script setting output "js" writes plain JavaScript). Templates — GDScript: node, node2d, node3d, character2d, character3d, control, refcounted; TypeScript: web-app (Vite + React + Tailwind + Dexie starter: App component as a graph, runs in Preview), module (exported main), async-module, empty.',
       inputSchema: { name: z.string(), language: z.string().optional().describe('Default gdscript'), template: z.string().optional(), script_name: z.string().optional().describe('Name of the first script (default Main)') },
     },
     (a) => call('create_project', a, 20_000),

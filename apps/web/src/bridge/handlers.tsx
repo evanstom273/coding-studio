@@ -9,7 +9,8 @@ import { createProject, OpError, projectRevision, projectToJson, type EditOp, ty
 import { toolchainFor, languages } from '@web/lib/toolchain';
 import * as svc from '@cs/project-service';
 import { navigate } from '@web/lib/router';
-import { backupToWorkspace, createBackup, deleteProject, duplicateProject, getBackup, insertProject, listBackups, listProjects } from '@web/db/projects';
+import { backupToWorkspace, createBackup, deleteProject, duplicateProject, getBackup, insertProject, insertWorkspace, listBackups, listProjects } from '@web/db/projects';
+import { buildWebStarter } from '@cs/examples';
 import { configOf, workspaceRevision, type Workspace } from '@cs/workspace';
 import { readState } from '@cs/git';
 import { cloneRepo, commitOpen, github, pullOpen } from '@web/lib/git';
@@ -117,7 +118,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const scriptName = str(params.script_name) ?? 'Main';
       if (!tc.adapter.identifiers.isValid(scriptName)) throw new BridgeHandlerError('E_INVALID_IDENTIFIER', `script_name "${scriptName}" is not a valid identifier`);
       await saveNow();
-      const p = await insertProject(createProject(tc.adapter, name, { template, scriptName }));
+      const p = language === 'typescript' && template === 'web-app' ? await insertWorkspace(buildWebStarter(tc, name)) : await insertProject(createProject(tc.adapter, name, { template, scriptName }));
       await openAndWait(p.meta.id);
       return describeProject(useEditor.getState().project!);
     }

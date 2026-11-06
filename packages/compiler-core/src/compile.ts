@@ -467,6 +467,7 @@ function compileFunction(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, rep
     if (!tc.adapter.capabilities.async || tc.adapter.id === 'gdscript') rep({ severity: 'error', code: 'E_UNSUPPORTED', message: `${tc.adapter.name} has no async functions; turn off "async" on ${fn.name}.`, ...at });
     ir.isAsync = true;
   }
+  if (fn.component) ir.component = true;
   if (fn.exported) {
     if (!tc.adapter.capabilities.modules) rep({ severity: 'warning', code: 'W_UNSUPPORTED', message: `${tc.adapter.name} has no exports; "export" on ${fn.name} is ignored.`, ...at });
     else ir.exported = true;

@@ -50,6 +50,7 @@ export function createFunction(init: Partial<FunctionDecl> & { name: string }): 
     ...(init.description ? { description: init.description } : {}),
     ...(init.async ? { async: true } : {}),
     ...(init.exported ? { exported: true } : {}),
+    ...(init.component ? { component: true } : {}),
     graph: init.graph ?? { id: newId('g'), nodes: [entryNode()], edges: [] },
   };
 }

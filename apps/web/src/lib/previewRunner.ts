@@ -32,5 +32,7 @@ export async function buildPreview(ws: Workspace, generated: { path: string; con
   const extraHead = tw ? (/^[\^~]?3/.test(tw) ? '<script src="https://cdn.tailwindcss.com"></script>' : '<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>') : '';
   delete deps.tailwindcss;
   delete deps['@tailwindcss/vite'];
+  // Tailwind's browser build styles the page; the bare `@import "tailwindcss"` would 404.
+  if (tw) build.css = build.css.replace(/@import\s+["']tailwindcss["'][^;]*;?/g, '');
   return { build, html: previewHtml(build, ws.files.get('index.html')?.text, deps, extraHead) };
 }

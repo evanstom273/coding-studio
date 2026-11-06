@@ -15,6 +15,7 @@ import { toolchainFor, languages } from '@cs/toolchain';
 import * as svc from '@cs/project-service';
 import { applyProjectOps, applyWorkspaceOps, CONFIG_PATH, deriveProject, makeRecord, projectToWorkspace, reidWorkspace, WorkspaceOpError, type Workspace } from '@cs/workspace';
 import { newId } from '@cs/graph-core';
+import { buildWebStarter } from '@cs/examples';
 import type { BridgeMethod } from '../packages/shared-protocol/src/index';
 import { CloudStore, diffFiles, type StoreBackend } from './cloud-store';
 import { GitHubVault } from './github';
@@ -246,6 +247,12 @@ export class CloudService {
         if (template && !tc.adapter.templates.some((t) => t.id === template)) throw new svc.ServiceError('E_INVALID', `Unknown template "${template}". Available: ${tc.adapter.templates.map((t) => t.id).join(', ')}`);
         const scriptName = svc.str(params.script_name) ?? 'Main';
         if (!tc.adapter.identifiers.isValid(scriptName)) throw new svc.ServiceError('E_INVALID_IDENTIFIER', `script_name "${scriptName}" is not a valid identifier`);
+        if (tc.adapter.id === 'typescript' && template === 'web-app') {
+          const ws = buildWebStarter(tc, name);
+          await this.commit(undefined, ws, 'claude');
+          await this.select(ws.meta.id);
+          return svc.describeProject(this.project(ws.meta.id)!.project, await this.active());
+        }
         const p = createProject(tc.adapter, name, { template, scriptName });
         await this.commit(undefined, projectToWorkspace(p), 'claude');
         await this.select(p.id, p.scripts[0]?.functions[0]?.id);

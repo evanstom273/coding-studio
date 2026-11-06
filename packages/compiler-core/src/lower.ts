@@ -71,7 +71,9 @@ class FunctionLowerer {
     const body: IRStmt[] = [];
     for (const local of fn.locals) {
       const type = ctx.type(local.type);
-      body.push({ k: 'var', name: local.name, type, ...(local.default !== undefined ? { init: literalExpr(tc.adapter, local.default, type) } : {}), src: { graphId: fn.graph.id } });
+      const init = local.default !== undefined ? literalExpr(tc.adapter, local.default, type) : undefined;
+      const special = tc.adapter.declareLocal?.(local, type, init, fn);
+      body.push(special ? { ...special, src: { graphId: fn.graph.id } } : { k: 'var', name: local.name, type, ...(init ? { init } : {}), src: { graphId: fn.graph.id } });
     }
     const first = this.inp.index.from(this.inp.entryId, 'then')[0]?.to.node;
     body.push(...this.chain(first, new Set()));
@@ -257,6 +259,7 @@ class FunctionLowerer {
       },
       uniqueName: (hint) => self.uniqueName(hint),
       lambda: (fid) => self.inp.lowerLambda?.(fid),
+      provide: (portId, expr) => void self.scopes[self.scopes.length - 1].set(`${nodeId}|${portId}`, expr),
       error: (code, message, o) => self.diag('error', code, message, nodeId, o?.port, o?.suggestion),
       warn: (code, message, o) => self.diag('warning', code, message, nodeId, o?.port, o?.suggestion),
     };

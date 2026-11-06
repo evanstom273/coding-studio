@@ -98,6 +98,8 @@ export type IRExpr =
   | { k: 'invoke'; callee: IRExpr; args: IRExpr[] }
   /** An inline function (closure): (params) => { body } */
   | { k: 'lambda'; params: IRParam[]; returnType: TypeRef; body: IRStmt[]; isAsync?: boolean; src?: SourceRef }
+  /** A JSX element: <tag attr={…}>children</tag>. `tag` is an HTML tag name or a component expression. */
+  | { k: 'jsx'; tag: string | IRExpr; attrs: { name: string; value: IRExpr }[]; children: IRExpr[] }
   /** A function of this module used as a value (callbacks). */
   | { k: 'func_ref'; name: string }
   /** Property access that yields undefined instead of failing on null (`a?.b`). */
@@ -130,6 +132,8 @@ export type IRStmt = (
   /** try { body } catch (catchVar) { handler } finally { finally } */
   | { k: 'try'; body: IRStmt[]; catchVar?: string; handler?: IRStmt[]; finally?: IRStmt[] }
   | { k: 'throw'; value: IRExpr }
+  /** const [a, b] = init (array destructuring, e.g. React's useState). */
+  | { k: 'var_tuple'; names: string[]; init: IRExpr; constant?: boolean }
   /** Language-specific statement (see IRExpr 'lang'). */
   | { k: 'lang'; lang: string; op: string; args: IRExpr[]; data?: Record<string, JsonValue> }
 ) & { src?: SourceRef };
@@ -153,6 +157,8 @@ export interface IRFunction {
   isStatic?: boolean;
   isAsync?: boolean;
   exported?: boolean;
+  /** A React component: parameters are props (destructured from one object). */
+  component?: boolean;
   doc?: string;
   /** Lifecycle event id when this function is a host callback (GDScript "_ready"). */
   event?: string;
@@ -302,6 +308,11 @@ export function walkExpr(e: IRExpr, fn: (e: IRExpr) => void) {
     case 'optional_prop':
       walkExpr(e.target, fn);
       break;
+    case 'jsx':
+      if (typeof e.tag !== 'string') walkExpr(e.tag, fn);
+      e.attrs.forEach((a) => walkExpr(a.value, fn));
+      e.children.forEach((c) => walkExpr(c, fn));
+      break;
     case 'invoke':
       walkExpr(e.callee, fn);
       e.args.forEach((a) => walkExpr(a, fn));
@@ -337,6 +348,8 @@ export function stmtExprs(s: IRStmt): IRExpr[] {
       return s.value ? [s.value] : [];
     case 'throw':
       return [s.value];
+    case 'var_tuple':
+      return [s.init];
     case 'lang':
       return s.args;
     default:

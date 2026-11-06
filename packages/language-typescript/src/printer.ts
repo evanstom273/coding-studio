@@ -3,7 +3,7 @@
  * `js` (same code without type annotations). Imports referenced anywhere in the module are
  * collected by the import manager and written at the top.
  */
-import type { IRExpr, IRFunction, IRModule, IRStmt } from '@cs/intermediate-representation';
+import { stmtExprs, walkExpr, walkStmts, type IRExpr, type IRFunction, type IRModule, type IRStmt } from '@cs/intermediate-representation';
 import { CodeWriter, type CompilationContext } from '@cs/language-sdk';
 import type { TypeRef } from '@cs/type-system';
 import { tsType } from './types';
@@ -79,6 +79,8 @@ export class TSPrinter {
   readonly imports: ImportManager;
   private matchCounter = 0;
   private unit = '\t';
+  /** React state in the function being printed: name → setter. */
+  private states = new Map<string, string>();
   /** Names of enums in this module (JS mode prints them as frozen objects). */
   constructor(
     private readonly module: IRModule,
@@ -174,6 +176,8 @@ export class TSPrinter {
         const inner = w.result().content.replace(/\n$/, '');
         return [`${e.isAsync ? 'async ' : ''}(${params})${ret} => {${e.body.length ? `\n${inner}\n` : ''}}`, P.assign];
       }
+      case 'jsx':
+        return [this.jsx(e), P.primary];
       case 'invoke':
         return [`${this.expr(e.callee, P.member)}(${e.args.map((a) => this.expr(a, P.assign)).join(', ')})`, P.member];
       case 'lang':
@@ -264,9 +268,16 @@ export class TSPrinter {
       case 'var':
         w.line(`${s.constant ? 'const' : 'let'} ${s.name}${s.init && s.init.k === 'lit' && s.type?.kind !== 'map' && s.type?.kind !== 'array' ? '' : this.ann(s.type)}${s.init ? ` = ${this.expr(s.init, P.assign)}` : ''};`, src);
         break;
-      case 'assign':
+      case 'assign': {
+        const setter = s.target.k === 'ref' ? this.states.get(s.target.name) : undefined;
+        if (setter) {
+          const v = s.op ? { k: 'bin' as const, op: s.op, left: s.target, right: s.value } : s.value;
+          w.line(`${setter}(${this.expr(v, P.assign)});`, src);
+          break;
+        }
         w.line(`${this.expr(s.target, P.member)} ${s.op ?? ''}= ${this.expr(s.value, P.assign)};`, src);
         break;
+      }
       case 'expr':
         w.line(`${this.expr(s.expr)};`, src);
         break;
@@ -332,9 +343,12 @@ export class TSPrinter {
       case 'continue':
         w.line('continue;', src);
         break;
-      case 'return':
-        w.line(s.value ? `return ${this.expr(s.value)};` : 'return;', src);
+      case 'return': {
+        const v = s.value ? this.expr(s.value) : '';
+        // Multi-line JSX is returned in parentheses, as people write it.
+        w.line(!s.value ? 'return;' : v.includes('\n') ? `return (\n${this.unit}${v.split('\n').join(`\n${this.unit}`)}\n);` : `return ${v};`, src);
         break;
+      }
       case 'comment':
         for (const line of s.text.split('\n')) w.line(`// ${line}`.trimEnd(), src);
         break;
@@ -355,6 +369,9 @@ export class TSPrinter {
       case 'throw':
         w.line(`throw ${this.expr(s.value)};`, src);
         break;
+      case 'var_tuple':
+        w.line(`${s.constant ? 'const' : 'let'} [${s.names.join(', ')}] = ${this.expr(s.init, P.assign)};`, src);
+        break;
       case 'lang':
         throw new Error(`TypeScript can't express "${s.lang}.${s.op}"`);
     }
@@ -363,11 +380,53 @@ export class TSPrinter {
   fn(w: CodeWriter, f: IRFunction, comments: boolean) {
     const src = { graphId: f.src?.graphId, nodeId: f.src?.nodeId };
     if (comments && f.doc) this.doc(w, f.doc);
-    const ret = this.mode === 'ts' ? `: ${f.isAsync ? `Promise<${tsType(f.returnType)}>` : tsType(f.returnType)}` : '';
-    const params = f.params.map((p) => `${p.name}${this.ann(p.type) || (this.mode === 'ts' ? ': any' : '')}${p.default ? ` = ${this.expr(p.default, P.assign)}` : ''}`).join(', ');
+    // Components: one destructured props object; the return type (JSX) is inferred.
+    const ret = f.component ? '' : this.mode === 'ts' ? `: ${f.isAsync ? `Promise<${tsType(f.returnType)}>` : tsType(f.returnType)}` : '';
+    const params = f.component
+      ? f.params.length
+        ? `{ ${f.params.map((p) => `${p.name}${p.default ? ` = ${this.expr(p.default, P.assign)}` : ''}`).join(', ')} }${this.mode === 'ts' ? `: { ${f.params.map((p) => `${p.name}${p.default ? '?' : ''}: ${tsType(p.type)}`).join('; ')} }` : ''}`
+        : ''
+      : f.params.map((p) => `${p.name}${this.ann(p.type) || (this.mode === 'ts' ? ': any' : '')}${p.default ? ` = ${this.expr(p.default, P.assign)}` : ''}`).join(', ');
     w.line(`${f.exported ? 'export ' : ''}${f.isAsync ? 'async ' : ''}function ${f.name}(${params})${ret} {`, src);
+    const before = this.states;
+    this.states = new Map(before);
+    for (const s of f.body) if (s.k === 'var_tuple' && s.init.k === 'invoke' && s.init.callee.k === 'import' && s.init.callee.name === 'useState' && s.names.length === 2) this.states.set(s.names[0], s.names[1]);
     this.block(w, f.body, f.src?.graphId);
+    this.states = before;
     w.line('}');
+  }
+
+  /** JSX text: one line when short, else children on their own lines. */
+  private jsx(e: Extract<IRExpr, { k: 'jsx' }>): string {
+    const tag = typeof e.tag === 'string' ? e.tag : this.expr(e.tag, P.member);
+    const attrs = e.attrs
+      .map((a) => {
+        if (a.value.k === 'lit' && typeof a.value.value === 'string' && !/["\n{}]/.test(a.value.value)) return `${a.name}="${a.value.value}"`;
+        if (a.value.k === 'lit' && a.value.value === true) return a.name;
+        return `${a.name}={${this.expr(a.value, P.assign)}}`;
+      })
+      .join(' ');
+    const open = `<${tag}${attrs ? ` ${attrs}` : ''}`;
+    const kids = e.children.map((c) => {
+      if (c.k === 'lit' && typeof c.value === 'string') return /[{}<>]/.test(c.value) || c.value !== c.value.trim() || !c.value ? `{${str(c.value)}}` : c.value;
+      if (c.k === 'jsx') return this.jsx(c);
+      return `{${this.expr(c, P.assign)}}`;
+    });
+    if (!kids.length) return `${open} />`;
+    const one = `${open}>${kids.join('')}</${tag}>`;
+    if (one.length <= 80 && !kids.some((k) => k.includes('\n')) && kids.length <= 2) return one;
+    return `${open}>\n${kids.map((k) => `${this.unit}${k.split('\n').join(`\n${this.unit}`)}`).join('\n')}\n</${tag}>`;
+  }
+
+  /** Whether the module contains JSX (written to .tsx / .jsx). */
+  usesJsx(): boolean {
+    let found = false;
+    for (const m of this.module.members) {
+      if (m.k !== 'function') continue;
+      if (m.component) found = true;
+      walkStmts(m.body, (s) => stmtExprs(s).forEach((x) => walkExpr(x, (y) => void (y.k === 'jsx' && (found = true)))));
+    }
+    return found;
   }
 
   doc(w: CodeWriter, text: string) {

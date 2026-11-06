@@ -56,3 +56,37 @@ test('live: a React + esm.sh app renders in the preview', async ({ page }) => {
   await frame.locator('button').click();
   await expect(frame.locator('button')).toHaveText('clicked 1');
 });
+
+test('the Web app starter: graph component, files, packages', async ({ page }) => {
+  await freshStart(page);
+  await page.getByTestId('new-project').click();
+  await page.getByTestId('project-name').fill('Todo Demo');
+  await page.getByTestId('project-language').selectOption('typescript');
+  await page.getByTestId('create-project').click();
+  await expect(page.getByTestId('project-title')).toHaveText('Todo Demo');
+  await page.getByTestId('left-tab-files').click();
+  for (const p of ['src', 'index.html', 'package.json', 'vite.config.ts']) await expect(page.locator(`[data-testid="file-row"][data-path="${p}"]`)).toBeVisible();
+  await expect(page.getByTestId('code-file')).toHaveText('src/App.tsx');
+  const code = await (await import('./helpers')).generatedCode(page);
+  await expect(code).toContainText('const [count, setCount] = useState(0);');
+  await expect(code).toContainText('<TodoList />');
+  await page.getByTestId('left-tab-project').click();
+  await page.getByTestId('function-row').filter({ hasText: 'App' }).first().click();
+  await expect(page.getByTestId('fn-component')).toBeChecked();
+});
+
+test('live: the Web app starter runs in the preview (React, Tailwind, Dexie from esm.sh)', async ({ page }) => {
+  test.skip(!process.env.LIVE_NET, 'needs esm.sh');
+  await freshStart(page);
+  await page.getByTestId('new-project').click();
+  await page.getByTestId('project-name').fill('Live Todos');
+  await page.getByTestId('project-language').selectOption('typescript');
+  await page.getByTestId('create-project').click();
+  await expect(page.getByTestId('project-title')).toHaveText('Live Todos');
+  await page.getByTestId('open-preview').click();
+  const frame = page.frameLocator('[data-testid="preview-frame"]');
+  await expect(frame.locator('h1')).toHaveText('My todos', { timeout: 60_000 });
+  await frame.getByRole('button', { name: 'Add a todo' }).click();
+  await expect(frame.locator('li')).toHaveText('Todo 1', { timeout: 15_000 });
+  await expect(frame.locator('button')).toHaveCSS('background-color', /rgb|oklch/);
+});

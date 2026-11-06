@@ -92,6 +92,8 @@ export interface FunctionDecl {
   async?: boolean;
   /** Languages with modules: the function is exported from its file. */
   exported?: boolean;
+  /** TypeScript: a React component (parameters are its props; returns JSX). */
+  component?: boolean;
   graph: Graph;
 }
 

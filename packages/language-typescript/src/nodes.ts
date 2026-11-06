@@ -374,6 +374,64 @@ const newObject: NodeDefinition = {
   ],
 };
 
+const isTag = (t: string) => /^[a-z][a-z0-9-]*$/.test(t) || /^[A-Z][\w$]*(\.[A-Z][\w$]*)*$/.test(t);
+
+const element: NodeDefinition = {
+  type: 'ts.element',
+  title: 'Element',
+  category: 'React',
+  description: 'A piece of UI (JSX): an HTML tag like div / button / input, or a component (TodoItem). Attributes become inputs (className, onClick, value…); children are text, other elements or lists of elements.',
+  keywords: ['jsx', 'html', 'tag', 'react', 'ui', 'div', 'button', 'component', 'element'],
+  flavor: 'pure',
+  languages: L,
+  allocates: false,
+  props: [
+    { key: 'tag', label: 'Tag / component', kind: 'string', default: 'div' },
+    { key: 'attributes', label: 'Attributes', kind: 'string_list', default: ['className'] },
+    { key: 'children', label: 'Children', kind: 'int', default: 1, min: 0, max: 32 },
+    { key: 'scriptPath', label: 'Component from script', kind: 'string', default: '', description: 'A component exported by another script of this project.' },
+    { key: 'module', label: 'Component from package', kind: 'string', default: '', description: 'A component from an npm package (e.g. react-router-dom).' },
+  ],
+  displayTitle: (n) => `<${str(n.props.tag, 'div')}>`,
+  ports: (n) => {
+    const attrs = list(n.props.attributes);
+    const count = typeof n.props.children === 'number' ? Math.max(0, Math.min(32, Math.trunc(n.props.children))) : 1;
+    return [
+      ...attrs.map((a) => data.in(`attr_${a}`, a, a === 'className' || a === 'id' || a === 'placeholder' || a === 'href' ? T.string : T.any, a === 'className' ? { default: '' } : { required: false })),
+      ...Array.from({ length: count }, (_, i) => data.in(`child_${i}`, count === 1 ? 'Children' : `Child ${i + 1}`, T.any, { default: '' })),
+      data.out('element', 'Element', T.any),
+    ];
+  },
+  check: (n, _ctx, report) => {
+    if (!isTag(str(n.props.tag))) report('E_INVALID_TAG', `"${str(n.props.tag)}" isn't a tag (lower-case, e.g. div) or a component name (Capitalised, e.g. TodoItem).`);
+    const attrs = list(n.props.attributes);
+    if (attrs.some((a) => !/^[A-Za-z_$][\w$-]*$/.test(a))) report('E_INVALID_ATTRIBUTE', 'Attribute names must be identifiers (className, onClick, aria-label…).');
+    if (new Set(attrs).size !== attrs.length) report('E_DUPLICATE_ATTRIBUTE', 'An attribute is listed twice.');
+  },
+  lowerExpr: (_p, lc) => {
+    const n = lc.node;
+    const tagName = str(n.props.tag, 'div');
+    let tag: string | IRExpr = tagName;
+    if (str(n.props.scriptPath)) tag = { k: 'import', module: relativeModule(lc.ctx.script.path, str(n.props.scriptPath)), name: tagName, kind: 'named' };
+    else if (str(n.props.module)) tag = { k: 'import', module: str(n.props.module), name: tagName, kind: 'named' };
+    const attrs = list(n.props.attributes)
+      .filter((a) => lc.isConnected(`attr_${a}`) || n.inputs[`attr_${a}`] !== undefined)
+      .map((a) => ({ name: a, value: lc.input(`attr_${a}`) }))
+      .filter((a) => !(a.name === 'className' && a.value.k === 'lit' && a.value.value === ''));
+    const count = typeof n.props.children === 'number' ? Math.max(0, Math.min(32, Math.trunc(n.props.children))) : 1;
+    const children = Array.from({ length: count }, (_, i) => lc.input(`child_${i}`)).filter((c) => !(c.k === 'lit' && (c.value === '' || c.value === null)) && c.k !== 'null');
+    return { k: 'jsx', tag, attrs, children };
+  },
+  presets: [
+    { title: '<div>', category: 'React', props: { tag: 'div', attributes: ['className'], children: 2 } },
+    { title: '<button>', category: 'React', keywords: ['click'], props: { tag: 'button', attributes: ['className', 'onClick'], children: 1 } },
+    { title: '<input>', category: 'React', keywords: ['text', 'field', 'form'], props: { tag: 'input', attributes: ['className', 'value', 'onChange', 'placeholder'], children: 0 } },
+    { title: '<ul> list', category: 'React', keywords: ['list'], props: { tag: 'ul', attributes: ['className'], children: 1 } },
+    { title: '<li>', category: 'React', props: { tag: 'li', attributes: ['className', 'key'], children: 1 } },
+    { title: '<h1>', category: 'React', keywords: ['heading', 'title'], props: { tag: 'h1', attributes: ['className'], children: 1 } },
+  ],
+};
+
 const nullish: NodeDefinition = {
   type: 'ts.default_value',
   title: 'Value or Default (??)',
@@ -391,5 +449,5 @@ const nullish: NodeDefinition = {
 };
 
 export function typescriptNodes(): NodeDefinition[] {
-  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, newObject, nullish];
+  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, newObject, nullish, element];
 }

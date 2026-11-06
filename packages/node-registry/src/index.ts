@@ -162,6 +162,8 @@ export interface LowerContext {
   bind(port: string, expr: IRExpr, opts?: { type?: TypeRef; nameHint?: string; sideEffect?: boolean }): IRStmt[];
   /** A fresh local identifier based on `hint`. */
   uniqueName(hint: string): string;
+  /** Make a data output read `expr` (already declared by this node's statements, e.g. destructuring). */
+  provide(port: string, expr: IRExpr): void;
   /** Compile an inline function (kind `lambda`) of this script into a closure expression. */
   lambda(functionId: string): IRExpr | undefined;
   /** Current loop nesting depth (for break/continue validation). */
