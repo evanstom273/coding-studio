@@ -1,6 +1,7 @@
 # Workspace, GitHub & Library Expansion — Technical Plan
 
 Status: **proposal, awaiting approval. Nothing in this document is implemented yet.**
+Revision 2: decisions from review applied: phone-first execution via **GitHub Actions**, GitHub moved earlier, the laptop host is optional, and Claude's remote actions (push, PR, merge, install) are **allowed by default** when asked for.
 Scope: evolve Coding Studio from "visual scripts compiled to GDScript" into a project-aware, multi-language IDE that works with real repositories, real files and real libraries — with the node graph still at the centre — prioritising TypeScript / React / Vite / Tailwind / Dexie, and keeping Godot/GDScript working.
 
 ---
@@ -12,11 +13,13 @@ Scope: evolve Coding Studio from "visual scripts compiled to GDScript" into a pr
 3. **Graphs own the files they generate; existing code is called, not converted.** Visual graphs generate whole files. They can import and call any function, class, component or library symbol in the project, using real type information from the TypeScript language service. Arbitrary source → graph conversion is **not** promised (see §5).
 4. **TypeScript's own compiler is the type authority for the web stack.** It runs in a Web Worker in the browser; `.d.ts` files come from the project's `node_modules` (via the companion) or are fetched from the npm CDN (verified: jsDelivr and the npm registry allow browser requests). Library nodes are generated from real declarations; framework patterns (React hooks/JSX, Dexie schemas and query chains, Tailwind classes) get small curated "framework packs".
 5. **GitHub via the API first, real git via the companion second.** The REST + Git Data APIs can do browse/edit/commit/branch/compare/PR without any local git, and work on a phone. Merges with conflicts, rebases and offline history need real git — that's the companion's job. OAuth tokens are held server-side in the Worker, never in browser storage or files.
-6. **Three execution tiers, stated honestly**: in the browser (editing, type checking, compiling graphs, simple previews); the **local companion** (npm install, Vite dev server, tests, builds, git) — merged into the existing single-file MCP server so there is still only one thing to run; optional **remote** execution later (e.g. Cloudflare Containers) for phone-only use.
+6. **Execution is phone-first, stated honestly**: the browser does editing, type checking, compiling graphs and live in-browser previews; **GitHub Actions** is the default place for install / build / test / deploy (triggered from the IDE or by commits, results shown in the IDE, works from a phone, free within GitHub's personal allowance); the **laptop host** (the single-file MCP server grown into a companion) is an optional power path for live dev servers and real git; a **cloud container** (e.g. Cloudflare Containers, paid) is a later option only if live dev servers on the phone turn out to be needed.
 7. **MCP stays the same shape, grows wider.** Same atomic, revision-checked batches — extended from "graph operations" to "workspace operations" (files + graphs + dependencies in one batch). Local MCP, the served editor and the cloud connector all get the same tools.
 8. **IR and graph model need real upgrades** before library nodes are worth building: modules/imports/exports, closures (functions as values), async/await, classes, object literals, try/catch. These are additive; GDScript keeps working and keeps its golden tests.
 
-Recommended phase order (justified in §D): workspace & VFS → explorer & tabs & text editing → workspace MCP tools → TypeScript language adapter & IR upgrades → TS language service → dependencies → library nodes → React/TSX → companion execution (dev server, tests) → GitHub → git via companion → more languages.
+9. **Claude acts when asked.** If you ask Claude to commit, push, open or merge a PR, or install a package, it does it — no second confirmation. Revision checks and backups still apply, so nothing is silently overwritten. A setting can switch categories to "ask first" later.
+
+Phase order (justified in §D): workspace & VFS → explorer, tabs & text editing → workspace MCP tools → **GitHub (API)** → **GitHub Actions** → TypeScript adapter & IR upgrades → TS language service → dependencies → library nodes → React/TSX packs & browser preview → laptop host (optional) → host git → cloud container (optional) → more languages.
 
 ---
 
@@ -246,6 +249,7 @@ interface GitProvider {
 ```
 
 - **GitHub API provider (browser + Worker)**: base = a commit/tree sha; working copy = VFS; status = hash comparison (VFS uses git blob hashes so no content download is needed to compare); commit = Git Data API (create blobs, tree with `base_tree`, commit, update ref with `force: false` → a rejection means "remote moved"); pull = fetch new tree, three-way merge per file in the browser (`node-diff3` for text; **graph-aware merge** for `.vgraph` by node/edge id; conflicts surfaced in a merge editor). Branches, compare, PRs, reviews: REST.
+- **GitHub Actions as the execution backend** (phone-first): the IDE adds a workflow (`.github/workflows/coding-studio.yml`: install → build → test → optional `wrangler deploy` using a repository secret), triggers it on push or on demand (`workflow_dispatch` API), and shows runs, step logs, test failures (mapped to files/nodes where possible) and artifacts. Needs GitHub App permissions `actions: write`, `checks: read`, `workflows: write`. Limits: queue/start latency (tens of seconds to minutes), monthly minutes for private repos, no interactive dev server — the in-browser preview covers live iteration.
 - **Companion git provider**: shells out to real `git` in the companion's workspace folder. Full fidelity: rebase, cherry-pick, stash, blame, LFS, submodules, large repos, offline.
 - **Auth**: a **GitHub App** (fine-grained, per-repo permissions, user-to-server tokens, revocable). OAuth web flow; the code→token exchange happens in the Worker (needs the client secret, and GitHub's token endpoint doesn't allow browser calls). Token stored encrypted in a Durable Object, session via `HttpOnly; Secure; SameSite=Lax` cookie; the browser calls GitHub through the Worker (or receives short-lived installation tokens). Never in localStorage, files, generated code or logs. The companion can alternatively use the user's existing `gh`/git credentials.
 
@@ -253,15 +257,16 @@ interface GitProvider {
 
 ```ts
 interface ExecutionHost {
-  kind: 'browser' | 'local' | 'remote';
+  kind: 'browser' | 'github-actions' | 'local' | 'remote';
   capabilities: { install: boolean; run: boolean; devServer: boolean; tests: boolean; git: boolean; shell: boolean };
   run(task: Task): TaskHandle;      // streams output to the Output panel; cancellable
 }
 ```
 
 - **Browser**: graph compile, TS type-check, esbuild-wasm bundling for previews with CDN-resolved imports (esm.sh — verified browser-accessible), sandboxed `<iframe>` preview, Tailwind's browser build for previews. Cannot: run npm install, native tools, Vite plugins needing Node, tests with Node APIs.
-- **Local host**: today's single-file MCP server grows into the "Coding Studio host" (MCP + served editor + companion + execution) — still one `.mjs` file to run. Adds: workspace folders on disk, `npm/pnpm` install, `vite dev` with the preview proxied into the IDE, `vitest`/`playwright`, `tsc`, git, `wrangler deploy`. Permissions: per-workspace folder allow-list, command allow-list (package-manager scripts from the manifest, git, tsc…), explicit confirmation for anything else.
-- **Remote host (optional, later)**: same protocol, hosted (e.g. Cloudflare Containers/Sandbox, which cost money and have cold starts) for phone-only workflows. WebContainers were considered: they run Node in the browser but require cross-origin isolation headers and a commercial licence for some uses — noted as an alternative, not the plan.
+- **GitHub Actions (default for real tooling)**: see B.8 — install, build, tests, deploy, all from a phone.
+- **Local host (optional)**: today's single-file MCP server grows into the "Coding Studio host" (MCP + served editor + companion + execution) — still one `.mjs` file to run. Adds: workspace folders on disk, `npm/pnpm` install, `vite dev` with the preview proxied into the IDE, `vitest`/`playwright`, `tsc`, git, `wrangler deploy`. Permissions: per-workspace folder allow-list, command allow-list (package-manager scripts from the manifest, git, tsc…), explicit confirmation for anything else.
+- **Cloud container (optional, later)**: same protocol, hosted (e.g. Cloudflare Containers/Sandbox — paid, cold starts) — only if live dev servers from the phone become necessary. WebContainers were considered: they run Node in the browser but require cross-origin isolation headers and a commercial licence for some uses — noted as an alternative, not the plan.
 
 ### B.10 MCP tools (same principles, wider reach)
 
@@ -272,8 +277,9 @@ New tool groups (available through local MCP, the served editor and the cloud co
 - **Dependencies**: `list_dependencies`, `add_dependency` / `remove_dependency` (manifest edits), `install` (local host only), `package_info` (registry metadata), `type_info`.
 - **Generation**: `compile_workspace`, `generated_output(path)`.
 - **Source control**: `git_status`, `git_diff`, `git_log`, `create_branch`, `prepare_commit` (returns staged summary), `commit` (requires user confirmation by default), `push`, `create_pull_request` (confirmation), `pull`.
-- **Execution** (local host): `run_task` (manifest scripts), `run_tests`, `dev_server` start/stop/url, output tail.
-Safety: destructive or remote-visible actions (delete outside generated files, push, PR, force anything, installing packages) go through the existing in-editor confirmation mechanism; a per-workspace "trust Claude for…" setting can pre-approve categories (useful given this is a personal tool), but defaults are conservative.
+- **CI** (GitHub Actions): `setup_workflow`, `run_workflow`, `list_runs`, `get_run` (status, failed steps, test results), `get_run_logs`, `deploy` (runs the deploy workflow).
+- **Execution** (local host, optional): `run_task` (manifest scripts), `run_tests`, `dev_server` start/stop/url, output tail.
+Safety (decided): when the user asks Claude to commit, push, open/merge a PR, run a workflow or change dependencies, Claude does it directly — **no second confirmation**. What stays: revision/hash checks (nothing overwritten silently), backups before deletions and large batches, undo, and an activity log of everything Claude did. Force-pushes and deleting branches/repositories are never done implicitly — only when explicitly asked for by name. A per-category "ask first" setting exists for anyone who wants it.
 
 ### B.11 Proposed directory structure
 
@@ -333,7 +339,8 @@ Legend: **B** = browser only · **L** = local host (companion) · **R** = remote
 | Autocomplete, go-to-def, references, rename | Yes (TS/JS) | B | TS LanguageService + Monaco | Memory on big projects | — |
 | Type-checking / diagnostics project-wide | Yes | B / L for big | TS in worker; `tsc` on host | — | — |
 | Previews | Partly | B (simple), L (real) | esbuild-wasm + esm.sh; Vite dev on host | Browser previews can't run Node-only plugins | Sandboxed iframe, separate origin |
-| Dev server, tests, builds | Yes | **L/R** | vite, vitest, playwright | — | Command allow-list |
+| Builds, tests, deploy from a phone | Yes | **GitHub Actions** | Actions REST API, workflow files | Start latency; private-repo minutes | Deploy token as a repo secret, never in files |
+| Live dev server | Yes | **L/R** | vite | Not on a phone without a container | Command allow-list |
 | Deploy (Cloudflare) | Yes | L (wrangler) / W API | wrangler, Cloudflare API | Needs user's CF token | Token on host only |
 | MCP for whole workspace | Yes | B/L/W | existing stack | Connector can't run tools without a host | Confirmations, revision checks |
 
@@ -341,7 +348,9 @@ Legend: **B** = browser only · **L** = local host (companion) · **R** = remote
 
 ## D. Phased roadmap
 
-Order rationale (changes vs the suggested order): **workspace MCP tools move earlier** (phase 3) because MCP is how much of this will be driven and every later phase just adds tools; **the TypeScript adapter + IR upgrades come before the language service** because graphs must be able to *emit* TS before typed library nodes have anything to emit into; **local execution comes before GitHub** because install/dev/test is needed to validate generated web code, while GitHub is independent and can slot in any time after phase 2; **cloud workspace storage** is folded into phase 1 so the connector doesn't regress.
+Order rationale (revision 2, phone-first): **workspace MCP tools move early** (phase 3) because MCP drives much of this and later phases only add tools; **GitHub (phase 4) and GitHub Actions (phase 5) come next** because on a phone the repository *is* the durable home of a project and Actions is where real builds/tests/deploys run — and both work for existing hand-written repos before any visual TypeScript exists; **the TypeScript adapter + IR upgrades come before the language service** because graphs must be able to emit TS before typed library nodes have anything to emit into; **the laptop host and cloud container become optional late phases**; **cloud workspace storage** is folded into phase 1 so the connector doesn't regress.
+
+Phase numbering below follows the original write-up; the order to build them in is: **1 → 2 → 3 → 10 (GitHub) → 10a (Actions) → 4 → 5 → 6 → 7 → 8 → 9 (host, optional) → 11 → 9a (cloud container, optional) → 12.**
 
 Each phase ends with: typecheck, lint, all existing tests green (including the 12 GDScript golden files), new tests green, docs updated, deployable.
 
@@ -393,7 +402,7 @@ Each phase ends with: typecheck, lint, all existing tests green (including the 1
 - Acceptance: a working todo app (React + Dexie + Tailwind) built visually, type-checks, previews in the browser, and builds with Vite on the host in phase 9.
 - Tests: golden TSX, rules-of-hooks enforcement tests, preview smoke test.
 
-### Phase 9 — Local execution host
+### Phase 9 — Local execution host (optional, laptop)
 - Prereqs: 1, 3 (and 8 for the showcase).
 - Deliverables: single-file "Coding Studio host" (existing MCP server + companion merged): disk workspaces (open folder), file watching, install, run scripts, Vite dev server proxied into a preview tab, test runner integration with results linked to files/nodes, output console, wrangler deploy; command allow-list + confirmations; MCP tools `run_task`, `run_tests`, `dev_server`, `install`.
 - Acceptance: open an existing Vite repo from disk, install, run dev server, edit visually and see hot reload, run tests from the IDE.
@@ -404,6 +413,17 @@ Each phase ends with: typecheck, lint, all existing tests green (including the 1
 - Deliverables: GitHub App + Worker OAuth + token vault (DO) + API proxy; repo browser, clone-into-workspace (tree + lazy blobs), status/diff (text + semantic graph diff), commit, branches, compare, pull (three-way merge, merge editor, graph-aware merge), push, PR create/list/review, private repos.
 - Acceptance: on a phone, open a private repo, edit a graph and a TS file, commit to a new branch, open a PR; concurrent remote change produces a correct merge or a clear conflict UI.
 - Tests: provider against recorded GitHub fixtures + a sandbox repo e2e behind a flag; merge unit tests (text + graph).
+
+### Phase 10a — GitHub Actions (builds, tests, deploys from a phone)
+- Prereqs: 10.
+- Deliverables: workflow templates (Vite/TS: install, typecheck, build, test; optional Cloudflare deploy via `wrangler` with `CLOUDFLARE_API_TOKEN` as a repo secret); "Run" panel to trigger workflows and follow runs; logs viewer; failed tests/type errors linked to files and nodes; status on commits/PRs; artifacts download; MCP CI tools.
+- Acceptance: from a phone, commit a change, see the workflow run, open a failing test's log line in the editor, fix, re-run green, deploy.
+- Tests: provider against recorded Actions API fixtures; sandbox repo e2e behind a flag.
+
+### Phase 9a — Cloud container (optional)
+- Prereqs: 9.
+- Deliverables: same host protocol running in a hosted container (live dev server + preview from a phone).
+- Only if needed; has a monthly cost.
 
 ### Phase 11 — Git via the host + source-control MCP tools
 - Prereqs: 9–10.
@@ -465,7 +485,7 @@ Each item should be a single session-sized change with tests. Tick only when mer
 **Phase 3**
 - [ ] 3.1 Tool schemas + `project-service` read APIs for trees/files/search.
 - [ ] 3.2 `workspace_batch` (files + graphs + config) in browser handlers and cloud service.
-- [ ] 3.3 Confirmation flow for destructive ops; MCP e2e (local + connector).
+- [ ] 3.3 Activity log + backups for Claude's batches; MCP e2e (local + connector).
 
 **Phase 4**
 - [ ] 4.1 IR: imports/exports + import manager; GDScript reports unsupported.
@@ -512,19 +532,26 @@ Each item should be a single session-sized change with tests. Tick only when mer
 - [ ] 10.4 Pull + three-way merge (text, graph) + merge editor.
 - [ ] 10.5 Compare, PR create/list/review.
 
+**Phase 10a**
+- [ ] 10a.1 GitHub App permissions for Actions; workflow templates.
+- [ ] 10a.2 Trigger/list/follow runs; logs viewer.
+- [ ] 10a.3 Map failures to files/nodes; deploy workflow; MCP CI tools.
+
 **Phase 11**
 - [ ] 11.1 Host git provider; parity tests with API provider.
-- [ ] 11.2 SCM MCP tools with confirmations.
+- [ ] 11.2 SCM MCP tools (allowed by default when asked; force/delete only when named).
 
 **Phase 12**
 - [ ] 12.x Per language/framework, as separate plans.
 
 ---
 
-## Open questions for approval
+## Decisions (from review)
 
-1. **Graph granularity**: one `.vgraph` per generated source file (recommended), or keep multi-script project documents inside the tree?
-2. **Execution**: is extending the single-file local MCP server into the "host" (Node on your PC) the right first backend, with paid remote execution only later?
-3. **GitHub**: start with the API provider (works on your phone, needs a GitHub App and the Worker) before host git — agreed?
-4. **Confirmations**: since this is a personal tool, should Claude's pushes/PRs/installs default to "ask" or "allowed" (with a setting either way)?
-5. **Phase order**: the reordering in §D (MCP tools earlier, TS adapter before language service, host before GitHub) — OK?
+1. **Graph granularity**: one `.vgraph` per generated source file — *assumed; not objected to.*
+2. **Execution**: phone-first. GitHub Actions is the default for install/build/test/deploy; in-browser preview for live iteration; laptop host optional; cloud container only if needed later.
+3. **GitHub**: API provider first (works on a phone, GitHub App + Worker), host git later.
+4. **Claude's actions**: allowed by default when asked — no second confirmation; revision checks, backups, undo and the activity log remain.
+5. **Phase order**: as revised in §D.
+
+Waiting for approval to start Phase 1.
