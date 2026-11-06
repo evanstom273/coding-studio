@@ -101,7 +101,7 @@ export function serializeConfig(c: WorkspaceConfig): string {
 
 /** Parse codingstudio.json leniently: unknown keys are kept out, missing ones defaulted. */
 export function parseConfig(text: string | undefined, fallbackName = 'Untitled'): WorkspaceConfig {
-  let raw: Record<string, unknown> = {};
+  let raw: Record<string, unknown>;
   try {
     raw = text ? JSON.parse(text) : {};
   } catch {

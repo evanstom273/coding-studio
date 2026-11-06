@@ -1,6 +1,7 @@
 /** Workspace paths: relative, forward slashes, no "." / ".." segments, no leading slash. */
 export class PathError extends Error {}
 
+// eslint-disable-next-line no-control-regex -- control characters are exactly what we reject
 const BAD_SEGMENT = /[\u0000-\u001f<>:"|?*\\]/;
 
 export function normalizePath(input: string): string {
