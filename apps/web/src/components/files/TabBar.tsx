@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Lock, X } from 'lucide-react';
 import { GRAPH_EXT } from '@cs/workspace';
 import { useEditor } from '@web/store/editor';
-import { DIFF_PREFIX, GEN_PREFIX, isDiffTab, isGenTab, isLogTab } from '@web/lib/fileTypes';
+import { DIFF_PREFIX, GEN_PREFIX, isDiffTab, isGenTab, isLogTab, isPreviewTab } from '@web/lib/fileTypes';
 import { cx } from '../ui/primitives';
 import { ContextMenu, iconFor } from './FileExplorer';
 import { flushTextEdits } from './FileView';
@@ -16,6 +16,7 @@ export function TabBar() {
   if (!tabs.length) return null;
   const label = (id: string) => {
     if (isGenTab(id)) return id.slice(GEN_PREFIX.length).split('/').pop()!;
+    if (isPreviewTab(id)) return 'Preview';
     if (isLogTab(id)) return `Log #${id.split(':')[2]}`;
     if (isDiffTab(id)) return `${id.slice(DIFF_PREFIX.length).split('/').pop()} (changes)`;
     if (id.endsWith(GRAPH_EXT)) return scripts?.find((s) => `${s.path}${GRAPH_EXT}` === id)?.name ?? id.split('/').pop()!;
@@ -43,7 +44,7 @@ export function TabBar() {
             setMenu({ x: e.clientX, y: e.clientY, id });
           }}
         >
-          {iconFor(isGenTab(id) ? id.slice(GEN_PREFIX.length) : isDiffTab(id) ? id.slice(DIFF_PREFIX.length) : isLogTab(id) ? 'log.txt' : id, 12)}
+          {iconFor(isGenTab(id) ? id.slice(GEN_PREFIX.length) : isDiffTab(id) ? id.slice(DIFF_PREFIX.length) : isLogTab(id) ? 'log.txt' : isPreviewTab(id) ? 'index.html' : id, 12)}
           <span className="truncate">{label(id)}</span>
           {isGenTab(id) && <Lock size={10} className="shrink-0 text-muted" />}
           <button

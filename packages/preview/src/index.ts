@@ -116,18 +116,19 @@ export async function bundle(esbuild: Esbuild, files: Map<string, PreviewFile>, 
 
 /** Import map sending every dependency (and its sub-paths) to esm.sh, with deps shared via the map. */
 export function importMap(deps: Record<string, string>): { imports: Record<string, string> } {
+  const all: Record<string, string> = { ...deps };
+  // react-dom comes with react even when only react is declared.
+  if (all.react && !all['react-dom']) all['react-dom'] = all.react;
   const imports: Record<string, string> = {};
-  for (const [name, range] of Object.entries(deps)) {
+  const names = Object.keys(all);
+  for (const [name, range] of Object.entries(all)) {
     const v = /^(workspace:|file:|link:|git|https?:)/.test(range) ? 'latest' : range.trim() || 'latest';
-    // "*" asks esm.sh to leave the package's own imports bare, so they resolve through this map too.
-    const url = `https://esm.sh/*${name}@${encodeURIComponent(v).replace(/%2F/g, '/')}`;
+    // Declared packages stay bare inside other packages (`&external=`) and resolve through this
+    // map, so each exists once (one React); undeclared sub-dependencies are left to esm.sh.
+    const others = names.filter((n) => n !== name);
+    const url = `https://esm.sh/${name}@${encodeURIComponent(v).replace(/%2F/g, '/')}${others.length ? `&external=${others.join(',')}` : ''}`;
     imports[name] = url;
     imports[`${name}/`] = `${url}/`;
-  }
-  // Packages that libraries import without the app declaring them.
-  if (imports.react && !imports['react-dom']) {
-    imports['react-dom'] = imports.react.replace('*react@', '*react-dom@');
-    imports['react-dom/'] = `${imports['react-dom']}/`;
   }
   return { imports };
 }

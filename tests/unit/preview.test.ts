@@ -21,8 +21,8 @@ describe('preview bundling', () => {
     expect(r.js).toContain('from "date-fns"');
     expect(r.css).toContain('color: red');
     const html = previewHtml(r, files.get('index.html')!.text, { 'date-fns': '^4.1.0', react: '^19.1.0' });
-    expect(html).toContain('"date-fns":"https://esm.sh/*date-fns@%5E4.1.0"');
-    expect(html).toContain('"react-dom/":"https://esm.sh/*react-dom@%5E19.1.0/"');
+    expect(html).toContain('"date-fns":"https://esm.sh/date-fns@%5E4.1.0&external=react,react-dom"');
+    expect(html).toContain('"react-dom/":"https://esm.sh/react-dom@%5E19.1.0&external=date-fns,react/"');
     expect(html).not.toContain('src="/src/main.ts"');
     expect(html).not.toContain('href="/src/x.css"');
     expect(html.indexOf('importmap')).toBeLessThan(html.indexOf('<script type="module">'));
@@ -35,7 +35,7 @@ describe('preview bundling', () => {
     const g = globalThis as { result?: number };
     await import(`data:text/javascript;base64,${Buffer.from(ok.js).toString('base64')}`);
     expect(g.result).toBe(42);
-    expect(importMap({ x: 'workspace:*' }).imports.x).toBe('https://esm.sh/*x@latest');
+    expect(importMap({ x: 'workspace:*' }).imports.x).toBe('https://esm.sh/x@latest');
   });
 
   it('JSX compiles with the automatic runtime (react/jsx-runtime from the import map)', async () => {

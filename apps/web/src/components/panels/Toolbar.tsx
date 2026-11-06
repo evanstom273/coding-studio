@@ -1,4 +1,4 @@
-import { PanelLeft, PanelRight, ArrowLeft, CheckCircle2, Cloud, CloudOff, Code2, Command, Download, FolderOpen, History, Keyboard, Loader2, Plus, Redo2, Save, Settings, ShieldCheck, Undo2, FilePlus2 } from 'lucide-react';
+import { Play, PanelLeft, PanelRight, ArrowLeft, CheckCircle2, Cloud, CloudOff, Code2, Command, Download, FolderOpen, History, Keyboard, Loader2, Plus, Redo2, Save, Settings, ShieldCheck, Undo2, FilePlus2 } from 'lucide-react';
 import { useEditor } from '@web/store/editor';
 import { useUI } from '@web/store/ui';
 import { navigate } from '@web/lib/router';
@@ -89,6 +89,11 @@ export function Toolbar() {
       <IconButton label="Generate code" onClick={cmd.generate} data-testid="generate">
         <Code2 size={15} /> <span className="hidden text-[12px] lg:inline">Generate</span>
       </IconButton>
+      {project.language !== 'gdscript' && (
+        <IconButton label="Preview the app" onClick={() => useEditor.getState().openTab('preview:app')} data-testid="open-preview">
+          <Play size={15} /> <span className="hidden text-[12px] lg:inline">Preview</span>
+        </IconButton>
+      )}
       <IconButton label="Export" onClick={() => setUI({ dialog: 'export' })} data-testid="export">
         <Download size={15} /> <span className="hidden text-[12px] lg:inline">Export</span>
       </IconButton>

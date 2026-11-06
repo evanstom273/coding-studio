@@ -45,4 +45,7 @@ export const isDiffTab = (id: string) => id.startsWith(DIFF_PREFIX);
 /** `log:<runId>:<jobId>`: a GitHub Actions job log. */
 export const LOG_PREFIX = 'log:';
 export const isLogTab = (id: string) => id.startsWith(LOG_PREFIX);
-export const isVirtualTab = (id: string) => isGenTab(id) || isDiffTab(id) || isLogTab(id);
+/** The running app. */
+export const PREVIEW_TAB = 'preview:app';
+export const isPreviewTab = (id: string) => id === PREVIEW_TAB;
+export const isVirtualTab = (id: string) => isGenTab(id) || isDiffTab(id) || isLogTab(id) || isPreviewTab(id);
