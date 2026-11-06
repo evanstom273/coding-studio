@@ -12,24 +12,22 @@ There are two ways to connect Claude, and you can use either or both:
 ## Claude connector (phone, claude.ai, anywhere)
 
 ```
-Claude (any device) ──HTTPS──► <your site>/mcp/<secret key>  ─┐
-                                                               ├─ Durable Object (one per key) ─► your editor tab
-Coding Studio tab ──WebSocket─► <your site>/bridge/<same key> ─┘
+Claude (any device) ──HTTPS──► <your site>/mcp/<key> ──┐
+                                                         ├─ Durable Object (one per key): your projects + Claude's edits
+Coding Studio (any browser) ──► /sync + /bridge/<key> ──┘     (the editor syncs; live updates when open)
 ```
 
-1. Open your deployed site (e.g. `https://coding-studio.<you>.workers.dev`), tap the robot **MCP** button in the toolbar.
-2. Switch on **Claude connector**. Copy the link shown under it.
-3. In Claude: **claude.ai → Settings → Connectors → Add custom connector**. Paste the link as the URL, leave everything else empty. It is then available in the Claude apps on your phone and computer too.
-4. Keep the Coding Studio tab open while Claude works. On a phone use split screen (or keep it on your computer); phones pause background tabs, and the tab reconnects by itself when it's visible again.
+With the connector on, your projects are kept in your Cloudflare account as well as the browser, and **Claude edits that cloud copy directly — no browser needs to be open**. When you open the editor it pulls in Claude's changes; if it's already open they appear live, as an undoable step.
 
-Security: the link contains a random 256-bit key generated in your browser. Anyone with the link can edit projects in a tab where the connector is switched on, so treat it like a password; *Make a new link* in the same dialog invalidates the old one. The editor's WebSocket is only accepted from the site's own origin, and Durable Objects are named by a hash of the key. The connector has the same tools as the local server; `export_script` / `export_project` return the files' contents instead of writing them, and `open_editor` returns the site address.
+1. Open your deployed site, tap the robot **MCP** button, switch on **Claude connector**, copy the link.
+2. In Claude: **claude.ai → Settings → Connectors → Add custom connector**, paste the link, leave the rest empty. It also works in the Claude phone and desktop apps.
 
-
-```
-Claude Code ──stdio (MCP)──► dist/mcp/coding-studio-mcp.mjs ──ws://127.0.0.1:47831──► Coding Studio tab
-```
-
-The MCP server is a local Node process launched by Claude Code. It relays tool calls to the editor tab, which executes them with the **same edit operations as the mouse**: validated, atomic per batch, one undo step per batch, autosaved, and checked against `expected_revision`. The server keeps no project state and does not need any Cloudflare service.
+Details:
+- Same tools and validation as everywhere else (the editing code runs inside the Durable Object). `undo` / `redo` cover Claude's own edits, and refuse if the project changed since (e.g. you edited it) rather than throw your work away; backups are taken before deletions and large batches.
+- Sync rules: on connect, the newer copy of each project wins and new projects go both ways; every save in the editor is pushed up; if Claude changed the project at the same moment, the cloud version is kept and loaded (you get a notice). Deleting a project on either side deletes it everywhere.
+- "The project I have open": the editor tells the cloud which project/graph is open, so Claude's tools default to it.
+- Exports return file contents (the cloud can't write to your disk).
+- The link contains a random key; it is the only access control. *Make a new link* replaces it (projects stay with the old key's storage, so re-sync from a browser that has them).
 
 ## The simplest setup: the server serves the editor
 

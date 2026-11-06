@@ -145,6 +145,9 @@ interface LinkConfig {
   unreachableText(): string;
   /** Send "ping" this often (ms) to keep proxies from dropping an idle socket. */
   keepAlive?: number;
+  /** Messages other than the request/response protocol (e.g. cloud "project-updated"). */
+  onMessage?(msg: Record<string, unknown>): void;
+  onWelcome?(): void;
 }
 
 class Link {
@@ -207,6 +210,11 @@ class Link {
         this.retryDelay = 1000;
         this.cfg.setStatus('connected', `Connected (${this.cfg.name})`);
         bridgeLog({ method: 'connected', ok: true, ms: 0, text: `This tab now accepts edits from Claude (${this.cfg.name})` });
+        this.cfg.onWelcome?.();
+        return;
+      }
+      if (msg.type !== 'request' && msg.type !== 'rejected' && msg.type !== 'revoked') {
+        this.cfg.onMessage?.(msg as unknown as Record<string, unknown>);
         return;
       }
       if (msg.type === 'rejected' || msg.type === 'revoked') {
@@ -257,6 +265,10 @@ class Link {
     this.retryDelay = Math.min(10_000, this.retryDelay * 1.6);
   }
 
+  send(msg: unknown) {
+    if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(msg));
+  }
+
   /** Reconnect straight away (e.g. when a phone brings the tab back to the front). */
   nudge() {
     if (this.cfg.enabled() && !this.socket) {
@@ -281,11 +293,18 @@ const remote = new Link({
   name: 'Claude connector',
   enabled: () => useBridge.getState().remoteEnabled,
   url: () => `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/bridge/${useBridge.getState().remoteKey}`,
-  setStatus: (remoteStatus, remoteStatusText) => useBridge.setState({ remoteStatus, remoteStatusText: remoteStatus === 'connected' ? 'Connected: Claude can use this tab through the connector' : remoteStatusText }),
+  setStatus: (remoteStatus, remoteStatusText) => useBridge.setState({ remoteStatus, remoteStatusText: remoteStatus === 'connected' ? 'Connected: your projects sync with the cloud, and Claude can edit them even when this page is closed' : remoteStatusText }),
   offText: 'Claude connector is off',
   unreachableText: () => 'Connector service not reachable from this page. Retrying… (it only exists on the deployed site, not on localhost dev servers)',
   keepAlive: 25_000,
+  onWelcome: () => void import('../sync/cloud').then((m) => m.onCloudConnected()),
+  onMessage: (msg) => void import('../sync/cloud').then((m) => m.onCloudMessage(msg)),
 });
+
+/** Send a message on the connector socket (e.g. which project is open). */
+export function sendToCloud(msg: unknown) {
+  remote.send(msg);
+}
 
 function summarize(method: string, params: Record<string, unknown>): string {
   if (method === 'batch_edit' && Array.isArray(params.operations)) {

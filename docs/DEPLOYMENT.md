@@ -1,6 +1,6 @@
 # Deploying to Cloudflare Workers
 
-The web app is deployed as a **Cloudflare Worker with Static Assets** (not Pages). Static assets serve the Vite build from `apps/web/dist`, with SPA fallback for client-side routes. The Worker script (`worker/index.ts`) only runs for `/mcp/*` and `/bridge/*`: the remote **Claude connector** (see [MCP.md](MCP.md)), backed by one SQLite Durable Object class (`BridgeRoom`), which the Workers Free plan supports. Projects live in each user's browser; the local MCP server and the Godot companion run on the user's PC.
+The web app is deployed as a **Cloudflare Worker with Static Assets** (not Pages). Static assets serve the Vite build from `apps/web/dist`, with SPA fallback for client-side routes. The Worker script (`worker/index.ts`) only runs for `/mcp/*`, `/bridge/*` and `/sync/*`: the **Claude connector** and cloud copy of your projects (see [MCP.md](MCP.md)), stored in one SQLite Durable Object class (`BridgeRoom`), which the Workers Free plan supports. Projects also live in each browser; the local MCP server and the Godot companion run on the user's PC.
 
 ## Configuration
 

@@ -30,8 +30,12 @@ export async function loadProject(id: string): Promise<LoadedProject | undefined
   return { project: { ...m.project, id: row.id }, issues: m.issues, migratedFrom: m.migratedFrom };
 }
 
-export async function saveProject(p: Project): Promise<void> {
+/** Fired after a project is saved or deleted in this browser (used by cloud sync). Not fired for `silent` writes. */
+export const projectEvents = new EventTarget();
+
+export async function saveProject(p: Project, opts: { silent?: boolean } = {}): Promise<void> {
   await db.projects.put({ id: p.id, name: p.name, language: p.language, createdAt: p.createdAt, updatedAt: p.updatedAt, doc: p });
+  if (!opts.silent) projectEvents.dispatchEvent(new CustomEvent('saved', { detail: p }));
 }
 
 export async function insertProject(p: Project): Promise<Project> {
@@ -51,11 +55,12 @@ export async function duplicateProject(id: string, name?: string): Promise<Proje
   return insertProject(copy);
 }
 
-export async function deleteProject(id: string): Promise<void> {
+export async function deleteProject(id: string, opts: { silent?: boolean } = {}): Promise<void> {
   await db.transaction('rw', db.projects, db.backups, async () => {
     await db.projects.delete(id);
     await db.backups.where('projectId').equals(id).delete();
   });
+  if (!opts.silent) projectEvents.dispatchEvent(new CustomEvent('deleted', { detail: id }));
 }
 
 export async function renameProject(id: string, name: string): Promise<void> {

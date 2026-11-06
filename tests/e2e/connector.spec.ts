@@ -1,17 +1,18 @@
 /**
- * Remote "Claude connector": MCP over HTTPS to the Worker (/mcp/<key>) → Durable Object →
- * WebSocket to the editor tab (/bridge/<key>). Runs the real Worker locally with `wrangler dev`.
+ * Claude connector with cloud projects: Claude edits projects stored in the Worker's Durable
+ * Object with NO browser open; the editor syncs and shows Claude's edits (live when open).
+ * Runs the real Worker locally with `wrangler dev`.
  */
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import WebSocket from 'ws';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { node } from './helpers';
+import { addNodeViaMenu, generatedCode, node } from './helpers';
 
 const PORT = 8789;
 const SITE = `http://127.0.0.1:${PORT}`;
-const KEY = 'TestConnectorKey_0123456789abcdefghijklmnop';
+const KEY = `TestKey_${Date.now()}_0123456789abcdefghijklmnop`;
 type ToolResult = { isError?: boolean; content: { type: string; text?: string }[] };
 
 let wrangler: ChildProcess;
@@ -30,68 +31,71 @@ async function claude() {
 }
 const data = (r: ToolResult) => JSON.parse(r.content[0].text!);
 
-test('Claude drives the editor through the hosted connector', async ({ page, browser }) => {
+async function openWithConnector(page: Page) {
+  await page.goto(SITE);
+  await page.evaluate((key) => {
+    localStorage.setItem('coding-studio:connector-test', '1');
+    localStorage.setItem('coding-studio:connector', JSON.stringify({ enabled: true, key }));
+  }, KEY);
+  await page.reload();
+  await expect(page.getByTestId('mcp-indicator')).toContainText('Claude connected');
+}
+
+test('Claude edits projects with no browser open; the editor syncs and shows changes live', async ({ page }) => {
   const { c, call } = await claude();
   try {
-    // No tab yet: a clear instruction, not a crash.
-    const before = await call('status');
-    expect(before.isError).toBe(true);
-    expect(data(before).error.code).toBe('E_NOT_CONNECTED');
-
-    // The user switches the connector on (stored per browser), with this key.
-    await page.goto(SITE);
-    await page.evaluate((key) => {
-      localStorage.setItem('coding-studio:connector-test', '1');
-      localStorage.setItem('coding-studio:connector', JSON.stringify({ enabled: false, key }));
-    }, KEY);
-    await page.reload();
-    await page.getByTestId('mcp-indicator').click();
-    await expect(page.getByTestId('connector-url')).toHaveText(`${SITE}/mcp/${KEY}`);
-    await page.getByTestId('connector-enable').check();
-    await expect(page.getByTestId('connector-status')).toContainText('Connected');
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('mcp-indicator')).toContainText('Claude connected');
-
-    // Claude builds a script.
-    const created = data(await call('create_project', { name: 'From My Phone', template: 'node' }));
-    await expect(page.getByTestId('project-title')).toHaveText('From My Phone');
+    // --- no browser anywhere ---
+    const created = data(await call('create_project', { name: 'Built Offline', template: 'node' }));
     const ready = created.scripts[0].functions.find((f: { name: string }) => f.name === '_ready');
-    const r = data(await call('add_node', { graph: ready.id, type: 'core.print', inputs: { value: 'Hello from the connector' } }));
-    expect(r.diagnostics.errors).toBe(0);
+    const add = data(await call('add_node', { graph: ready.id, type: 'core.print', inputs: { value: 'Made while the editor was closed' } }));
     const g = data(await call('get_graph', { graph: ready.id }));
     const entry = g.nodes.find((n: { type: string }) => n.type === 'core.entry').id;
-    const printId = g.nodes.find((n: { type: string }) => n.type === 'core.print').id;
-    expect((await call('connect_nodes', { expected_revision: g.revision, from: { node: entry, port: 'then' }, to: { node: printId, port: 'exec' } })).isError).toBeFalsy();
-    await expect(node(page, 'core.print')).toHaveCount(1);
-    const code = (await call('get_generated_code', {})).content[0].text!;
-    expect(code).toContain('print("Hello from the connector")');
+    expect((await call('connect_nodes', { expected_revision: g.revision, from: { node: entry, port: 'then' }, to: { node: add.created.node, port: 'exec' } })).isError).toBeFalsy();
+    expect((await call('get_generated_code', {})).content[0].text).toContain('print("Made while the editor was closed")');
+    expect(data(await call('status')).editorsOpen).toBe(0);
+    // undo / redo work in the cloud
+    expect(data(await call('undo', {})).undone).toMatch(/^Claude:/);
+    expect((await call('get_generated_code', {})).content[0].text).not.toContain('\tprint(');
+    await call('redo', {});
+    expect((await call('get_generated_code', {})).content[0].text).toContain('\tprint("Made while the editor was closed")');
 
-    // Exports come back as text: the cloud can't write to the user's disk.
-    const exp = data(await call('export_script', {}));
-    expect(Object.values(exp.files)[0]).toContain('extends Node');
-    expect(data(await call('export_script', { output_dir: '/tmp/x' })).error.code).toBe('E_NO_FILESYSTEM');
+    // --- the user opens the site: the project is there with Claude's work ---
+    await openWithConnector(page);
+    await page.getByTestId('project-card').filter({ hasText: 'Built Offline' }).click();
+    await expect(page.getByTestId('project-title')).toHaveText('Built Offline');
+    await expect(await generatedCode(page)).toContainText('print("Made while the editor was closed")');
 
-    // A second tab can't silently take over; an explicit takeover works.
-    const other = await browser.newPage();
-    await other.goto(SITE);
-    await other.evaluate((key) => {
-      localStorage.setItem('coding-studio:connector-test', '1');
-      localStorage.setItem('coding-studio:connector', JSON.stringify({ enabled: true, key }));
-    }, KEY);
-    await other.reload();
-    await other.getByTestId('mcp-indicator').click();
-    await expect(other.getByTestId('connector-status')).toContainText('Another Coding Studio tab');
-    expect(data(await call('status')).openProject.name).toBe('From My Phone');
-    await other.getByTestId('connector-takeover').click();
-    await expect(other.getByTestId('connector-status')).toContainText('Connected');
-    await expect.poll(async () => data(await call('status')).openProject, { timeout: 10_000 }).toBeNull();
-    await other.close();
+    // --- Claude edits while it's open: appears live ---
+    await call('add_node', { graph: ready.id, type: 'core.branch' });
+    await expect(node(page, 'core.branch')).toHaveCount(1);
+    await page.getByTestId('undo').click(); // Claude's live edit is an undoable step here too
+    await expect(node(page, 'core.branch')).toHaveCount(0);
+
+    // --- the user's edits reach Claude ---
+    await addNodeViaMenu(page, 'while', 'core.while');
+    await expect.poll(async () => data(await call('get_graph', { graph: ready.id })).nodes.some((n: { type: string }) => n.type === 'core.while'), { timeout: 10_000 }).toBe(true);
+    // ...and Claude can't undo its old edit over the user's newer work
+    expect(data(await call('undo', {})).error.code).toBe('E_REVISION_CONFLICT');
+
+    // --- a project made in the browser is visible to Claude ---
+    await page.goto(SITE);
+    await page.getByTestId('new-project').click();
+    await page.getByTestId('project-name').fill('Made In Browser');
+    await page.getByTestId('create-project').click();
+    await expect(page.getByTestId('project-title')).toHaveText('Made In Browser');
+    await expect.poll(async () => data(await call('list_projects')).map((p: { name: string }) => p.name), { timeout: 10_000 }).toContain('Made In Browser');
+
+    // --- deleting in Claude removes it here ---
+    await page.goto(SITE);
+    await expect(page.getByTestId('project-card').filter({ hasText: 'Built Offline' })).toHaveCount(1);
+    await call('delete_project', { project: 'Built Offline' });
+    await expect(page.getByTestId('project-card').filter({ hasText: 'Built Offline' })).toHaveCount(0);
   } finally {
     await c.close();
   }
 });
 
-test('the editor socket only accepts this site and valid keys', async () => {
+test('the editor endpoints only accept this site and valid keys', async () => {
   const tryWs = (url: string, origin: string) =>
     new Promise<string>((resolve) => {
       const ws = new WebSocket(url, { origin });
@@ -105,4 +109,5 @@ test('the editor socket only accepts this site and valid keys', async () => {
   expect(await tryWs(`ws://127.0.0.1:${PORT}/bridge/${KEY}`, 'https://evil.example')).toBe('403');
   expect(await tryWs(`ws://127.0.0.1:${PORT}/bridge/short`, SITE)).toBe('404');
   expect(await tryWs(`ws://127.0.0.1:${PORT}/bridge/${KEY}`, SITE)).toBe('open');
+  expect((await fetch(`${SITE}/sync/${KEY}/projects`, { headers: { Origin: 'https://evil.example' } })).status).toBe(403);
 });

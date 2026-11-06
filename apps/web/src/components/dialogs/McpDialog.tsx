@@ -46,7 +46,7 @@ export function McpDialog({ onClose }: { onClose: () => void }) {
         <>
           <label className="mb-2 flex items-center gap-2 rounded border border-border bg-panel-2 p-2.5">
             <input type="checkbox" checked={b.remoteEnabled} onChange={(e) => b.setRemoteEnabled(e.target.checked)} data-testid="connector-enable" />
-            <span className="text-[13px] font-medium">Claude connector: let Claude use this tab through this site</span>
+            <span className="text-[13px] font-medium">Claude connector: sync my projects so Claude can edit them from anywhere</span>
           </label>
           <div className="mb-2 rounded border border-border p-2.5 text-[12px]" data-testid="connector-status">
             <span className="font-medium">Status:</span> {b.remoteStatusText}
@@ -59,11 +59,11 @@ export function McpDialog({ onClose }: { onClose: () => void }) {
             )}
           </div>
           <p className="mb-1 text-[12px] text-[#c9ced8]">
-            Add this link once in Claude: <b>claude.ai → Settings → Connectors → Add custom connector</b>, paste it as the URL, leave the rest empty. It then works in the Claude app on your phone too. Keep this tab open (on a phone, in split screen) while Claude works.
+            While this is on, your projects are kept in sync with your Cloudflare site, and Claude edits them there directly, so <b>this page doesn't need to be open</b>. Changes show up here as soon as you open it (or live, if it's already open). Add this link once in Claude: <b>claude.ai → Settings → Connectors → Add custom connector</b>, paste it as the URL, leave the rest empty. It works in the Claude phone app too.
           </p>
           <CopyLine text={connectorUrl(b.remoteKey)} testId="connector-url" />
           <p className="mt-1 text-[11px] text-muted">
-            Treat the link like a password: anyone who has it can edit projects in a tab where the connector is on.{' '}
+            Keep the link to yourself: it gives access to your synced projects.{' '}
             <button
               className="text-accent hover:underline"
               data-testid="connector-reset"

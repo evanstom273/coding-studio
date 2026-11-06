@@ -24,6 +24,11 @@ export class ExportError extends Error {
 }
 
 export function errorPayload(e: unknown): BridgeError {
-  if (e instanceof BridgeRequestError || e instanceof ExportError) return { code: e.code, message: e.message, ...(e.details !== undefined ? { details: e.details } : {}) };
+  // Any error carrying a string code (BridgeRequestError, ExportError, the project service's
+  // ServiceError…) is reported as-is.
+  if (e instanceof Error && typeof (e as { code?: unknown }).code === 'string') {
+    const details = (e as { details?: unknown }).details;
+    return { code: (e as unknown as { code: string }).code, message: e.message, ...(details !== undefined ? { details } : {}) };
+  }
   return { code: 'E_INTERNAL', message: e instanceof Error ? e.message : String(e) };
 }

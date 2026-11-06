@@ -1,7 +1,7 @@
 {
   // Coding Studio: a Cloudflare Worker with Static Assets (not Pages).
   //  - Static assets: the editor (Vite build), with SPA fallback for client-side routes.
-  //  - worker/index.ts: only handles /mcp/* (remote MCP connector for Claude) and /bridge/*
+  //  - worker/index.ts: only handles /mcp/* (Claude connector), /bridge/* and /sync/*
   //    (the editor tab's WebSocket); everything else is served straight from the assets.
   // Projects stay in each user's browser (IndexedDB). The local MCP server runs on the user's PC.
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -14,7 +14,7 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "html_handling": "auto-trailing-slash",
-    "run_worker_first": ["/mcp/*", "/bridge/*"]
+    "run_worker_first": ["/mcp/*", "/bridge/*", "/sync/*"]
   },
   "durable_objects": {
     "bindings": [{ "name": "BRIDGE", "class_name": "BridgeRoom" }]

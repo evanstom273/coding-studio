@@ -26,6 +26,11 @@ export function Dashboard() {
   const setUI = useUI((s) => s.set);
   const refresh = useCallback(() => void listProjects().then(setProjects), []);
   useEffect(refresh, [refresh]);
+  // Cloud sync (Claude connector) can add or remove projects while this page is open.
+  useEffect(() => {
+    window.addEventListener('cs:projects-changed', refresh);
+    return () => window.removeEventListener('cs:projects-changed', refresh);
+  }, [refresh]);
   useEffect(() => {
     document.title = 'Coding Studio';
   }, []);
