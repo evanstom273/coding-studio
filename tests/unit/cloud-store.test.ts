@@ -205,3 +205,62 @@ describe('cloud service (Claude connector)', () => {
     expect(cloud.store.readPaths(created.id, ['assets/data23.txt'])[0].text).toBe(chunk + 23);
   });
 });
+
+describe('workspace MCP tools (cloud)', () => {
+  const svc2 = () => new CloudService(kv(), backend(), () => undefined, 'https://site', () => 0);
+  type Batch = { workspace_revision: string; changed: { path: string; hash: string | null }[]; created: Record<string, string>; diagnostics?: { errors: number } };
+
+  it('one atomic batch creates folders, files and a new visual script; reads, search and undo work', async () => {
+    const cloud = svc2();
+    await cloud.handle('create_project', { name: 'Multi' });
+    const r = (await cloud.handle('workspace_batch', {
+      operations: [
+        { op: 'create_dir', path: 'assets' },
+        { op: 'write_file', path: 'src/util.ts', content: 'export const add = (a: number, b: number) => a + b;\n' },
+        { op: 'write_file', path: 'README.md', content: '# Multi\nuses add()\n', expected_hash: null },
+        { op: 'graph', ops: [{ op: 'add_script', ref: 'p', name: 'Player', path: 'actors/player', template: 'character2d' }] },
+        { op: 'graph', script: 'actors/player.vgraph', ops: [{ op: 'add_variable', name: 'speed', type: 'float', default: 300 }] },
+        { op: 'config', patch: { description: 'made by Claude' } },
+      ],
+    })) as Batch;
+    expect(r.changed.map((c) => c.path).sort()).toEqual(['README.md', 'actors/player.vgraph', 'assets/.gitkeep', 'codingstudio.json', 'src/util.ts']);
+    expect(r.diagnostics?.errors).toBe(0);
+    const tree = (await cloud.handle('read_tree', {})) as { files: { path: string }[]; folders: string[]; generated: string[]; workspace_revision: string };
+    expect(tree.folders).toEqual(['actors', 'assets', 'src']);
+    expect(tree.generated).toContain('actors/player.gd');
+    expect(tree.workspace_revision).toBe(r.workspace_revision);
+    const read = (await cloud.handle('read_files', { paths: ['src/util.ts', 'actors/player.gd', 'nope.txt'] })) as { files: { path: string; text?: string; hash?: string; generated?: boolean; error?: string }[] };
+    expect(read.files[0].text).toContain('export const add');
+    expect(read.files[1]).toMatchObject({ generated: true });
+    expect(read.files[1].text).toContain('var speed: float = 300');
+    expect(read.files[2].error).toBe('E_NOT_FOUND');
+    const hits = (await cloud.handle('search_files', { query: 'add' })) as { matches: { path: string; line: number }[] };
+    expect(hits.matches).toEqual([{ path: 'README.md', line: 2, text: 'uses add()' }, expect.objectContaining({ path: 'src/util.ts', line: 1 })].sort((a, b) => (a.path < b.path ? -1 : 1)));
+    // graph tools accept the file path
+    expect(((await cloud.handle('list_graphs', {})) as { script: string }[]).length).toBeGreaterThan(0);
+    expect(((await cloud.handle('compile_script', { script: 'actors/player.vgraph' })) as { files: { path: string }[] }).files[0].path).toBe('actors/player.gd');
+    // the whole batch is one undo step
+    await cloud.handle('undo', {});
+    const after = (await cloud.handle('read_tree', {})) as { files: { path: string }[] };
+    expect(after.files.map((f) => f.path).sort()).toEqual(['codingstudio.json', 'main.vgraph']);
+  });
+
+  it('stale expected_hash / revision and invalid ops change nothing', async () => {
+    const cloud = svc2();
+    await cloud.handle('create_project', { name: 'Stale' });
+    const w1 = (await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'a.txt', content: 'one' }] })) as Batch;
+    const h1 = w1.changed[0].hash!;
+    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'a.txt', content: 'two', expected_hash: h1 }] });
+    await expect(cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'b.txt', content: 'b' }, { op: 'write_file', path: 'a.txt', content: 'three', expected_hash: h1 }] })).rejects.toMatchObject({ code: 'E_REVISION_CONFLICT' });
+    await expect(cloud.handle('workspace_batch', { expected_revision: w1.workspace_revision, operations: [{ op: 'write_file', path: 'c.txt', content: 'c' }] })).rejects.toMatchObject({ code: 'E_REVISION_CONFLICT' });
+    await expect(cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'd.txt', content: 'd' }, { op: 'delete', path: 'codingstudio.json' }] })).rejects.toMatchObject({ details: { opIndex: 1 } });
+    await expect(cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: '../evil', content: 'x' }] })).rejects.toMatchObject({ code: 'E_INVALID_PATH' });
+    const tree = (await cloud.handle('read_tree', {})) as { files: { path: string }[] };
+    expect(tree.files.map((f) => f.path).sort()).toEqual(['a.txt', 'codingstudio.json', 'main.vgraph']);
+    expect(((await cloud.handle('read_files', { paths: ['a.txt'] })) as { files: { text: string }[] }).files[0].text).toBe('two');
+    // deleting a folder takes a backup first
+    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'old/x.txt', content: 'x' }] });
+    await cloud.handle('workspace_batch', { operations: [{ op: 'delete', path: 'old', recursive: true }] });
+    expect(((await cloud.handle('list_backups', {})) as { label: string }[])[0].label).toMatch(/Before Claude file batch/);
+  });
+});

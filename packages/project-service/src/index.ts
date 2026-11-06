@@ -8,6 +8,7 @@ import { defaultProps, NodeRegistry, type PortSpec } from '@cs/node-registry';
 import { formatType } from '@cs/type-system';
 import { projectRevision, projectToJson, type EditOp, type Project } from '@cs/project-format';
 import { toolchainFor } from '@cs/toolchain';
+import { matchScript } from './workspace';
 
 /** Structured error returned to MCP clients as { code, message, details }. */
 export class ServiceError extends Error {
@@ -23,7 +24,7 @@ export class ServiceError extends Error {
 export const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 
 export function locateFunction(p: Project, ref: unknown, scriptRef?: unknown, activeFunctionId?: string): { script: ScriptDoc; fn: FunctionDecl } {
-  const scripts = str(scriptRef) ? p.scripts.filter((s) => s.id === scriptRef || s.name === scriptRef) : p.scripts;
+  const scripts = str(scriptRef) ? p.scripts.filter((s) => matchScript(s, scriptRef)) : p.scripts;
   const r = str(ref) ?? activeFunctionId;
   for (const s of scripts) {
     const f = s.functions.find((x) => x.id === r || x.graph.id === r) ?? (str(ref) ? s.functions.find((x) => x.name === r) : undefined);
@@ -170,7 +171,7 @@ export function validate(p: Project, graphRef?: unknown, scriptRef?: unknown, ac
 }
 
 export function compileOne(p: Project, scriptRef: unknown, activeScriptId?: string) {
-  const s = p.scripts.find((x) => x.id === scriptRef || x.name === scriptRef) ?? p.scripts.find((x) => x.id === activeScriptId) ?? p.scripts[0];
+  const s = p.scripts.find((x) => matchScript(x, scriptRef)) ?? p.scripts.find((x) => x.id === activeScriptId) ?? p.scripts[0];
   if (!s) throw new ServiceError('E_NOT_FOUND', 'Script not found');
   const r = compileScript(toolchainFor(p.language), s, { languageVersion: p.languageVersion, settings: p.compilerSettings });
   return { ok: r.ok, files: r.files.map((f) => ({ path: f.path, content: f.content })), diagnostics: r.diagnostics };
@@ -184,7 +185,7 @@ export function compileAll(p: Project) {
 export function exportFiles(p: Project, scriptRef?: unknown, includeProject = false) {
   const r = compileProject(toolchainFor(p.language), p);
   const ref = str(scriptRef);
-  const scripts = ref ? r.scripts.filter((s) => s.scriptId === ref || p.scripts.find((x) => x.id === s.scriptId)?.name === ref) : r.scripts;
+  const scripts = ref ? r.scripts.filter((s) => { const sc = p.scripts.find((x) => x.id === s.scriptId); return !!sc && matchScript(sc, ref); }) : r.scripts;
   if (ref && !scripts.length) throw new ServiceError('E_NOT_FOUND', `Script "${ref}" not found`);
   const diags = scripts.flatMap((s) => s.diagnostics);
   const ok = scripts.every((s) => s.ok) && (ref ? true : r.ok);
@@ -194,3 +195,4 @@ export function exportFiles(p: Project, scriptRef?: unknown, includeProject = fa
   if (includeProject) files[`${p.name.replace(/[^A-Za-z0-9_-]+/g, '_') || 'project'}.vproj.json`] = projectToJson(p);
   return { ok: true, files, diagnostics: diagSummary(diags) };
 }
+export * from './workspace';

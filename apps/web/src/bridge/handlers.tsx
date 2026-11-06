@@ -10,7 +10,7 @@ import { toolchainFor, languages } from '@web/lib/toolchain';
 import * as svc from '@cs/project-service';
 import { navigate } from '@web/lib/router';
 import { backupToWorkspace, createBackup, deleteProject, duplicateProject, getBackup, insertProject, listBackups, listProjects } from '@web/db/projects';
-import { configOf } from '@cs/workspace';
+import { configOf, workspaceRevision, type Workspace } from '@cs/workspace';
 import { saveNow } from '@web/hooks/useAutosave';
 import { useEditor } from '@web/store/editor';
 import { compileNow } from '@web/compile/store';
@@ -63,6 +63,28 @@ const describeProject = (p: Project) => {
   return svc.describeProject(p, st.project?.id === p.id ? { scriptId: st.activeScriptId, functionId: st.activeFunctionId } : {});
 };
 const { describeGraph, diagSummary, isSubstantial } = svc;
+
+function generatedFiles() {
+  const p = useEditor.getState().project;
+  return p ? svc.compileAll(p).files : [];
+}
+
+function describeOp(o: { op: string; path?: string; from?: string; to?: string }) {
+  return `${o.op.replace(/_/g, ' ')}${o.path ? ` ${o.path}` : o.from ? ` ${o.from} → ${o.to}` : ''}`;
+}
+
+function batchResult(ws: Workspace, changed: string[], created: Record<string, string>, warnings: string[], graphs: boolean) {
+  const p = useEditor.getState().project!;
+  return {
+    workspace_revision: workspaceRevision(ws),
+    revision: projectRevision(p),
+    changed: changed.map((path) => ({ path, hash: ws.files.get(path)?.hash ?? null })),
+    created,
+    warnings,
+    ...(graphs ? { diagnostics: diagSummary(compileNow(p).diagnostics) } : {}),
+    undo: 'This batch is one undo step (tool "undo").',
+  };
+}
 
 function opError(e: unknown): never {
   if (e instanceof OpError) throw new BridgeHandlerError(e.code, e.message, { opIndex: e.opIndex, projectUnchanged: true });
@@ -158,7 +180,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       try {
         res = useEditor.getState().dispatch(ops as EditOp[], `Claude: ${(ops as EditOp[]).length === 1 ? (ops as EditOp[])[0].op.replace(/_/g, ' ') : `${ops.length} edits`}`, {
           source: 'mcp',
-          defaults: { scriptId: str(params.script) ? p.scripts.find((s) => s.id === params.script || s.name === params.script)?.id : useEditor.getState().activeScriptId, functionId: str(params.graph) ? locateFunction(p, params.graph, params.script).fn.id : useEditor.getState().activeFunctionId },
+          defaults: { scriptId: str(params.script) ? svc.findScript(p, params.script)?.id : useEditor.getState().activeScriptId, functionId: str(params.graph) ? locateFunction(p, params.graph, params.script).fn.id : useEditor.getState().activeFunctionId },
         });
       } catch (e) {
         opError(e);
@@ -204,6 +226,36 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       await createBackup(useEditor.getState().workspace!, 'Before restoring a backup (Claude)', 'mcp');
       useEditor.getState().replaceWorkspace(backupToWorkspace(row.doc, p.id), `Claude: restore backup "${row.label}"`, 'mcp');
       return { restored: row.id, label: row.label, revision: projectRevision(useEditor.getState().project!) };
+    }
+    case 'read_tree': {
+      await ensureOpen(params.project);
+      const ws = useEditor.getState().workspace!;
+      return svc.describeTree([...ws.files.values()], { path: params.path, depth: params.depth, revision: workspaceRevision(ws), generated: generatedFiles().map((f) => f.path) });
+    }
+    case 'read_files': {
+      await ensureOpen(params.project);
+      const ws = useEditor.getState().workspace!;
+      return svc.readFilesView(params.paths, (p) => ws.files.get(p), (p) => generatedFiles().find((f) => f.path === p)?.content);
+    }
+    case 'search_files': {
+      await ensureOpen(params.project);
+      return svc.searchView(useEditor.getState().workspace!.files.values(), params);
+    }
+    case 'workspace_batch': {
+      const p = await ensureOpen(params.project);
+      const st = useEditor.getState();
+      const ws = st.workspace!;
+      const expected = str(params.expected_revision);
+      if (expected && expected !== workspaceRevision(ws)) throw new BridgeHandlerError('E_REVISION_CONFLICT', `The project's files changed since revision ${expected} (now ${workspaceRevision(ws)}). Nothing was applied. Re-read (read_tree / read_files) and retry, or use per-file expected_hash.`, { expected, current: workspaceRevision(ws) });
+      const { ops, destructive, touchesGraphs } = svc.prepareBatch(p, params.operations, { scriptId: st.activeScriptId, functionId: st.activeFunctionId });
+      if (destructive || ops.length >= 20) await createBackup(ws, `Before Claude file batch (${ops.length} ops)`, 'mcp');
+      let r;
+      try {
+        r = st.applyFiles(ops, `Claude: ${ops.length === 1 ? describeOp(ops[0]) : `${ops.length} file changes`}`, { source: 'mcp' });
+      } catch (e) {
+        throw new BridgeHandlerError(String((e as { code?: string }).code ?? 'E_INVALID_OPERATION'), e instanceof Error ? e.message : String(e), { ...((e as { details?: object }).details ?? {}), opIndex: (e as { opIndex?: number }).opIndex, projectUnchanged: true });
+      }
+      return batchResult(r.workspace, r.changedPaths, r.created, r.warnings, touchesGraphs);
     }
     case 'confirm_overwrite': {
       const files = Array.isArray(params.files) ? (params.files as string[]) : [];

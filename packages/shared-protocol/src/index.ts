@@ -38,6 +38,10 @@ export const BRIDGE_METHODS = [
   'list_backups',
   'restore_backup',
   'confirm_overwrite',
+  'read_tree',
+  'read_files',
+  'search_files',
+  'workspace_batch',
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 

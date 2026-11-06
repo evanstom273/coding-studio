@@ -13,7 +13,7 @@
 import { createProject, OpError, projectRevision, type EditOp, type Project } from '@cs/project-format';
 import { toolchainFor, languages } from '@cs/toolchain';
 import * as svc from '@cs/project-service';
-import { applyProjectOps, CONFIG_PATH, deriveProject, makeRecord, projectToWorkspace, reidWorkspace, type Workspace } from '@cs/workspace';
+import { applyProjectOps, applyWorkspaceOps, CONFIG_PATH, deriveProject, makeRecord, projectToWorkspace, reidWorkspace, WorkspaceOpError, type Workspace } from '@cs/workspace';
 import { newId } from '@cs/graph-core';
 import type { BridgeMethod } from '../packages/shared-protocol/src/index';
 import { CloudStore, diffFiles, type StoreBackend } from './cloud-store';
@@ -206,6 +206,7 @@ export class CloudService {
       return await this.dispatch(method, params);
     } catch (e) {
       if (e instanceof OpError) throw new svc.ServiceError(e.code, e.message, { opIndex: e.opIndex, projectUnchanged: true });
+      if (e instanceof WorkspaceOpError) throw new svc.ServiceError(e.code, e.message, { ...((e.details as object) ?? {}), opIndex: e.opIndex, projectUnchanged: true });
       throw e;
     }
   }
@@ -292,7 +293,7 @@ export class CloudService {
         if (expected && expected !== current) throw new svc.ServiceError('E_REVISION_CONFLICT', `The project changed since revision ${expected} (now ${current}) — probably the user edited it. Nothing was applied. Re-read the graph (get_graph) and retry with the new revision.`, { expected, current });
         const a = await this.active();
         const defaults = {
-          scriptId: svc.str(params.script) ? p.scripts.find((s) => s.id === params.script || s.name === params.script)?.id : a.projectId === p.id ? a.scriptId : undefined,
+          scriptId: svc.str(params.script) ? svc.findScript(p, params.script)?.id : a.projectId === p.id ? a.scriptId : undefined,
           functionId: svc.str(params.graph) ? svc.locateFunction(p, params.graph, params.script).fn.id : a.projectId === p.id ? a.functionId : undefined,
         };
         const r = applyProjectOps(ws, ops, toolchainFor(p.language), defaults);
@@ -334,6 +335,45 @@ export class CloudService {
         const before = this.store.read(p.id)!;
         await this.commit(before, { meta: before.meta, files: new Map(files.map((f) => [f.path, f])) }, 'claude', { label: 'Claude: restore backup', source: 'claude' });
         return { restored: Number(params.backup), label, revision: projectRevision(this.project(p.id)!.project) };
+      }
+      case 'read_tree': {
+        const { project: p } = await this.resolve(params.project);
+        const w = this.store.get(p.id)!;
+        return svc.describeTree(this.store.index(p.id), { path: params.path, depth: params.depth, revision: w.revision, generated: svc.compileAll(p).files.map((f) => f.path) });
+      }
+      case 'read_files': {
+        const { project: p } = await this.resolve(params.project);
+        const wanted = Array.isArray(params.paths) ? params.paths.map(String) : [];
+        const recs = new Map(this.store.readPaths(p.id, wanted.map((x) => x.replace(/^\/+/, ''))).map((f) => [f.path, f]));
+        let gen: { path: string; content: string }[] | undefined;
+        return svc.readFilesView(params.paths, (x) => recs.get(x), (x) => (gen ??= svc.compileAll(p).files).find((f) => f.path === x)?.content);
+      }
+      case 'search_files': {
+        const { project: p } = await this.resolve(params.project);
+        return svc.searchView(this.store.read(p.id, (e) => e.kind === 'text')!.files.values(), params);
+      }
+      case 'workspace_batch': {
+        const { project: p } = await this.resolve(params.project);
+        const before = this.store.read(p.id)!;
+        const current = this.store.get(p.id)!.revision;
+        const expected = svc.str(params.expected_revision);
+        if (expected && expected !== current) throw new svc.ServiceError('E_REVISION_CONFLICT', `The project's files changed since revision ${expected} (now ${current}). Nothing was applied. Re-read (read_tree / read_files) and retry, or use per-file expected_hash.`, { expected, current });
+        const a = await this.active();
+        const { ops, destructive, touchesGraphs } = svc.prepareBatch(p, params.operations, a.projectId === p.id ? a : {});
+        const r = applyWorkspaceOps(before, ops, toolchainFor(p.language));
+        if (destructive || ops.length >= 20) this.store.backup(p.id, `Before Claude file batch (${ops.length} ops)`);
+        const label = `Claude: ${ops.length === 1 ? ops[0].op.replace(/_/g, ' ') : `${ops.length} file changes`}`;
+        const revision = await this.commit(before, r.workspace, 'claude', { label, source: 'claude' });
+        const next = deriveProject(r.workspace).project;
+        return {
+          workspace_revision: revision,
+          revision: projectRevision(next),
+          changed: r.changedPaths.map((path) => ({ path, hash: r.workspace.files.get(path)?.hash ?? null })),
+          created: r.created,
+          warnings: r.warnings,
+          ...(touchesGraphs ? { diagnostics: svc.diagSummary(svc.compileAll(next).diagnostics) } : {}),
+          undo: 'This batch is one undo step (tool "undo").',
+        };
       }
       case 'confirm_overwrite':
         return { approved: false };

@@ -25,7 +25,7 @@ const fail = (e: unknown) => ({ isError: true, content: [{ type: 'text' as const
 const project = z.string().optional().describe('Project id or exact name. Omit to use the project open in Coding Studio.');
 const revision = z.string().optional().describe('Revision returned by get_graph / get_project / a previous edit. If the project changed since (e.g. the user edited it), the edit is rejected with E_REVISION_CONFLICT and nothing changes.');
 const graph = z.string().optional().describe('Function/graph id (or function name). Omit to use the graph open in the editor.');
-const script = z.string().optional().describe('Script id or name. Omit for the active script.');
+const script = z.string().optional().describe('Script id, name or graph file path (e.g. "player/player.vgraph"). Omit for the active script.');
 const nodeRef = z.string().describe('Node id, or "$ref" of a node created earlier in the same batch');
 const port = z.object({ node: nodeRef, port: z.string().describe('Port id (or its display name) — see get_graph / get_node_schema') });
 const json = z.unknown();
@@ -238,6 +238,50 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     'export_project',
     { title: 'Export project', description: 'Write every generated script (folder structure preserved) into output_dir; include_project also writes the editable <name>.vproj.json. Same overwrite rules as export_script.', inputSchema: { project, output_dir: z.string().optional(), overwrite: z.boolean().optional(), include_project: z.boolean().optional() } },
     (a) => doExport({ project: a.project, include_project: a.include_project === true }, a.output_dir, a.overwrite === true),
+  );
+
+  // --- files (the whole project workspace) -------------------------------------------------------
+  const wsRevision = z.string().optional().describe('workspace_revision from read_tree / a previous file batch. If ANY file changed since, nothing is applied (E_REVISION_CONFLICT). For finer control use expected_hash per write.');
+  server.registerTool(
+    'read_tree',
+    { title: 'Read file tree', description: 'List the project\'s files and folders (path, kind text|binary|graph, size, git blob hash) and the workspace_revision. Visual scripts are "<path>.vgraph" files; their generated source (e.g. main.gd) is listed under "generated" (read-only).', inputSchema: { project, path: z.string().optional().describe('Folder to list (default: whole project)'), depth: z.number().int().min(1).max(50).optional() }, annotations: ro },
+    (a) => call('read_tree', a),
+  );
+  server.registerTool(
+    'read_files',
+    { title: 'Read files', description: 'Read up to 200 files at once: text (and .vgraph JSON) as text, binaries as base64. Each file comes with its hash — pass it as expected_hash when writing it back so you never overwrite someone else\'s change. Generated files (e.g. main.gd) can be read too.', inputSchema: { project, paths: z.array(z.string()).min(1).max(200) }, annotations: ro },
+    (a) => call('read_files', a),
+  );
+  server.registerTool(
+    'search_files',
+    { title: 'Search files', description: 'Search text files in the project (literal by default; regex=true for a regular expression). Returns path, line and the matching line.', inputSchema: { project, query: z.string(), regex: z.boolean().optional(), case_sensitive: z.boolean().optional(), path: z.string().optional().describe('Only search inside this folder'), limit: z.number().int().min(1).max(2000).optional() }, annotations: ro },
+    (a) => call('search_files', a),
+  );
+  const WS_DOC = `Change the project's files atomically: all operations succeed or nothing changes, and the batch is ONE undo step. Operations:
+- {op:"write_file", path, content | base64, [expected_hash]}  create or replace a file. expected_hash = the hash you read (refused if the file changed since); null = must not exist yet. Parent folders are created.
+- {op:"create_dir", path} · {op:"delete", path, [recursive], [expected_hash]} (folders need recursive:true) · {op:"move"|"copy", from, to, [overwrite]} (files or folders)
+- {op:"graph", ops:[…batch_edit operations…], [script: "path/to.vgraph" | name | id], [graph]}  edit visual scripts in the same atomic batch (see batch_edit for the operation list). Create a new visual script with {op:"graph", ops:[{op:"add_script", name, path}]}.
+- {op:"config", patch:{name?, description?, language?, languageVersion?, compiler?}}  edit codingstudio.json.
+.vgraph files are visual scripts: prefer "graph" ops over writing their JSON. codingstudio.json can't be deleted or moved. A backup is taken before deletes and large batches.`;
+  server.registerTool(
+    'workspace_batch',
+    { title: 'Edit files (batch)', description: WS_DOC, inputSchema: { project, expected_revision: wsRevision, operations: z.array(z.looseObject({ op: z.enum(['write_file', 'create_dir', 'delete', 'move', 'copy', 'graph', 'config']) })).min(1).max(2000) } },
+    (a) => call('workspace_batch', a, 60_000),
+  );
+  server.registerTool(
+    'write_file',
+    { title: 'Write file', description: 'Create or replace one text file (folders are created). Pass expected_hash from read_files to avoid overwriting a newer version; null means the file must not exist yet.', inputSchema: { project, path: z.string(), content: z.string(), expected_hash: z.string().nullable().optional() } },
+    (a) => call('workspace_batch', { project: a.project, operations: [{ op: 'write_file', path: a.path, content: a.content, ...(a.expected_hash !== undefined ? { expectedHash: a.expected_hash } : {}) }] }),
+  );
+  server.registerTool(
+    'move_path',
+    { title: 'Move / rename', description: 'Move or rename a file or folder. Visual scripts keep their .vgraph extension.', inputSchema: { project, from: z.string(), to: z.string(), overwrite: z.boolean().optional() } },
+    (a) => call('workspace_batch', { project: a.project, operations: [{ op: 'move', from: a.from, to: a.to, overwrite: a.overwrite }] }),
+  );
+  server.registerTool(
+    'delete_path',
+    { title: 'Delete file or folder', description: 'Delete a file, or a folder with recursive=true. A backup is taken first and it can be undone.', inputSchema: { project, path: z.string(), recursive: z.boolean().optional(), expected_hash: z.string().optional() }, annotations: { destructiveHint: true } },
+    (a) => call('workspace_batch', { project: a.project, operations: [{ op: 'delete', path: a.path, recursive: a.recursive, ...(a.expected_hash ? { expectedHash: a.expected_hash } : {}) }] }),
   );
 
   // --- history ------------------------------------------------------------------------------------

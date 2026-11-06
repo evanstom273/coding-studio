@@ -5,3 +5,4 @@ export * from './project';
 export * from './ops';
 export * from './history';
 export * from './zip';
+export * from './search';

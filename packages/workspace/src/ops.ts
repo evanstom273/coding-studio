@@ -11,7 +11,7 @@ import type { Toolchain } from '@cs/compiler-core';
 import { OpError, type EditOp, type OpDefaults } from '@cs/project-format';
 import { CONFIG_PATH, GRAPH_EXT, kindForPath, looksBinary, makeRecord, parseConfig, parseGraph, scriptPathFor, serializeConfig, serializeGraph, type FileKind, type FileRecord, type Workspace, type WorkspaceConfig } from './model';
 import { ancestors, filePath, isWithin, normalizePath, PathError } from './paths';
-import { applyProjectOps, reidScript, scriptFromRecord } from './project';
+import { applyProjectOps, deriveProject, reidScript, scriptFromRecord } from './project';
 
 export type WorkspaceOp =
   | { op: 'write_file'; path: string; content?: string; base64?: string; expectedHash?: string | null }
@@ -19,7 +19,8 @@ export type WorkspaceOp =
   | { op: 'delete'; path: string; recursive?: boolean; expectedHash?: string }
   | { op: 'move'; from: string; to: string; overwrite?: boolean }
   | { op: 'copy'; from: string; to: string; overwrite?: boolean }
-  | { op: 'graph'; ops: EditOp[]; defaults?: OpDefaults }
+  /** script / graph: which script and graph the ops default to (id, name, or path like "player/player.vgraph"). */
+  | { op: 'graph'; ops: EditOp[]; defaults?: OpDefaults; script?: string; graph?: string }
   | { op: 'config'; patch: Partial<Omit<WorkspaceConfig, 'version'>> };
 
 export class WorkspaceOpError extends Error {
@@ -184,7 +185,16 @@ export function applyWorkspaceOps(ws: Workspace, ops: WorkspaceOp[], tc?: Toolch
         case 'graph': {
           if (!tc) throw new WorkspaceOpError('Graph operations need a toolchain');
           current = { meta: current.meta, files };
-          const r = applyProjectOps(current, op.ops, tc, op.defaults ?? {}, now);
+          let defaults = op.defaults ?? {};
+          if (op.script || op.graph) {
+            const p = deriveProject(current).project;
+            const sc = op.script ? p.scripts.find((s) => s.id === op.script || s.name === op.script || s.path === op.script || `${s.path}${GRAPH_EXT}` === op.script) : undefined;
+            if (op.script && !sc) throw new WorkspaceOpError(`Script "${op.script}" not found (use its path, e.g. "main.vgraph", its name or id)`, 'E_NOT_FOUND');
+            const fn = op.graph ? (sc ? [sc] : p.scripts).flatMap((s) => s.functions.map((f) => ({ s, f }))).find((x) => x.f.id === op.graph || x.f.name === op.graph || x.f.graph.id === op.graph) : undefined;
+            if (op.graph && !fn) throw new WorkspaceOpError(`Graph "${op.graph}" not found`, 'E_NOT_FOUND');
+            defaults = { scriptId: fn?.s.id ?? sc!.id, functionId: fn?.f.id ?? (sc!.id === defaults.scriptId ? defaults.functionId : sc!.functions[0]?.id) };
+          }
+          const r = applyProjectOps(current, op.ops, tc, defaults, now);
           files = new Map(r.workspace.files);
           r.changedPaths.forEach((p) => changed.add(p));
           Object.assign(created, r.result.created);

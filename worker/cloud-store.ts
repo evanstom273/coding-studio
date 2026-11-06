@@ -104,7 +104,7 @@ export class CloudStore {
   private putBlob(hash: string, content: Uint8Array) {
     if (this.rows(`SELECT 1 FROM blobs WHERE hash = ? AND n = 0`, hash).length) return;
     if (content.length === 0) {
-      this.db.sql.exec(`INSERT INTO blobs (hash, n, data) VALUES (?, 0, ?)`, hash, new ArrayBuffer(0));
+      this.db.sql.exec(`INSERT INTO blobs (hash, n, data) VALUES (?, 0, '')`, hash);
       return;
     }
     for (let i = 0, n = 0; i < content.length; i += CHUNK, n++) this.db.sql.exec(`INSERT INTO blobs (hash, n, data) VALUES (?, ?, ?)`, hash, n, toBuffer(content.subarray(i, i + CHUNK)));

@@ -7,39 +7,8 @@ import { useCompact } from '@web/hooks/useLayout';
 import { cx, IconButton } from '../ui/primitives';
 import { iconFor } from './FileExplorer';
 
-const MAX_RESULTS = 2000;
-
-export interface SearchHit {
-  path: string;
-  line: number;
-  text: string;
-  start: number;
-  end: number;
-}
-
-/** Pure search over files (exported for tests). */
-export function searchFiles(files: Iterable<{ path: string; kind: string; text?: string }>, query: string, opts: { caseSensitive?: boolean; regex?: boolean } = {}): { hits: SearchHit[]; error?: string; truncated: boolean } {
-  if (!query) return { hits: [], truncated: false };
-  let re: RegExp;
-  try {
-    re = new RegExp(opts.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), opts.caseSensitive ? 'g' : 'gi');
-  } catch (e) {
-    return { hits: [], error: e instanceof Error ? e.message : String(e), truncated: false };
-  }
-  const hits: SearchHit[] = [];
-  for (const f of files) {
-    if (f.kind !== 'text' || !f.text || f.path.endsWith('.gitkeep')) continue;
-    const lines = f.text.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      re.lastIndex = 0;
-      const m = re.exec(lines[i]);
-      if (!m) continue;
-      hits.push({ path: f.path, line: i + 1, text: lines[i].slice(0, 300), start: m.index, end: m.index + Math.max(1, m[0].length) });
-      if (hits.length >= MAX_RESULTS) return { hits, truncated: true };
-    }
-  }
-  return { hits, truncated: false };
-}
+export { searchFiles, type SearchHit } from '@cs/workspace';
+import { searchFiles, type SearchHit } from '@cs/workspace';
 
 export function SearchPanel() {
   const ws = useEditor((s) => s.workspace)!;

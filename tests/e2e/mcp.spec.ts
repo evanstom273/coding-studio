@@ -133,3 +133,59 @@ test('backups are created for large Claude batches and can be restored', async (
   expect(restored.revision).toBe(before.revision);
   await expect(node(page, 'core.print')).toHaveCount(0);
 });
+
+test('Claude works with files: atomic multi-file batch, stale hashes rejected, editor updates live', async ({ page }) => {
+  await freshStart(page);
+  await page.evaluate((port) => localStorage.setItem('coding-studio:bridge', JSON.stringify({ enabled: true, port })), PORT);
+  await page.reload();
+  await expect(page.getByTestId('mcp-indicator')).toContainText('Claude connected');
+  const tools = (await client.listTools()).tools.map((t) => t.name);
+  for (const t of ['read_tree', 'read_files', 'search_files', 'workspace_batch', 'write_file', 'move_path', 'delete_path']) expect(tools).toContain(t);
+
+  await tool('create_project', { name: 'Files By Claude' });
+  await expect(page.getByTestId('project-title')).toHaveText('Files By Claude');
+  await page.getByTestId('left-tab-files').click();
+
+  const b = data(
+    await tool('workspace_batch', {
+      operations: [
+        { op: 'write_file', path: 'src/util.ts', content: 'export const twice = (n: number) => n * 2;\n' },
+        { op: 'write_file', path: 'docs/notes.md', content: '# Notes\n' },
+        { op: 'graph', ops: [{ op: 'add_script', name: 'Enemy', path: 'actors/enemy', template: 'node2d' }] },
+        { op: 'graph', script: 'actors/enemy.vgraph', ops: [{ op: 'add_variable', name: 'hp', type: 'int', default: 3 }] },
+      ],
+    }),
+  );
+  expect(b.diagnostics.errors).toBe(0);
+  // the editor shows it at once
+  await expect(page.locator('[data-testid="file-row"][data-path="src"]')).toBeVisible();
+  await expect(page.locator('[data-testid="file-row"][data-path="actors"]')).toBeVisible();
+
+  const tree = data(await tool('read_tree', {}));
+  expect(tree.generated).toContain('actors/enemy.gd');
+  const util = data(await tool('read_files', { paths: ['src/util.ts'] })).files[0];
+
+  // the user edits the file in the editor…
+  await page.locator('[data-testid="file-row"][data-path="src"]').click();
+  await page.locator('[data-testid="file-row"][data-path="src/util.ts"]').click();
+  await page.locator('[data-testid="text-editor"] .view-lines').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('// user was here');
+  await expect.poll(async () => data(await tool('read_files', { paths: ['src/util.ts'] })).files[0].text).toContain('user was here');
+  // …so Claude's write based on the old hash is refused and nothing in the batch applies
+  const stale = await tool('workspace_batch', { operations: [{ op: 'write_file', path: 'other.txt', content: 'x' }, { op: 'write_file', path: 'src/util.ts', content: 'overwritten', expected_hash: util.hash }] });
+  expect(stale.isError).toBe(true);
+  expect(data(stale).error.code).toBe('E_REVISION_CONFLICT');
+  expect(data(await tool('read_tree', {})).files.map((f: { path: string }) => f.path)).not.toContain('other.txt');
+
+  // search, move with an open tab following, delete + undo
+  expect(data(await tool('search_files', { query: 'twice' })).matches[0].path).toBe('src/util.ts');
+  await tool('move_path', { from: 'src', to: 'lib' });
+  await expect(page.locator('[data-testid="tab"][data-tab="lib/util.ts"]')).toBeVisible();
+  await tool('delete_path', { path: 'docs', recursive: true });
+  await expect(page.locator('[data-testid="file-row"][data-path="docs"]')).toHaveCount(0);
+  await tool('undo', {});
+  await expect(page.locator('[data-testid="file-row"][data-path="docs"]')).toBeVisible();
+  // graph tools take paths too
+  expect((await tool('get_generated_code', { script: 'actors/enemy.vgraph' })).content[0].text).toContain('var hp: int = 3');
+});
