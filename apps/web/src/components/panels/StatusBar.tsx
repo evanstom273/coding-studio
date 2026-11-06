@@ -1,3 +1,4 @@
+import { languages } from '@web/lib/toolchain';
 import { useCompile } from '@web/compile/store';
 import { useEditor } from '@web/store/editor';
 import { useUI } from '@web/store/ui';
@@ -20,7 +21,10 @@ export function StatusBar() {
       <span>{running ? 'compiling…' : `compiled in ${Math.round(ms)} ms`}</span>
       {sel > 0 && <span>{sel} selected</span>}
       <span className="ml-auto">
-        {project.language} · Godot {project.languageVersion}
+        {(() => {
+          const a = languages.get(project.language);
+          return `${a?.name ?? project.language} · ${a?.versions.find((v) => v.id === project.languageVersion)?.label ?? project.languageVersion}`;
+        })()}
       </span>
     </footer>
   );
