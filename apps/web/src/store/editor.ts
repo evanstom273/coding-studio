@@ -11,7 +11,7 @@ import { create } from 'zustand';
 import type { FunctionDecl, ScriptDoc } from '@cs/graph-core';
 import { OpError, type ApplyResult, type EditOp, type Project } from '@cs/project-format';
 import { applyProjectOps, applyWorkspaceOps, deriveProject, graphPathFor, makeRecord, projectToWorkspace, serializeGraph, workspaceRevision, type Workspace, type WorkspaceApplyResult, type WorkspaceOp } from '@cs/workspace';
-import { isGenTab } from '@web/lib/fileTypes';
+import { isVirtualTab as isGenTab } from '@web/lib/fileTypes';
 import { remapPath } from '@web/lib/fileTree';
 import { toolchainFor } from '@web/lib/toolchain';
 import { emptyHistory, pushHistory, redoHistory, undoHistory, type HistoryState } from './history';

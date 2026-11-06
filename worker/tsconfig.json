@@ -57,6 +57,9 @@
       ],
       "@cs/workspace": [
         "packages/workspace/src/index.ts"
+      ],
+      "@cs/git": [
+        "packages/git/src/index.ts"
       ]
     }
   },

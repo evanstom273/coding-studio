@@ -11,6 +11,8 @@ import * as svc from '@cs/project-service';
 import { navigate } from '@web/lib/router';
 import { backupToWorkspace, createBackup, deleteProject, duplicateProject, getBackup, insertProject, listBackups, listProjects } from '@web/db/projects';
 import { configOf, workspaceRevision, type Workspace } from '@cs/workspace';
+import { readState } from '@cs/git';
+import { cloneRepo, commitOpen, github, pullOpen } from '@web/lib/git';
 import { saveNow } from '@web/hooks/useAutosave';
 import { useEditor } from '@web/store/editor';
 import { compileNow } from '@web/compile/store';
@@ -257,6 +259,36 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       }
       return batchResult(r.workspace, r.changedPaths, r.created, r.warnings, touchesGraphs);
     }
+    case 'git_status':
+      await ensureOpen(params.project);
+      return svc.gitStatusView(useEditor.getState().workspace!);
+    case 'git_commit': {
+      await ensureOpen(params.project);
+      await saveNow();
+      const r = await commitOpen(String(params.message ?? ''), { paths: Array.isArray(params.paths) ? params.paths.map(String) : undefined, newBranch: str(params.new_branch) }, 'mcp');
+      return { commit: r.commit, branch: r.branch, files: r.files };
+    }
+    case 'git_pull': {
+      await ensureOpen(params.project);
+      return svc.pullView(await pullOpen('mcp'));
+    }
+    case 'git_create_pr': {
+      await ensureOpen(params.project);
+      const st = svc.requireLinked(readState(useEditor.getState().workspace!));
+      const gh = github();
+      const r = await gh.createPull(st.owner, st.repo, { title: String(params.title ?? st.branch), head: str(params.head) ?? st.branch, base: str(params.base) ?? (await gh.repo(st.owner, st.repo)).default_branch, ...(str(params.body) ? { body: str(params.body) } : {}) });
+      return { number: r.number, url: r.html_url };
+    }
+    case 'git_clone': {
+      const [owner, repo] = String(params.repository ?? '').split('/');
+      if (!owner || !repo) throw new BridgeHandlerError('E_INVALID', 'repository must be "owner/name"');
+      await saveNow();
+      const ws = await cloneRepo(owner, repo, str(params.branch));
+      await openAndWait(ws.meta.id);
+      return { project: ws.meta.id, files: ws.files.size, ...svc.gitStatusView(ws) };
+    }
+    case 'git_repos':
+      return (await github().repos()).map((r) => ({ repository: r.full_name, private: r.private, default_branch: r.default_branch, updated: r.updated_at }));
     case 'confirm_overwrite': {
       const files = Array.isArray(params.files) ? (params.files as string[]) : [];
       const ok = await confirmDialog({

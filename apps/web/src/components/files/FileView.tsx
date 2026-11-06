@@ -7,7 +7,7 @@
  *  - generated code (`gen:` tabs): read-only, with a way back to the graph.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
+import Editor, { DiffEditor, type OnMount } from '@monaco-editor/react';
 import '@web/lib/monaco';
 import type { editor } from 'monaco-editor';
 import { Download, Workflow } from 'lucide-react';
@@ -15,7 +15,8 @@ import { useEditor } from '@web/store/editor';
 import { useCompile } from '@web/compile/store';
 import { toast } from '@web/store/toasts';
 import { downloadBytes } from '@web/lib/files';
-import { formatSize, GEN_PREFIX, mimeType, monacoLanguage, previewKind } from '@web/lib/fileTypes';
+import { DIFF_PREFIX, formatSize, GEN_PREFIX, mimeType, monacoLanguage, previewKind } from '@web/lib/fileTypes';
+import { baseVersion } from '@web/lib/git';
 import { Button } from '../ui/primitives';
 
 const EDIT_LIMIT = 5 * 1024 * 1024;
@@ -207,6 +208,43 @@ export function GeneratedFileView({ id }: { id: string }) {
       </div>
       <div className="min-h-0 flex-1">
         <Editor height="100%" theme="coding-studio" path={`generated:///${path}`} language={monacoLanguage(path)} value={file.content} options={{ ...editorOptions, readOnly: true, domReadOnly: true }} />
+      </div>
+    </div>
+  );
+}
+
+/** A file compared with its version at the last commit synced with GitHub. */
+export function DiffFileView({ id }: { id: string }) {
+  const path = id.slice(DIFF_PREFIX.length);
+  const rec = useEditor((s) => s.workspace?.files.get(path));
+  const [original, setOriginal] = useState<{ text: string; binary: boolean } | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    baseVersion(path)
+      .then((f) => live && setOriginal(f ? { text: f.text ?? '', binary: f.kind === 'binary' } : null))
+      .catch((e) => {
+        if (live) setOriginal(null);
+        toast('error', e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      live = false;
+    };
+  }, [path]);
+  if (original === undefined) return <Empty>Loading GitHub's version…</Empty>;
+  if (original?.binary || rec?.kind === 'binary') return <Empty>{path} is a binary file: {original ? (rec ? 'changed' : 'deleted') : 'added'}.</Empty>;
+  return (
+    <div className="flex h-full min-h-0 flex-col" data-testid="diff-view">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-[11.5px] text-muted">
+        <span className="font-mono text-text">{path}</span>
+        <span>GitHub (left) → yours (right)</span>
+        {rec && (
+          <Button className="ml-auto" variant="ghost" onClick={() => useEditor.getState().openTab(path)}>
+            Edit file
+          </Button>
+        )}
+      </div>
+      <div className="min-h-0 flex-1">
+        <DiffEditor height="100%" theme="coding-studio" language={monacoLanguage(path)} original={original?.text ?? ''} modified={rec?.text ?? ''} options={{ readOnly: true, renderSideBySide: window.innerWidth > 900, automaticLayout: true, minimap: { enabled: false }, fontSize: 12.5 }} />
       </div>
     </div>
   );

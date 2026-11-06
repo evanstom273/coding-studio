@@ -17,6 +17,9 @@ import { applyProjectOps, applyWorkspaceOps, CONFIG_PATH, deriveProject, makeRec
 import { newId } from '@cs/graph-core';
 import type { BridgeMethod } from '../packages/shared-protocol/src/index';
 import { CloudStore, diffFiles, type StoreBackend } from './cloud-store';
+import { GitHubVault } from './github';
+import { cloneFiles, commitAndPush, GitHubError, pull, readState, stateRecord } from '@cs/git';
+import { defaultConfig, serializeConfig } from '@cs/workspace';
 
 export interface ProjectSummary {
   id: string;
@@ -59,6 +62,9 @@ export class CloudService {
   ) {
     this.store = new CloudStore(backend);
   }
+
+  /** GitHub (token in this Durable Object). Overridable for tests. */
+  github = () => new GitHubVault(this.kv);
 
   // --- meta ----------------------------------------------------------------------------------
 
@@ -206,6 +212,8 @@ export class CloudService {
       return await this.dispatch(method, params);
     } catch (e) {
       if (e instanceof OpError) throw new svc.ServiceError(e.code, e.message, { opIndex: e.opIndex, projectUnchanged: true });
+      if (e instanceof GitHubError) throw new svc.ServiceError(e.code, e.message);
+      if (typeof (e as { code?: unknown })?.code === 'string' && e instanceof Error && !(e instanceof svc.ServiceError) && !(e instanceof WorkspaceOpError)) throw new svc.ServiceError((e as unknown as { code: string }).code, e.message);
       if (e instanceof WorkspaceOpError) throw new svc.ServiceError(e.code, e.message, { ...((e.details as object) ?? {}), opIndex: e.opIndex, projectUnchanged: true });
       throw e;
     }
@@ -375,6 +383,59 @@ export class CloudService {
           undo: 'This batch is one undo step (tool "undo").',
         };
       }
+      case 'git_status': {
+        const { project: p } = await this.resolve(params.project);
+        // Status needs only hashes: build the view from the index (no file contents loaded).
+        const idx = this.store.index(p.id);
+        const state = this.store.readPaths(p.id, ['.codingstudio/git.json'])[0];
+        const files = new Map(idx.map((e) => [e.path, e.path === state?.path ? state : { ...e, kind: e.kind }]));
+        return svc.gitStatusView({ meta: { id: p.id, schemaVersion: 2, createdAt: 0, updatedAt: 0 }, files } as Workspace);
+      }
+      case 'git_commit': {
+        const { project: p } = await this.resolve(params.project);
+        const ws = this.store.read(p.id)!;
+        const r = await commitAndPush(await this.github().client(), ws, String(params.message ?? ''), { paths: Array.isArray(params.paths) ? params.paths.map(String) : undefined, newBranch: svc.str(params.new_branch) });
+        const files = new Map(ws.files);
+        files.set('.codingstudio/git.json', stateRecord(r.state));
+        await this.commit(ws, { meta: ws.meta, files }, 'claude', { label: `Claude: commit "${String(params.message).split('\n')[0]}"`, source: 'claude' });
+        return { commit: r.commit, branch: r.branch, files: r.files };
+      }
+      case 'git_pull': {
+        const { project: p } = await this.resolve(params.project);
+        const ws = this.store.read(p.id)!;
+        const r = await pull(await this.github().client(), ws);
+        if (!r.upToDate) {
+          const files = new Map(ws.files);
+          for (const [path, f] of r.updates) {
+            if (f) files.set(path, f);
+            else files.delete(path);
+          }
+          files.set('.codingstudio/git.json', stateRecord(r.state));
+          await this.commit(ws, { meta: ws.meta, files }, 'claude', { label: `Claude: pull ${r.state.branch}`, source: 'claude' });
+        }
+        return svc.pullView(r);
+      }
+      case 'git_create_pr': {
+        const { project: p } = await this.resolve(params.project);
+        const st = svc.requireLinked(readState(this.store.read(p.id, (e) => e.path === '.codingstudio/git.json')!));
+        const gh = await this.github().client();
+        const r = await gh.createPull(st.owner, st.repo, { title: String(params.title ?? st.branch), head: svc.str(params.head) ?? st.branch, base: svc.str(params.base) ?? (await gh.repo(st.owner, st.repo)).default_branch, ...(svc.str(params.body) ? { body: svc.str(params.body) } : {}) });
+        return { number: r.number, url: r.html_url };
+      }
+      case 'git_clone': {
+        const [owner, repo] = String(params.repository ?? '').split('/');
+        if (!owner || !repo) throw new svc.ServiceError('E_INVALID', 'repository must be "owner/name"');
+        const c = await cloneFiles(await this.github().client(), owner, repo, svc.str(params.branch));
+        const now = Date.now();
+        const files = new Map(c.files.map((f) => [f.path, f]));
+        if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(defaultConfig(c.state.repo)), now));
+        const ws: Workspace = { meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files };
+        await this.commit(undefined, ws, 'claude');
+        await this.select(ws.meta.id);
+        return { project: ws.meta.id, files: files.size, ...svc.gitStatusView(ws) };
+      }
+      case 'git_repos':
+        return (await (await this.github().client()).repos()).map((r) => ({ repository: r.full_name, private: r.private, default_branch: r.default_branch, updated: r.updated_at }));
       case 'confirm_overwrite':
         return { approved: false };
     }

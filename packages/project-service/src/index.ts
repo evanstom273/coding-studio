@@ -196,3 +196,4 @@ export function exportFiles(p: Project, scriptRef?: unknown, includeProject = fa
   return { ok: true, files, diagnostics: diagSummary(diags) };
 }
 export * from './workspace';
+export * from './git';

@@ -176,3 +176,14 @@ test('the connector has the file tools and the editor follows them live', async 
     await c.close();
   }
 });
+
+test('the GitHub endpoints keep the token server-side and only proxy GitHub API paths', async () => {
+  const gh = (path: string, init?: RequestInit) => fetch(`${SITE}/github/${KEY}${path}`, { ...init, headers: { 'Content-Type': 'application/json', Origin: SITE } });
+  expect(await (await gh('/token')).json()).toEqual({ connected: false });
+  expect((await gh('/token', { method: 'PUT', body: JSON.stringify({ token: 'x' }) })).status).toBe(400);
+  const r = await gh('/api/user');
+  expect(r.status).toBe(401);
+  expect((await r.json()).code).toBe('E_GITHUB_NOT_CONNECTED');
+  expect((await gh('/api/orgs/x')).status).toBe(400);
+  expect((await fetch(`${SITE}/github/${KEY}/token`, { headers: { Origin: 'https://evil.example' } })).status).toBe(403);
+});

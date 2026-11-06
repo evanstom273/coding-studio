@@ -13,6 +13,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { BRIDGE_MAX_PAYLOAD, BRIDGE_PROTOCOL_VERSION } from '../packages/shared-protocol/src/index';
 import { buildServer, type ToolHost } from '../mcp/server/tools';
 import { CloudService, type KvLike } from './cloud-service';
+import { GitHubVault } from './github';
 import type { SqlLike } from './cloud-store';
 
 export interface Env {
@@ -80,6 +81,26 @@ export class BridgeRoom extends DurableObject<Env> {
       const [client, server] = Object.values(pair);
       this.ctx.acceptWebSocket(server);
       return new Response(null, { status: 101, webSocket: client });
+    }
+
+    // GitHub: token kept here, browser calls go through this proxy.
+    if (url.pathname.startsWith('/github/')) {
+      const vault = new GitHubVault(this.ctx.storage as unknown as KvLike);
+      if (url.pathname === '/github/token') {
+        try {
+          if (request.method === 'GET') return json(200, await vault.status());
+          if (request.method === 'DELETE') return json(200, await vault.clear());
+          if (request.method === 'PUT') return json(200, await vault.set(String(((await request.json()) as { token?: unknown }).token ?? '')));
+        } catch (e) {
+          return json(400, { error: { code: (e as { code?: string }).code ?? 'E_GITHUB', message: e instanceof Error ? e.message : String(e) } });
+        }
+      }
+      if (url.pathname.startsWith('/github/api/')) {
+        const text = request.method === 'GET' ? '' : await request.text();
+        if (text.length > 48 * 1024 * 1024) return json(413, { message: 'Request too large' });
+        const r = await vault.proxy(url.pathname.slice('/github/api'.length) + url.search, request.method, text ? JSON.parse(text) : undefined);
+        return json(r.status, r.body);
+      }
     }
 
     // Editor sync API (per file).

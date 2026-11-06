@@ -10,6 +10,8 @@ import { useUI } from '@web/store/ui';
 import { Button, confirmDialog, IconButton } from '../ui/primitives';
 import { NewProjectDialog } from '../dialogs/NewProjectDialog';
 import { McpDialog } from '../dialogs/McpDialog';
+import { GitHubDialog } from '../dialogs/GitHubDialog';
+import { GitBranch as Github } from 'lucide-react';
 import { McpIndicator } from '../panels/McpIndicator';
 
 function ago(t: number) {
@@ -22,6 +24,7 @@ function ago(t: number) {
 
 export function Dashboard() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
+  const [githubOpen, setGithubOpen] = useState(false);
   const dialog = useUI((s) => s.dialog);
   const setUI = useUI((s) => s.set);
   const refresh = useCallback(() => void listProjects().then(setProjects), []);
@@ -57,6 +60,9 @@ export function Dashboard() {
               }}
             >
               <Upload size={14} /> Import project
+            </Button>
+            <Button onClick={() => setGithubOpen(true)} data-testid="open-github">
+              <Github size={14} /> Open from GitHub
             </Button>
             <span className="ml-2 text-[12px] text-muted">Languages: {languages.all().map((l) => l.name).join(', ')} · projects are stored in this browser</span>
           </div>
@@ -127,6 +133,7 @@ export function Dashboard() {
       </main>
       {dialog === 'new-project' && <NewProjectDialog onClose={() => setUI({ dialog: null })} />}
       {dialog === 'mcp' && <McpDialog onClose={() => setUI({ dialog: null })} />}
+      {githubOpen && <GitHubDialog onClose={() => setGithubOpen(false)} />}
     </div>
   );
 }

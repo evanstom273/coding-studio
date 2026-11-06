@@ -42,6 +42,7 @@ interface BridgeState {
   takeOver(): void;
   setRemoteEnabled(on: boolean): void;
   /** New secret link; the old one stops working. */
+  saveRemoteKey(): void;
   resetRemoteKey(): void;
   takeOverRemote(): void;
   clearLog(): void;
@@ -114,6 +115,10 @@ export const useBridge = create<BridgeState>()((set, get) => ({
     set({ remoteEnabled });
     writeJson(REMOTE_KEY, { enabled: remoteEnabled, key: get().remoteKey });
     remote.restart(false);
+  },
+  /** Persist the key (GitHub tokens are stored under it in the cloud even if the connector is off). */
+  saveRemoteKey() {
+    writeJson(REMOTE_KEY, { enabled: get().remoteEnabled, key: get().remoteKey });
   },
   resetRemoteKey() {
     const remoteKey = randomId(32);

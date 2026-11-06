@@ -284,6 +284,31 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     (a) => call('workspace_batch', { project: a.project, operations: [{ op: 'delete', path: a.path, recursive: a.recursive, ...(a.expected_hash ? { expectedHash: a.expected_hash } : {}) }] }),
   );
 
+  // --- GitHub ------------------------------------------------------------------------------------
+  const gitNote = 'Needs GitHub connected in Coding Studio (Git tab → token; the token stays in the user\'s own cloud storage).';
+  server.registerTool('git_repos', { title: 'List GitHub repositories', description: `Repositories the user's GitHub token can access. ${gitNote}`, inputSchema: {}, annotations: ro }, () => call('git_repos', {}, 60_000));
+  server.registerTool(
+    'git_clone',
+    { title: 'Open a GitHub repository', description: `Download a branch of a repository as a new Coding Studio project (linked to GitHub for commit/pull). ${gitNote}`, inputSchema: { repository: z.string().describe('"owner/name"'), branch: z.string().optional().describe('Default: the repository\'s default branch') } },
+    (a) => call('git_clone', a, 300_000),
+  );
+  server.registerTool('git_status', { title: 'Git status', description: 'Repository, branch and the files changed (added/modified/deleted) since the last commit or pull.', inputSchema: { project }, annotations: ro }, (a) => call('git_status', a));
+  server.registerTool(
+    'git_commit',
+    { title: 'Commit & push', description: `Commit all changes (or only "paths") and push to GitHub. new_branch commits to a new branch made from the current one (then open a PR with git_create_pr). Refused with E_NOT_FAST_FORWARD if GitHub has newer commits — git_pull first. ${gitNote}`, inputSchema: { project, message: z.string(), paths: z.array(z.string()).optional(), new_branch: z.string().optional() } },
+    (a) => call('git_commit', a, 300_000),
+  );
+  server.registerTool(
+    'git_pull',
+    { title: 'Pull', description: 'Bring in new commits from GitHub. Files changed only on GitHub are updated; text changed on both sides is merged line by line (overlaps get conflict markers); graph/binary files changed on both sides keep the local version and are reported. One undo step.', inputSchema: { project } },
+    (a) => call('git_pull', a, 300_000),
+  );
+  server.registerTool(
+    'git_create_pr',
+    { title: 'Open a pull request', description: 'Open a pull request from the current branch (or "head") into the default branch (or "base").', inputSchema: { project, title: z.string(), body: z.string().optional(), head: z.string().optional(), base: z.string().optional() } },
+    (a) => call('git_create_pr', a, 60_000),
+  );
+
   // --- history ------------------------------------------------------------------------------------
   server.registerTool('undo', { title: 'Undo', description: 'Undo the latest edit in the editor (each batch is one step).', inputSchema: { project } }, (a) => call('undo', a));
   server.registerTool('redo', { title: 'Redo', description: 'Redo the latest undone edit.', inputSchema: { project } }, (a) => call('redo', a));

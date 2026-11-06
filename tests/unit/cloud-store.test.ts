@@ -264,3 +264,39 @@ describe('workspace MCP tools (cloud)', () => {
     expect(((await cloud.handle('list_backups', {})) as { label: string }[])[0].label).toMatch(/Before Claude file batch/);
   });
 });
+
+describe('GitHub through the cloud connector', () => {
+  it('token is validated and never returned; clone, edit, commit to a branch, PR, pull', async () => {
+    const { FakeGitHub } = await import('../fixtures/fake-github');
+    const { GitHubVault } = await import('../../worker/github');
+    const fake = new FakeGitHub();
+    fake.push('main', { 'README.md': '# Game\n', 'src/app.ts': 'export const a = 1;\n' });
+    const store = kv();
+    const cloud = new CloudService(store, backend(), () => undefined, 'https://site', () => 0);
+    cloud.github = () => new GitHubVault(store, () => fake.fetch);
+    await expect(cloud.handle('git_repos', {})).rejects.toMatchObject({ code: 'E_GITHUB_NOT_CONNECTED' });
+    const vault = cloud.github();
+    await expect(vault.set('nope')).rejects.toMatchObject({ code: 'E_INVALID' });
+    expect(await vault.set('github_pat_1234567890abcdefghij')).toEqual({ connected: true, login: 'lyra' });
+    expect(JSON.stringify(await vault.status())).not.toContain('github_pat');
+
+    const cl = (await cloud.handle('git_clone', { repository: 'lyra/game' })) as { project: string; linked: boolean; changes: { path: string }[] };
+    expect(cl.linked).toBe(true);
+    expect(cl.changes.map((c) => c.path)).toEqual(['codingstudio.json']);
+    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'src/app.ts', content: 'export const a = 2;\n' }] });
+    const st = (await cloud.handle('git_status', {})) as { changes: { path: string; status: string }[] };
+    expect(st.changes).toEqual([{ path: 'codingstudio.json', status: 'added' }, { path: 'src/app.ts', status: 'modified' }]);
+    const c = (await cloud.handle('git_commit', { message: 'Claude change', new_branch: 'claude/edit' })) as { branch: string };
+    expect(c.branch).toBe('claude/edit');
+    expect(fake.files('claude/edit')['src/app.ts']).toBe('export const a = 2;\n');
+    expect(fake.files('main')['src/app.ts']).toBe('export const a = 1;\n');
+    expect(((await cloud.handle('git_status', {})) as { clean: boolean }).clean).toBe(true);
+    const pr = (await cloud.handle('git_create_pr', { title: 'Edit' })) as { number: number };
+    expect(fake.pullsList[pr.number - 1]).toMatchObject({ head: 'claude/edit', base: 'main' });
+    // someone pushes to the branch; pull brings it in
+    fake.push('claude/edit', { 'docs/x.md': 'new' });
+    const p = (await cloud.handle('git_pull', {})) as { updated: string[] };
+    expect(p.updated).toEqual(['docs/x.md']);
+    expect(((await cloud.handle('read_files', { paths: ['docs/x.md'] })) as { files: { text: string }[] }).files[0].text).toBe('new');
+  });
+});

@@ -18,5 +18,6 @@ export const aliases: Record<string, string> = {
   '@cs/examples': r('./packages/examples/src/index.ts'),
   '@cs/project-service': r('./packages/project-service/src/index.ts'),
   '@cs/workspace': r('./packages/workspace/src/index.ts'),
+  '@cs/git': r('./packages/git/src/index.ts'),
   '@web': r('./apps/web/src'),
 };

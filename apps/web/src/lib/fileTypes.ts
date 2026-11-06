@@ -38,3 +38,8 @@ export function formatSize(n: number) {
 /** Tab ids: workspace paths, or `gen:<output path>` for generated (read-only) files. */
 export const GEN_PREFIX = 'gen:';
 export const isGenTab = (id: string) => id.startsWith(GEN_PREFIX);
+/** `diff:<path>`: the file compared with the last version on GitHub. */
+export const DIFF_PREFIX = 'diff:';
+export const isDiffTab = (id: string) => id.startsWith(DIFF_PREFIX);
+/** Tabs that aren't workspace files. */
+export const isVirtualTab = (id: string) => isGenTab(id) || isDiffTab(id);

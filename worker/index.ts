@@ -27,7 +27,7 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const m = /^\/(mcp|bridge|sync)\/([^/]+)(\/.*)?$/.exec(url.pathname);
+    const m = /^\/(mcp|bridge|sync|github)\/([^/]+)(\/.*)?$/.exec(url.pathname);
     if (!m) return env.ASSETS.fetch(request);
     const [, kind, key, rest = ''] = m;
     if (!KEY.test(key)) return json(404, { error: 'Unknown connector link. Copy it again from Coding Studio.' });
@@ -35,7 +35,7 @@ export default {
     const origin = request.headers.get('Origin');
     if (kind !== 'mcp' && origin && origin !== url.origin) return json(403, { error: 'Origin not allowed' });
     const inner = new URL(request.url);
-    inner.pathname = `/${kind}${kind === 'sync' ? rest : ''}`;
+    inner.pathname = `/${kind}${kind === 'sync' || kind === 'github' ? rest : ''}`;
     const headers = new Headers(request.headers);
     headers.set('X-Site-Origin', url.origin);
     return (await room(env, key)).fetch(new Request(inner, { method: request.method, headers, body: request.body, ...(request.body ? { duplex: 'half' } : {}) } as RequestInit));

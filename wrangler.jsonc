@@ -14,7 +14,7 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "html_handling": "auto-trailing-slash",
-    "run_worker_first": ["/mcp/*", "/bridge/*", "/sync/*"]
+    "run_worker_first": ["/mcp/*", "/bridge/*", "/sync/*", "/github/*"]
   },
   "durable_objects": {
     "bindings": [{ "name": "BRIDGE", "class_name": "BridgeRoom" }]
