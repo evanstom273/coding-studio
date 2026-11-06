@@ -447,7 +447,7 @@ export function Inspector() {
   const inspect = useUI((s) => s.inspect);
   const script = project.scripts.find((s) => s.id === activeScriptId);
   const fn = script?.functions.find((f) => f.id === activeFunctionId);
-  let body: React.ReactNode = null;
+  let body: React.ReactNode;
   if (script && fn && selection.nodes.length === 1) body = <NodeInspector nodeId={selection.nodes[0]} script={script} fn={fn} />;
   else if (selection.nodes.length > 1) body = <div className="text-muted">{selection.nodes.length} nodes selected. Ctrl+D duplicates, Del deletes, C wraps them in a comment frame.</div>;
   else if (inspect?.kind === 'project') body = <ProjectEditor />;

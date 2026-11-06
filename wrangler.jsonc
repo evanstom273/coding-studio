@@ -1,0 +1,15 @@
+{
+  // Coding Studio is served as a Cloudflare Worker with Static Assets (not Pages).
+  // The Worker has no server-side code: it serves the Vite build and falls back to index.html
+  // for client-side routes. Projects stay in the browser (IndexedDB); MCP runs locally.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "coding-studio",
+  "compatibility_date": "2025-10-01",
+  "assets": {
+    "directory": "./apps/web/dist",
+    "not_found_handling": "single-page-application",
+    "html_handling": "auto-trailing-slash"
+  },
+  "observability": { "enabled": false },
+  "workers_dev": true
+}

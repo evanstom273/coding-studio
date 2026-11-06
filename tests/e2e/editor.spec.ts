@@ -20,7 +20,7 @@ test('create, add, connect, edit, generate, save, reopen and export', async ({ p
   await createProject(page, 'Hello Project');
   const print = await addNodeViaMenu(page, 'print', 'core.print');
   const entry = node(page, 'core.entry').first();
-  await dragPin(page, entry.getByTestId('pin-out-then'), print.getByTestId('pin-in-exec'));
+  await dragPin(page, entry.getByTestId('pin-out-then'), print.getByTestId('pin-in-exec'), { expectEdge: true });
   await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 
   // edit the inline value of the Print node
@@ -84,7 +84,7 @@ test('undo and redo', async ({ page }) => {
 test('diagnostics are listed and focus their node', async ({ page }) => {
   await createProject(page);
   const w = await addNodeViaMenu(page, 'while', 'core.while');
-  await dragPin(page, node(page, 'core.entry').getByTestId('pin-out-then'), w.getByTestId('pin-in-exec'));
+  await dragPin(page, node(page, 'core.entry').getByTestId('pin-out-then'), w.getByTestId('pin-in-exec'), { expectEdge: true });
   await page.getByTestId('validate').click();
   await expect(page.getByTestId('diagnostic').first()).toContainText('needs a value for "Condition"');
   await page.getByTestId('diagnostic').first().click();

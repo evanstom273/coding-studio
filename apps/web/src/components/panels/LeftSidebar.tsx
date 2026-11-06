@@ -19,8 +19,10 @@ function dragStart(e: React.DragEvent, payload: DragNodePayload) {
 
 function NodeLibrary() {
   const project = useEditor((s) => s.project)!;
-  const script = project.scripts.find((s) => s.id === useEditor((x) => x.activeScriptId));
-  const fn = script?.functions.find((f) => f.id === useEditor.getState().activeFunctionId);
+  const activeScriptId = useEditor((x) => x.activeScriptId);
+  const activeFunctionId = useEditor((x) => x.activeFunctionId);
+  const script = project.scripts.find((s) => s.id === activeScriptId);
+  const fn = script?.functions.find((f) => f.id === activeFunctionId);
   const [q, setQ] = useState('');
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const tc = toolchainFor(project.language);

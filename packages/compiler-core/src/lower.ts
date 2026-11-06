@@ -191,6 +191,7 @@ class FunctionLowerer {
   }
 
   private lc(nodeId: string, stops: Set<string>): LowerContext {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- needed for the loopDepth getter below
     const self = this;
     const info = this.inp.infos.get(nodeId)!;
     const node = info.node;

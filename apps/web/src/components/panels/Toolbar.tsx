@@ -30,8 +30,10 @@ export function Toolbar() {
   const undoLabel = useEditor((s) => s.history.past[s.history.past.length - 1]?.label);
   const redoLabel = useEditor((s) => s.history.future[0]?.label);
   const setUI = useUI((s) => s.set);
-  const script = project.scripts.find((s) => s.id === useEditor((x) => x.activeScriptId));
-  const fn = script?.functions.find((f) => f.id === useEditor.getState().activeFunctionId);
+  const activeScriptId = useEditor((x) => x.activeScriptId);
+  const activeFunctionId = useEditor((x) => x.activeFunctionId);
+  const script = project.scripts.find((s) => s.id === activeScriptId);
+  const fn = script?.functions.find((f) => f.id === activeFunctionId);
   return (
     <header className="flex h-11 shrink-0 items-center gap-1 border-b border-border bg-panel px-2">
       <IconButton label="Back to projects" onClick={() => navigate({ name: 'dashboard' })}>

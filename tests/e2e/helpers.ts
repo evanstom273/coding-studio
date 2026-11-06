@@ -35,14 +35,24 @@ export async function addNodeViaMenu(page: Page, query: string, type: string) {
   return node(page, type).nth(before);
 }
 
-export async function dragPin(page: Page, from: ReturnType<Page['locator']>, to: ReturnType<Page['locator']>) {
-  const a = (await from.boundingBox())!;
-  const b = (await to.boundingBox())!;
-  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
-  await page.mouse.down();
-  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 5 });
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 5 });
-  await page.mouse.up();
+export async function dragPin(page: Page, from: ReturnType<Page['locator']>, to: ReturnType<Page['locator']>, opts: { expectEdge?: boolean } = {}) {
+  const edges = page.locator('.react-flow__edge');
+  const before = await edges.count();
+  // React Flow measures handles after the node renders; give a freshly added node a moment.
+  await page.waitForTimeout(150);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const a = (await from.boundingBox())!;
+    const b = (await to.boundingBox())!;
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 5 });
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 5 });
+    await page.mouse.up();
+    if (!opts.expectEdge) return;
+    if ((await edges.count()) > before) return;
+    await page.waitForTimeout(250);
+  }
+  await expect(edges).toHaveCount(before + 1);
 }
 
 export async function generatedCode(page: Page) {

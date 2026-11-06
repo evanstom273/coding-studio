@@ -70,7 +70,7 @@ export interface NodeInfo {
 export function nodeInfo(tc: Toolchain, ctx: NodeContext, node: GraphNode): NodeInfo {
   const def = tc.registry.get(node.type);
   if (!def) return { node, def, ports: [], title: `Unknown (${node.type})` };
-  let ports: PortSpec[] = [];
+  let ports: PortSpec[];
   let title = def.title;
   try {
     ports = def.ports(node, ctx);
