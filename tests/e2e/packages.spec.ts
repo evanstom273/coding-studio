@@ -131,8 +131,7 @@ test('live: real dexie and date-fns from npm produce library nodes', async ({ pa
   const cat = () => page.evaluate(() => (window as never as { codingStudio: { catalog: { getState(): { byPackage: Record<string, { title: string }[]> } } } }).codingStudio.catalog.getState().byPackage);
   await expect.poll(async () => Object.keys(await cat()).sort(), { timeout: 90_000 }).toEqual(['date-fns', 'dexie']);
   const c = await cat();
-  console.log('dexie', c.dexie.length, c.dexie.slice(0, 12).map((e) => e.title).join(' | '));
-  console.log('date-fns', c['date-fns'].length, c['date-fns'].slice(0, 12).map((e) => e.title).join(' | '));
   expect(c.dexie.some((e) => e.title === 'new Dexie')).toBe(true);
+  expect(c.dexie.some((e) => e.title === 'Dexie.table()')).toBe(true);
   expect(c['date-fns'].some((e) => e.title === 'format()')).toBe(true);
 });

@@ -33,5 +33,7 @@ describe('library signatures from the TypeScript service', () => {
     expect(parseDisplay('(alias) class Dexie\nimport Dexie')).toEqual({ kind: 'class', name: 'Dexie' });
     expect(parseDisplay('(property) Dexie.name: string')).toEqual({ kind: 'value', name: 'name', type: 'string' });
     expect(parseDisplay('interface Foo')).toBeUndefined();
+    expect(parseDisplay('interface Dexie\nnamespace Dexie\nvar Dexie: DexieConstructor')).toEqual({ kind: 'value', name: 'Dexie', type: 'any' });
+    expect(parseDisplay('(alias) interface Dexie\n(alias) namespace Dexie\n(alias) var Dexie: DexieConstructor\nexport default')).toMatchObject({ kind: 'value', name: 'Dexie' });
   });
 });

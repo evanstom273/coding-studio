@@ -171,8 +171,21 @@ function parseCallable(name: string, rest: string): ApiSignature | undefined {
  * Parse one completion-detail text. Returns a callable signature for functions, methods and
  * function-typed constants; `{ kind: 'class' }` for classes; undefined for anything else.
  */
-export function parseDisplay(text: string): ({ kind: 'function' } & ApiSignature) | { kind: 'class'; name: string } | { kind: 'value'; name: string; type: string } | undefined {
+type Parsed = ({ kind: 'function' } & ApiSignature) | { kind: 'class'; name: string } | { kind: 'value'; name: string; type: string } | undefined;
+
+export function parseDisplay(text: string): Parsed {
+  // Merged declarations come one per line ("interface Dexie / namespace Dexie / var Dexie: …"):
+  // when the whole text isn't a signature, use the most useful line (class, function, value).
+  const whole = parseOne(text);
+  if (whole) return whole;
+  const lines = text.split('\n').filter((l) => /^\s*(\(alias\)\s*)?(abstract\s+)?(class|function|const|let|var)\s/.test(l));
+  const parsed = lines.map(parseOne).filter(Boolean);
+  return parsed.find((p) => p!.kind === 'class') ?? parsed.find((p) => p!.kind === 'function') ?? parsed[0];
+}
+
+function parseOne(text: string): Parsed {
   const t = stripPrefix(text);
+  if (/^(interface|namespace|type|enum|const enum)\s/.test(t)) return undefined;
   let m = /^(?:abstract\s+)?class\s+([A-Za-z_$][\w$]*)/.exec(t);
   if (m) return { kind: 'class', name: m[1] };
   m = /^function\s+([A-Za-z_$][\w$]*)\s*([\s\S]*)$/.exec(t);

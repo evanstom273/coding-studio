@@ -165,3 +165,16 @@ export function refreshCatalogs(packages: string[]) {
     });
   }
 }
+
+/** Debugging aid: what the TypeScript service reports for a package's exports. */
+export async function probeExports(pkg: string) {
+  return withModel(pkg, `import * as __m from '${pkg}';\n__m.`, async (w, file, pos) => {
+    const c = await w.getCompletionsAtPosition(file, pos);
+    const out: { name: string; kind: string; display: string }[] = [];
+    for (const e of c?.entries ?? []) {
+      const d = await w.getCompletionEntryDetails(file, pos, e.name);
+      out.push({ name: e.name, kind: e.kind, display: text(d?.displayParts) });
+    }
+    return out;
+  });
+}
