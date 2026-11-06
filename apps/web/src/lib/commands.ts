@@ -5,6 +5,7 @@ import { useUI } from '@web/store/ui';
 import { compileNow } from '@web/compile/store';
 import { saveNow } from '@web/hooks/useAutosave';
 import { createBackup } from '@web/db/projects';
+import { flushTextEdits } from '@web/components/files/FileView';
 
 const CLIP_KEY = 'coding-studio-clipboard';
 let clipboard: { nodes: GraphNode[]; edges: Edge[] } | null = null;
@@ -108,6 +109,7 @@ export function redo() {
 }
 
 export async function save() {
+  flushTextEdits();
   await saveNow();
   if (useEditor.getState().saveState === 'saved') toast('success', 'Saved');
 }

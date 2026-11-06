@@ -22,11 +22,17 @@ import { SettingsDialog } from './dialogs/SettingsDialog';
 import { ShortcutsDialog } from './dialogs/ShortcutsDialog';
 import { McpDialog } from './dialogs/McpDialog';
 import { NewProjectDialog } from './dialogs/NewProjectDialog';
+import { TabBar } from './files/TabBar';
+import { BinaryFileView, GeneratedFileView, TextFileView } from './files/FileView';
+import { isGenTab } from '@web/lib/fileTypes';
+import { GRAPH_EXT } from '@cs/workspace';
 
 const GraphCanvas = lazy(() => import('./canvas/GraphCanvas'));
 
 export default function EditorShell({ projectId }: { projectId: string }) {
   const project = useEditor((s) => s.project);
+  const activeTab = useEditor((s) => s.activeTab);
+  const activeKind = useEditor((s) => (!s.activeTab || s.activeTab.endsWith(GRAPH_EXT) ? 'graph' : isGenTab(s.activeTab) ? 'gen' : s.workspace?.files.get(s.activeTab)?.kind === 'binary' ? 'binary' : 'text'));
   const [error, setError] = useState<string | null>(null);
   const ui = useUI();
   const compact = useCompact();
@@ -94,12 +100,21 @@ export default function EditorShell({ projectId }: { projectId: string }) {
     </div>
   );
   const canvas = (
-    <div className="min-h-0 flex-1">
-      <ErrorBoundary label="Graph canvas">
-        <Suspense fallback={<div className="flex h-full items-center justify-center text-muted">Loading canvas…</div>}>
-          <GraphCanvas />
-        </Suspense>
-      </ErrorBoundary>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <TabBar />
+      <div className="min-h-0 flex-1">
+        {activeKind === 'graph' ? (
+          <ErrorBoundary label="Graph canvas">
+            <Suspense fallback={<div className="flex h-full items-center justify-center text-muted">Loading canvas…</div>}>
+              <GraphCanvas />
+            </Suspense>
+          </ErrorBoundary>
+        ) : (
+          <ErrorBoundary label="File" key={activeTab}>
+            {activeKind === 'gen' ? <GeneratedFileView id={activeTab!} /> : activeKind === 'binary' ? <BinaryFileView path={activeTab!} /> : <TextFileView key={activeTab} path={activeTab!} />}
+          </ErrorBoundary>
+        )}
+      </div>
     </div>
   );
   return (

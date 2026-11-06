@@ -52,7 +52,7 @@ export function Dashboard() {
             </Button>
             <Button
               onClick={async () => {
-                const f = await pickFile('.vproj,.json,application/zip,application/json');
+                const f = await pickFile('.vproj,.json,.zip,application/zip,application/json');
                 if (f) await importProjectFile(f);
               }}
             >

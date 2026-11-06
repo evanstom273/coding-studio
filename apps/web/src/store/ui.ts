@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 
 export type BottomTab = 'code' | 'errors' | 'warnings' | 'mcp' | 'info';
-export type LeftTab = 'nodes' | 'project';
+export type LeftTab = 'files' | 'project' | 'nodes' | 'search';
 export type DialogId = null | 'new-project' | 'export' | 'settings' | 'mcp' | 'backups' | 'shortcuts' | 'add-script';
 
 interface UIState {

@@ -11,6 +11,8 @@ import { create } from 'zustand';
 import type { FunctionDecl, ScriptDoc } from '@cs/graph-core';
 import { OpError, type ApplyResult, type EditOp, type Project } from '@cs/project-format';
 import { applyProjectOps, applyWorkspaceOps, deriveProject, graphPathFor, makeRecord, projectToWorkspace, serializeGraph, workspaceRevision, type Workspace, type WorkspaceApplyResult, type WorkspaceOp } from '@cs/workspace';
+import { isGenTab } from '@web/lib/fileTypes';
+import { remapPath } from '@web/lib/fileTree';
 import { toolchainFor } from '@web/lib/toolchain';
 import { emptyHistory, pushHistory, redoHistory, undoHistory, type HistoryState } from './history';
 import { toast } from './toasts';
@@ -40,6 +42,11 @@ interface EditorState {
   version: number;
   /** Node to centre on in the canvas (set by diagnostics clicks). */
   focusRequest?: { nodeId: string; seq: number };
+  /** Open editor tabs: workspace paths (graph files included) or `gen:<path>` for generated code. */
+  tabs: string[];
+  activeTab?: string;
+  /** Line to reveal in a text tab (search results). */
+  revealRequest?: { tab: string; line: number; seq: number };
 
   open(ws: Workspace, issues?: string[]): void;
   close(): void;
@@ -54,6 +61,9 @@ interface EditorState {
   undo(): string | null;
   redo(): string | null;
   setActive(scriptId?: string, functionId?: string): void;
+  openTab(id: string, opts?: { line?: number }): void;
+  closeTab(id: string): void;
+  closeOtherTabs(id: string): void;
   select(nodes: string[], edges?: string[]): void;
   focusNode(functionId: string, nodeId: string, scriptId?: string): void;
   setSaveState(s: SaveState, error?: string): void;
@@ -67,6 +77,28 @@ function fixActive(p: Project, scriptId?: string, functionId?: string) {
   return { activeScriptId: s?.id, activeFunctionId: f?.id };
 }
 
+/** Keep tabs pointing at the right files after a change: follow moves and renamed scripts, drop deleted files. */
+function fixTabs(tabs: string[], active: string | undefined, before: Project | null, after: Project, ws: Workspace, moves: [string, string][] = [], prev?: Workspace | null) {
+  const byId = new Map(after.scripts.map((s) => [s.id, graphPathFor(s.path)]));
+  const graphOf = new Map((before?.scripts ?? []).map((s) => [graphPathFor(s.path), s.id]));
+  const map = (t: string) => {
+    if (isGenTab(t)) return t;
+    let p = t;
+    for (const [from, to] of moves) p = remapPath(p, from, to);
+    if (ws.files.has(p)) return p;
+    const sid = graphOf.get(t);
+    const moved = sid ? byId.get(sid) : undefined;
+    if (moved && ws.files.has(moved)) return moved;
+    // Undo/redo/sync of a rename: follow the content to a path that just appeared.
+    const old = prev?.files.get(p);
+    if (old) for (const [q, r] of ws.files) if (r.hash === old.hash && !prev!.files.has(q)) return q;
+    return null;
+  };
+  const next = [...new Set(tabs.map(map).filter((t): t is string => !!t))];
+  const act = active ? map(active) : undefined;
+  return { tabs: next, activeTab: act ?? next[next.length - 1] };
+}
+
 function view(ws: Workspace) {
   const d = deriveProject(ws);
   return { project: d.project, issues: d.issues.map((i) => `${i.path}: ${i.message}`) };
@@ -74,7 +106,7 @@ function view(ws: Workspace) {
 
 export const useEditor = create<EditorState>()((set, get) => {
   /** Install a new workspace snapshot (with or without a history entry). */
-  const commit = (next: Workspace, entry?: { label: string; source: Source; mergeKey?: string }) => {
+  const commit = (next: Workspace, entry?: { label: string; source: Source; mergeKey?: string }, moves?: [string, string][]) => {
     const cur = get().workspace;
     const v = view(next);
     set((s) => ({
@@ -85,8 +117,18 @@ export const useEditor = create<EditorState>()((set, get) => {
       saveState: 'dirty',
       version: s.version + 1,
       ...fixActive(v.project, s.activeScriptId, s.activeFunctionId),
+      ...fixTabs(s.tabs, s.activeTab, s.project, v.project, next, moves, cur),
     }));
     return v.project;
+  };
+  /** The graph tab of a script (opened if needed). */
+  const graphTab = (scriptId?: string) => {
+    const p = get().project;
+    const sc = p?.scripts.find((x) => x.id === scriptId);
+    if (!sc) return {};
+    const path = graphPathFor(sc.path);
+    const tabs = get().tabs.includes(path) ? get().tabs : [...get().tabs, path];
+    return { tabs, activeTab: path };
   };
 
   return {
@@ -97,14 +139,18 @@ export const useEditor = create<EditorState>()((set, get) => {
     history: emptyHistory(),
     saveState: 'saved',
     version: 0,
+    tabs: [],
 
     open(ws, issues = []) {
       const v = view(ws);
       const e = ws.meta.editor;
-      set({ workspace: ws, project: v.project, loadIssues: [...issues, ...v.issues.filter((i) => !issues.includes(i))], history: emptyHistory(), selection: { nodes: [], edges: [] }, saveState: 'saved', saveError: undefined, version: get().version + 1, ...fixActive(v.project, e?.activeScriptId, e?.activeFunctionId) });
+      const active = fixActive(v.project, e?.activeScriptId, e?.activeFunctionId);
+      const saved = fixTabs(e?.openTabs ?? [], e?.activeTab, null, v.project, ws);
+      set({ workspace: ws, project: v.project, loadIssues: [...issues, ...v.issues.filter((i) => !issues.includes(i))], history: emptyHistory(), selection: { nodes: [], edges: [] }, saveState: 'saved', saveError: undefined, version: get().version + 1, ...active, ...saved });
+      if (!saved.tabs.length) set(graphTab(active.activeScriptId));
     },
     close() {
-      set({ workspace: null, project: null, history: emptyHistory(), selection: { nodes: [], edges: [] }, activeScriptId: undefined, activeFunctionId: undefined });
+      set({ workspace: null, project: null, history: emptyHistory(), selection: { nodes: [], edges: [] }, activeScriptId: undefined, activeFunctionId: undefined, tabs: [], activeTab: undefined });
     },
 
     dispatch(ops, label, opts = {}) {
@@ -131,7 +177,8 @@ export const useEditor = create<EditorState>()((set, get) => {
       const { workspace, project } = get();
       if (!workspace || !project) throw new OpError('No project is open');
       const r = applyWorkspaceOps(workspace, ops, toolchainFor(project.language));
-      if (r.workspace !== workspace) commit(r.workspace, { label, source: opts.source ?? 'user', mergeKey: opts.mergeKey });
+      const moves = ops.flatMap((o): [string, string][] => (o.op === 'move' ? [[o.from.replace(/^\/+|\/+$/g, ''), o.to.replace(/^\/+|\/+$/g, '')]] : []));
+      if (r.workspace !== workspace) commit(r.workspace, { label, source: opts.source ?? 'user', mergeKey: opts.mergeKey }, moves);
       for (const w of r.warnings) toast('warning', w);
       return r;
     },
@@ -165,7 +212,32 @@ export const useEditor = create<EditorState>()((set, get) => {
     setActive(scriptId, functionId) {
       const p = get().project;
       if (!p) return;
-      set({ ...fixActive(p, scriptId, functionId), selection: { nodes: [], edges: [] } });
+      const a = fixActive(p, scriptId, functionId);
+      set({ ...a, selection: { nodes: [], edges: [] }, ...graphTab(a.activeScriptId) });
+    },
+    openTab(id, opts = {}) {
+      const { project: p, tabs } = get();
+      if (!p) return;
+      const sc = p.scripts.find((x) => graphPathFor(x.path) === id);
+      const next = tabs.includes(id) ? tabs : [...tabs, id];
+      if (sc) {
+        const a = fixActive(p, sc.id, sc.id === get().activeScriptId ? get().activeFunctionId : undefined);
+        set({ tabs: next, activeTab: id, ...a, ...(a.activeScriptId !== get().activeScriptId ? { selection: { nodes: [], edges: [] } } : {}) });
+      } else set({ tabs: next, activeTab: id });
+      if (opts.line) set({ revealRequest: { tab: id, line: opts.line, seq: Date.now() } });
+    },
+    closeTab(id) {
+      const { tabs, activeTab } = get();
+      const i = tabs.indexOf(id);
+      if (i === -1) return;
+      const next = tabs.filter((t) => t !== id);
+      const act = activeTab === id ? (next[i] ?? next[i - 1]) : activeTab;
+      set({ tabs: next, activeTab: act });
+      if (act && act !== activeTab) get().openTab(act);
+    },
+    closeOtherTabs(id) {
+      set({ tabs: get().tabs.filter((t) => t === id) });
+      get().openTab(id);
     },
     select(nodes, edges = []) {
       const cur = get().selection;
@@ -176,7 +248,8 @@ export const useEditor = create<EditorState>()((set, get) => {
       const p = get().project;
       if (!p) return;
       const s = scriptId ?? p.scripts.find((x) => x.functions.some((f) => f.id === functionId))?.id;
-      set({ ...fixActive(p, s, functionId), selection: { nodes: [nodeId], edges: [] }, focusRequest: { nodeId, seq: Date.now() } });
+      const a = fixActive(p, s, functionId);
+      set({ ...a, selection: { nodes: [nodeId], edges: [] }, focusRequest: { nodeId, seq: Date.now() }, ...graphTab(a.activeScriptId) });
     },
     setSaveState(saveState, saveError) {
       set({ saveState, saveError });

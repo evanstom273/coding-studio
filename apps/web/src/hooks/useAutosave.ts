@@ -35,7 +35,7 @@ export async function saveNow(): Promise<void> {
   if (saving) await saving;
   const s = useEditor.getState();
   if (!s.workspace || s.saveState === 'saved') return;
-  const ws: Workspace = { meta: { ...s.workspace.meta, editor: { ...s.workspace.meta.editor, activeScriptId: s.activeScriptId, activeFunctionId: s.activeFunctionId } }, files: s.workspace.files };
+  const ws: Workspace = { meta: { ...s.workspace.meta, editor: { ...s.workspace.meta.editor, activeScriptId: s.activeScriptId, activeFunctionId: s.activeFunctionId, openTabs: s.tabs, activeTab: s.activeTab } }, files: s.workspace.files };
   const version = s.version;
   const paths = lastSaved?.meta.id === ws.meta.id ? changedBetween(lastSaved, ws) : undefined;
   s.setSaveState('saving');
