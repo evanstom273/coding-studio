@@ -29,6 +29,7 @@ import { useCompile } from '@web/compile/store';
 import { BlueprintNode } from './BlueprintNode';
 import { FrameNode } from './FrameNode';
 import { RerouteNode } from './RerouteNode';
+import { useTsCheck } from '@web/lib/tsCheckStore';
 import { AddNodeMenu, opsForEntry, type PendingConnection } from './AddNodeMenu';
 import { portColor, type BPNodeData } from './model';
 import { NodeContextMenu } from './NodeContextMenu';
@@ -104,7 +105,9 @@ function Canvas() {
   const activeFunctionId = useEditor((s) => s.activeFunctionId);
   const selection = useEditor((s) => s.selection);
   const focusRequest = useEditor((s) => s.focusRequest);
-  const diagnostics = useCompile((s) => s.diagnostics);
+  const compiled = useCompile((s) => s.diagnostics);
+  const tsNodes = useTsCheck((s) => s.nodes);
+  const diagnostics = useMemo(() => (tsNodes.length ? [...compiled, ...tsNodes] : compiled), [compiled, tsNodes]);
   const { snapToGrid, showMinimap } = useUI();
   const touch = useTouch();
   const compact = useCompact();

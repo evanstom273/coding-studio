@@ -103,3 +103,4 @@ export const typescriptAdapter: LanguageAdapter = {
 };
 
 export default typescriptAdapter;
+export { scanExports, type ExportedFunction } from './exports';

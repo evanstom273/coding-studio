@@ -17,6 +17,7 @@ import { toast } from '@web/store/toasts';
 import { downloadBytes } from '@web/lib/files';
 import { DIFF_PREFIX, formatSize, GEN_PREFIX, mimeType, monacoLanguage, previewKind } from '@web/lib/fileTypes';
 import { baseVersion } from '@web/lib/git';
+import { editorOwned, scheduleCheck } from '@web/lib/tsProject';
 import { Button } from '../ui/primitives';
 
 const EDIT_LIMIT = 5 * 1024 * 1024;
@@ -63,11 +64,14 @@ export function TextFileView({ path }: { path: string }) {
   useEffect(() => {
     const f = () => writeRef.current();
     flushers.add(f);
+    editorOwned.add(path);
     return () => {
       f();
       flushers.delete(f);
+      editorOwned.delete(path);
+      scheduleCheck();
     };
-  }, []);
+  }, [path]);
 
   // The file changed in the store (Claude, sync, undo/redo, another tab).
   useEffect(() => {
@@ -141,7 +145,7 @@ export function TextFileView({ path }: { path: string }) {
         </div>
       )}
       <div className="min-h-0 flex-1">
-        <Editor height="100%" theme="coding-studio" path={`file:///${path}`} defaultLanguage={monacoLanguage(path)} defaultValue={rec.text ?? ''} onMount={onMount} options={editorOptions} />
+        <Editor height="100%" theme="coding-studio" path={`file:///${path}`} defaultLanguage={monacoLanguage(path)} defaultValue={rec.text ?? ''} onMount={onMount} options={editorOptions} keepCurrentModel />
       </div>
     </div>
   );
@@ -207,7 +211,8 @@ export function GeneratedFileView({ id }: { id: string }) {
         </Button>
       </div>
       <div className="min-h-0 flex-1">
-        <Editor height="100%" theme="coding-studio" path={`generated:///${path}`} language={monacoLanguage(path)} value={file.content} options={{ ...editorOptions, readOnly: true, domReadOnly: true }} />
+        {/* Same model as the TypeScript project uses, so hovers and errors work here too. */}
+        <Editor height="100%" theme="coding-studio" path={`file:///${path}`} language={monacoLanguage(path)} value={file.content} options={{ ...editorOptions, readOnly: true, domReadOnly: true }} keepCurrentModel />
       </div>
     </div>
   );

@@ -41,6 +41,18 @@ export default function EditorShell({ projectId }: { projectId: string }) {
   useShortcuts();
 
   useEffect(() => startCompileLoop(), []);
+  // TypeScript language service over the project's files and generated code (loads Monaco lazily).
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let dead = false;
+    void import('@web/lib/tsProject').then((m) => {
+      if (!dead) stop = m.startTsProject();
+    });
+    return () => {
+      dead = true;
+      stop?.();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

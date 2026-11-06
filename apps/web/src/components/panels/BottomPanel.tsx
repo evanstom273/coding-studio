@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, useMemo, Suspense } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Code2, Info, Bot, XCircle } from 'lucide-react';
 import type { Diagnostic } from '@cs/graph-core';
 import { projectRevision } from '@cs/project-format';
@@ -8,18 +8,24 @@ import { useEditor } from '@web/store/editor';
 import { useUI, type BottomTab } from '@web/store/ui';
 import { cx } from '../ui/primitives';
 
+import { useTsCheck } from '@web/lib/tsCheckStore';
+
 const CodeView = lazy(() => import('./CodeView'));
 
 function DiagnosticList({ severity }: { severity: 'error' | 'warning' }) {
   const project = useEditor((s) => s.project)!;
-  const diagnostics = useCompile((s) => s.diagnostics);
+  const compiled = useCompile((s) => s.diagnostics);
+  const tsNodes = useTsCheck((s) => s.nodes);
+  const tsFiles = useTsCheck((s) => s.files);
+  const diagnostics = useMemo(() => [...compiled, ...tsNodes], [compiled, tsNodes]);
   const list = diagnostics.filter((d) => (severity === 'error' ? d.severity === 'error' : d.severity !== 'error'));
+  const files = tsFiles.filter((d) => d.severity === severity);
   const where = (d: Diagnostic) => {
     const s = project.scripts.find((x) => x.id === d.scriptId);
     const f = s?.functions.find((x) => x.id === d.functionId);
     return [s?.name, f?.name].filter(Boolean).join(' › ');
   };
-  if (!list.length) return <div className="p-3 text-muted">{severity === 'error' ? 'No errors. The generated code is up to date.' : 'No warnings.'}</div>;
+  if (!list.length && !files.length) return <div className="p-3 text-muted">{severity === 'error' ? 'No errors. The generated code is up to date.' : 'No warnings.'}</div>;
   return (
     <div className="min-h-0 flex-1 overflow-auto" data-testid={`diagnostics-${severity}`}>
       {list.map((d, i) => (
@@ -43,6 +49,16 @@ function DiagnosticList({ severity }: { severity: 'error' | 'warning' }) {
           </span>
           <span className="shrink-0 font-mono text-[10.5px] text-muted">{d.code}</span>
           <span className="w-40 shrink-0 truncate text-right text-[11px] text-muted">{where(d)}</span>
+        </button>
+      ))}
+      {files.map((d, i) => (
+        <button key={`f${i}`} data-testid="file-diagnostic" className="flex w-full items-start gap-2 border-b border-border/40 px-3 py-1.5 text-left hover:bg-panel-2" onClick={() => useEditor.getState().openTab(d.path, { line: d.line })}>
+          {d.severity === 'error' ? <XCircle size={14} className="mt-0.5 shrink-0 text-err" /> : <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warn" />}
+          <span className="min-w-0 flex-1 text-[12px]">{d.message}</span>
+          <span className="shrink-0 font-mono text-[10.5px] text-muted">{d.code}</span>
+          <span className="w-40 shrink-0 truncate text-right font-mono text-[11px] text-muted">
+            {d.path}:{d.line}
+          </span>
         </button>
       ))}
     </div>

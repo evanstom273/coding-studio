@@ -5,6 +5,8 @@ import { defaultProps, type NodeDefinition, type PortSpec } from '@cs/node-regis
 import type { EditOp } from '@cs/project-format';
 import { toolchainFor } from '@web/lib/toolchain';
 import { useEditor } from '@web/store/editor';
+import { relativeModule, scanExports, type ExportedFunction } from '@cs/language-typescript';
+import type { FileRecord } from '@cs/workspace';
 import { headerColor } from './model';
 
 export interface PendingConnection {
@@ -43,7 +45,10 @@ export function opsForEntry(e: Pick<MenuEntry, 'type' | 'props' | 'newClosure'>,
 
 /** Palette entries for the active script: every node type plus shortcuts for its own variables, functions and signals. */
 /** `others`: the project's other scripts (their exported functions become Call entries where the language has modules). */
-export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, others: ScriptDoc[] = []): MenuEntry[] {
+const exportCache = new Map<string, ExportedFunction[]>();
+const exportsOf = (f: FileRecord) => exportCache.get(f.hash) ?? (exportCache.set(f.hash, scanExports(f.text ?? '')), exportCache.get(f.hash)!);
+
+export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, others: ScriptDoc[] = [], files?: Iterable<FileRecord>): MenuEntry[] {
   const out: MenuEntry[] = [];
   const reg = tc.registry;
   const def = (t: string) => reg.get(t)!;
@@ -77,6 +82,17 @@ export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDec
         if (!f.exported) continue;
         const props = { scriptPath: s.path, name: f.name, argNames: f.params.map((p) => p.name), argTypes: f.params.map((p) => p.type), returnType: f.returnType, await: !!f.async && !!fn.async };
         out.push({ key: `xcall#${s.id}#${f.id}`, title: `${s.name}.${f.name}()`, category: `Project/${s.name}`, description: f.description ?? `Call ${f.name} exported by ${s.path}`, type: 'ts.call', props, def: call });
+      }
+    }
+  }
+  // Functions exported by hand-written TS/JS files in the project.
+  if (call && tc.adapter.capabilities.modules && files) {
+    for (const f of files) {
+      if (f.kind !== 'text' || !/\.(ts|tsx|js|jsx|mjs|mts)$/.test(f.path) || /\.d\.ts$/.test(f.path) || f.size > 512 * 1024) continue;
+      const mod = relativeModule(script.path, f.path.replace(/\.(ts|tsx|js|jsx|mjs|mts)$/, ''));
+      for (const x of exportsOf(f)) {
+        const props = { module: mod, name: x.name, importKind: x.isDefault ? 'default' : 'named', argNames: x.params.map((p) => p.name), argTypes: x.params.map((p) => p.type), returnType: x.returnType, await: x.async && !!fn.async };
+        out.push({ key: `fcall#${f.path}#${x.name}`, title: `${x.name}()`, category: `Project/${f.path}`, description: `${x.isDefault ? 'Default export' : 'Exported'} from ${f.path}: ${x.name}(${x.params.map((p) => `${p.name}: ${p.type}`).join(', ')}) → ${x.returnType}`, type: 'ts.call', props, def: call });
       }
     }
   }
@@ -119,7 +135,8 @@ export function AddNodeMenu({ screen, flow, pending, onClose }: { screen: { x: n
   useEffect(() => inputRef.current?.focus(), []);
 
   const scripts = useEditor((s) => s.project?.scripts);
-  const all = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, scripts) : []), [tc, script, fn, scripts]);
+  const wsFiles = useEditor((s) => s.workspace?.files);
+  const all = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, scripts, wsFiles?.values()) : []), [tc, script, fn, scripts, wsFiles]);
   const contextual = useMemo(() => (pending && script && fn ? all.filter((e) => compatiblePort(tc, script, fn, e, pending)) : all), [all, pending, tc, script, fn]);
   const results = useMemo(
     () =>
