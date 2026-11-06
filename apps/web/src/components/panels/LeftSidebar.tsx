@@ -4,6 +4,7 @@ import { FileExplorer } from '../files/FileExplorer';
 import { SearchPanel } from '../files/SearchPanel';
 import { SourceControl } from '../files/SourceControl';
 import { PackagesPanel } from '../files/PackagesPanel';
+import { useCatalog } from '@web/lib/catalogStore';
 import { Package } from 'lucide-react';
 import { GitBranch } from 'lucide-react';
 import type { ScriptDoc } from '@cs/graph-core';
@@ -34,7 +35,8 @@ function NodeLibrary() {
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const tc = toolchainFor(project.language);
   const wsFiles = useEditor((s) => s.workspace?.files);
-  const entries = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, project.scripts, wsFiles?.values()).filter((e) => !e.key.includes(':')) : []), [tc, script, fn, project.scripts, wsFiles]);
+  const catalog = useCatalog((s) => s.byPackage);
+  const entries = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, project.scripts, wsFiles?.values(), catalog).filter((e) => !e.key.includes(':')) : []), [tc, script, fn, project.scripts, wsFiles, catalog]);
   const filtered = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return entries.filter((e) => words.every((w) => `${e.title} ${e.category} ${(e.def.keywords ?? []).join(' ')} ${e.type}`.toLowerCase().includes(w)));

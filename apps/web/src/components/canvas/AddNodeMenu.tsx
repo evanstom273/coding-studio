@@ -7,6 +7,7 @@ import { toolchainFor } from '@web/lib/toolchain';
 import { useEditor } from '@web/store/editor';
 import { relativeModule, scanExports, type ExportedFunction } from '@cs/language-typescript';
 import type { FileRecord } from '@cs/workspace';
+import { useCatalog, type CatalogEntry } from '@web/lib/catalogStore';
 import { headerColor } from './model';
 
 export interface PendingConnection {
@@ -48,7 +49,7 @@ export function opsForEntry(e: Pick<MenuEntry, 'type' | 'props' | 'newClosure'>,
 const exportCache = new Map<string, ExportedFunction[]>();
 const exportsOf = (f: FileRecord) => exportCache.get(f.hash) ?? (exportCache.set(f.hash, scanExports(f.text ?? '')), exportCache.get(f.hash)!);
 
-export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, others: ScriptDoc[] = [], files?: Iterable<FileRecord>): MenuEntry[] {
+export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl, others: ScriptDoc[] = [], files?: Iterable<FileRecord>, catalog?: Record<string, CatalogEntry[]>): MenuEntry[] {
   const out: MenuEntry[] = [];
   const reg = tc.registry;
   const def = (t: string) => reg.get(t)!;
@@ -96,6 +97,17 @@ export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDec
       }
     }
   }
+  // Library nodes built from the dependencies' types.
+  if (catalog && tc.adapter.capabilities.modules) {
+    for (const [pkg, entries] of Object.entries(catalog)) {
+      entries.forEach((e, i) => {
+        const def = reg.get(e.type);
+        if (!def) return;
+        const props = 'await' in e.props ? { ...e.props, await: e.props.await === true && !!fn.async } : e.props;
+        out.push({ key: `lib#${pkg}#${i}`, title: e.title, category: e.category, description: e.description, type: e.type, props, def });
+      });
+    }
+  }
   return out;
 }
 
@@ -136,7 +148,8 @@ export function AddNodeMenu({ screen, flow, pending, onClose }: { screen: { x: n
 
   const scripts = useEditor((s) => s.project?.scripts);
   const wsFiles = useEditor((s) => s.workspace?.files);
-  const all = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, scripts, wsFiles?.values()) : []), [tc, script, fn, scripts, wsFiles]);
+  const catalog = useCatalog((s) => s.byPackage);
+  const all = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, scripts, wsFiles?.values(), catalog) : []), [tc, script, fn, scripts, wsFiles, catalog]);
   const contextual = useMemo(() => (pending && script && fn ? all.filter((e) => compatiblePort(tc, script, fn, e, pending)) : all), [all, pending, tc, script, fn]);
   const results = useMemo(
     () =>

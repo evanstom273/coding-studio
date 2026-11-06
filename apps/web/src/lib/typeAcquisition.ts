@@ -86,7 +86,11 @@ export async function refreshTypes(force = false) {
       }
     }),
   );
-  if (gen === generation) scheduleCheck(100);
+  if (gen === generation) {
+    scheduleCheck(100);
+    const typed = useDeps.getState().deps.filter((d) => d.state === 'types').map((d) => d.name);
+    void import('./apiCatalog').then((m) => m.refreshCatalogs(typed));
+  }
 }
 
 export function startTypeAcquisition(): () => void {

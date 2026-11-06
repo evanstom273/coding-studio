@@ -77,7 +77,7 @@ export type IRExpr =
   | { k: 'prop'; target: IRExpr; name: string }
   | { k: 'index'; target: IRExpr; index: IRExpr }
   /** Construct a value/object of a named type with positional arguments. */
-  | { k: 'new'; type: TypeRef; args: IRExpr[] }
+  | { k: 'new'; type: TypeRef; args: IRExpr[]; /** The class as an expression (an imported binding), when not a plain type name. */ callee?: IRExpr }
   | { k: 'array'; items: IRExpr[]; element?: TypeRef }
   | { k: 'map'; entries: { key: IRExpr; value: IRExpr }[] }
   | { k: 'ternary'; cond: IRExpr; then: IRExpr; else: IRExpr }

@@ -335,6 +335,45 @@ const callMethod: NodeDefinition = {
   },
 };
 
+const newObject: NodeDefinition = {
+  type: 'ts.new',
+  title: 'New',
+  category: 'Objects',
+  description: 'Create an object from a class: new Name(args). The class can come from an npm package (Module), another project file, or be global (Date, Map, URL…).',
+  keywords: ['new', 'construct', 'create', 'instance', 'class'],
+  flavor: 'exec',
+  languages: L,
+  props: [
+    { key: 'module', label: 'Module', kind: 'string', default: '', description: 'Package or path; empty for a global class.' },
+    { key: 'name', label: 'Class', kind: 'string', default: 'Date' },
+    { key: 'importKind', label: 'Import', kind: 'select', default: 'named', options: [{ value: 'named', label: 'import { Name }' }, { value: 'default', label: 'import Name (default)' }] },
+    { key: 'argNames', label: 'Argument names', kind: 'string_list', default: [] },
+    { key: 'argTypes', label: 'Argument types', kind: 'string_list', default: [] },
+    typeProp('type', 'Object type', 'any', 'Leave as any for library classes: TypeScript infers it.'),
+  ],
+  displayTitle: (n) => `new ${str(n.props.name, 'Class')}()${str(n.props.module) ? ` · ${str(n.props.module).split('/').pop()}` : ''}`,
+  ports: (n, ctx) => {
+    const names = list(n.props.argNames);
+    return [exec.in(), ...list(n.props.argTypes).map((t, i) => data.in(`arg_${i}`, names[i] || `arg ${i}`, ctx.type(t), { required: true })), exec.out(), data.out('object', 'Object', tp(n, ctx, 'type', 'any'))];
+  },
+  check: (n, _ctx, report) => {
+    if (!str(n.props.name).split('.').every((p) => IDENT.test(p))) report('E_INVALID_IDENTIFIER', 'Class name must be an identifier.');
+  },
+  lowerExec: (lc) => {
+    const n = lc.node;
+    const parts = str(n.props.name, 'Object').split('.');
+    const module = str(n.props.module);
+    let callee: IRExpr = module ? { k: 'import', module, name: parts[0], kind: str(n.props.importKind, 'named') === 'default' ? 'default' : 'named' } : { k: 'ref', name: parts[0] };
+    for (const p of parts.slice(1)) callee = { k: 'prop', target: callee, name: p };
+    const e: IRExpr = { k: 'new', type: T.named(parts[parts.length - 1]), callee, args: list(n.props.argTypes).map((_, i) => lc.input(`arg_${i}`)) };
+    return { stmts: lc.bind('object', e, { type: tp(n, lc.ctx, 'type', 'any'), nameHint: parts[parts.length - 1].replace(/^./, (c) => c.toLowerCase()), sideEffect: true }), next: 'then' };
+  },
+  presets: [
+    { title: 'new Date', category: 'Time', keywords: ['date', 'now', 'time'], props: { name: 'Date', type: 'Date' } },
+    { title: 'new URL', category: 'Web', keywords: ['url', 'link', 'parse'], props: { name: 'URL', argNames: ['url'], argTypes: ['string'], type: 'URL' } },
+  ],
+};
+
 const nullish: NodeDefinition = {
   type: 'ts.default_value',
   title: 'Value or Default (??)',
@@ -352,5 +391,5 @@ const nullish: NodeDefinition = {
 };
 
 export function typescriptNodes(): NodeDefinition[] {
-  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, nullish];
+  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, newObject, nullish];
 }

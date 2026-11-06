@@ -134,6 +134,7 @@ export class TSPrinter {
       case 'index':
         return [`${this.expr(e.target, P.member)}[${this.expr(e.index)}]`, P.member];
       case 'new':
+        if (e.callee) return [`new ${this.expr(e.callee, P.member)}(${e.args.map((a) => this.expr(a, P.assign)).join(', ')})`, P.member];
         return [`new ${this.mode === 'ts' ? tsType({ ...e.type, nullable: false }) : e.type.kind === 'named' ? e.type.name : 'Object'}(${e.args.map((a) => this.expr(a, P.assign)).join(', ')})`, P.member];
       case 'array':
         return [`[${e.items.map((a) => this.expr(a, P.assign)).join(', ')}]`, P.primary];

@@ -104,3 +104,4 @@ export const typescriptAdapter: LanguageAdapter = {
 
 export default typescriptAdapter;
 export { scanExports, type ExportedFunction } from './exports';
+export { parseDisplay, parseParams, canonicalFromTs, type ApiParam, type ApiSignature } from './catalog';
