@@ -182,6 +182,26 @@ export class ProjectFolder {
     this.watcher = undefined;
   }
 
+  /** Run git in the folder (argument array, never a shell) and wait for it. */
+  git(args: string[], timeoutMs = 300_000): Promise<{ code: number | null; stdout: string; stderr: string }> {
+    return new Promise((done, failed) => {
+      const child = spawn('git', args, { cwd: this.root, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_EDITOR: 'true', GIT_PAGER: 'cat', LC_ALL: 'C' }, windowsHide: true });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (b: Buffer) => (stdout = (stdout + b.toString('utf8')).slice(-MAX_OUTPUT)));
+      child.stderr.on('data', (b: Buffer) => (stderr = (stderr + b.toString('utf8')).slice(-MAX_OUTPUT)));
+      const timer = setTimeout(() => child.kill(), timeoutMs);
+      child.on('error', (e) => {
+        clearTimeout(timer);
+        failed(new HostError('E_NO_GIT', `Could not run git (${e.message}). Is git installed on this computer?`));
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        done({ code, stdout, stderr });
+      });
+    });
+  }
+
   // --- tasks ------------------------------------------------------------------------------------
 
   private start(kind: TaskInfo['kind'], args: string[]): TaskInfo {
@@ -350,8 +370,15 @@ export class LocalHost {
   }
 
   /** Open an existing folder (e.g. a Vite repo) as a new project, linked to it. */
-  async open(dir: string, opts: { name?: string; watch?: boolean } = {}) {
+  async open(dir: string, opts: { name?: string; watch?: boolean; cloneUrl?: string } = {}) {
     const full = resolve(dir);
+    if (opts.cloneUrl) {
+      if (!/^(https:\/\/|git@|file:\/\/)\S+$/.test(opts.cloneUrl)) throw new HostError('E_INVALID', 'clone_url must be an https://, git@ or file:// repository address');
+      mkdirSync(full, { recursive: true });
+      if (readdirSync(full).length) throw new HostError('E_FILE_EXISTS', `${full} is not empty; pick a new folder to clone into.`);
+      const r = await new ProjectFolder(full).git(['clone', '--', opts.cloneUrl, '.'], 1_800_000);
+      if (r.code !== 0) throw new HostError('E_GIT', `git clone failed: ${r.stderr.trim().slice(-2000)}`);
+    }
     if (!existsSync(full) || !statSync(full).isDirectory()) throw new HostError('E_NOT_FOUND', `${full} is not a folder`);
     const folder = new ProjectFolder(full);
     const { files, skipped } = folder.readAll();
@@ -420,8 +447,189 @@ export class LocalHost {
     return this.view(t, 50_000);
   }
 
+  /** Bring the folder's current files into the project (after git changed the working tree). */
+  private async rescan(projectId: string) {
+    const link = this.linked(projectId);
+    const s = await this.snapshot(projectId);
+    const generated = new Set(s.files.filter((f) => f.generated).map((f) => f.path));
+    const mine = new Map(s.files.filter((f) => !f.generated).map((f) => [f.path, f]));
+    const { files } = link.folder.readAll();
+    const ops: Record<string, unknown>[] = [];
+    const onDisk = new Set<string>();
+    for (const f of files) {
+      if (generated.has(f.path)) continue;
+      onDisk.add(f.path);
+      const m = mine.get(f.path);
+      if (m && m.text === f.text && m.base64 === f.base64) continue;
+      ops.push({ op: 'write_file', path: f.path, ...(f.text !== undefined ? { content: f.text } : { base64: f.base64 }) });
+      link.known.add(f.path);
+    }
+    for (const p of mine.keys()) if (!onDisk.has(p) && p !== 'codingstudio.json') ops.push({ op: 'delete', path: p });
+    if (ops.length) await this.request('workspace_batch', { project: projectId, operations: ops }, 120_000);
+    return ops.length;
+  }
+
+  async git(action: GitAction, params: GitParams & { project?: string } = {}) {
+    if (!GIT_ACTIONS.includes(action)) throw new HostError('E_INVALID', `Unknown git action "${action}". One of: ${GIT_ACTIONS.join(', ')}`);
+    const { snap, link } = await this.current(params.project);
+    const root = link.folder.root;
+    if (action !== 'init' && !existsSync(join(root, '.git'))) throw new HostError('E_NOT_A_REPO', `${root} is not a git repository. Use action "init", or open_folder with clone_url.`);
+    // Make sure git sees what the editor has (commit, push, rebase… act on the folder).
+    await this.sync(params.project);
+    const args = gitArgs(root, action, params);
+    if (action === 'rebase_continue') await link.folder.git(['add', '-A']);
+    if (action === 'commit') {
+      const add = await link.folder.git(['add', '--', ...(params.paths?.length ? params.paths.map((x) => safePath(root, x)) : ['.'])]);
+      if (add.code !== 0) throw new HostError('E_GIT', add.stderr.trim() || 'git add failed');
+    }
+    if (NEEDS_APPROVAL.has(action)) {
+      const ok = (await this.request('confirm_action', { title: `Claude wants to run git ${action}`, message: `In ${root}:\n\ngit ${args.join(' ')}`, confirm: action === 'push' ? 'Push' : 'Rebase' }, 300_000)) as { approved: boolean };
+      if (!ok.approved) throw new HostError('E_DECLINED', `The user declined git ${action}. Nothing was run.`);
+    }
+    const r = await link.folder.git(args);
+    const imported = CHANGES_FILES.has(action) ? await this.rescan(snap.project) : 0;
+    const base = { action, command: `git ${args.join(' ')}`, exit_code: r.code, ...(imported ? { files_updated_in_project: imported } : {}) };
+    if (r.code !== 0) {
+      const st = parseStatus((await link.folder.git(['status', '--porcelain=v2', '--branch'])).stdout);
+      return { ...base, ok: false, error: (r.stderr || r.stdout).trim().slice(-4000), ...(st.conflicts.length ? { conflicts: st.conflicts, note: 'Resolve the conflict markers in these files (read_files / write_file), then rebase_continue (or commit for a merge / cherry-pick), or *_abort.' } : {}) };
+    }
+    if (action === 'status') return { ...base, ok: true, ...parseStatus(r.stdout) };
+    if (action === 'blame') return { ...base, ok: true, lines: parseBlame(r.stdout) };
+    if (action === 'log') return { ...base, ok: true, commits: r.stdout.trim().split('\n').filter(Boolean).map((l) => { const [sha, author, date, ...subject] = l.split('\t'); return { sha, author, date, subject: subject.join('\t') }; }) };
+    if (action === 'branches') return { ...base, ok: true, branches: r.stdout.trim().split('\n').filter(Boolean).map((l) => { const [name, sha, upstream, head] = l.split('\t'); return { name, sha, ...(upstream ? { upstream } : {}), ...(head === '*' ? { current: true } : {}) }; }) };
+    return { ...base, ok: true, output: (r.stdout + r.stderr).trim().slice(-8000) };
+  }
+
   dispose() {
     if (this.poller) clearInterval(this.poller);
     for (const l of this.folders.values()) l.folder.dispose();
   }
+}
+
+// --- git through the host (Phase 11) -----------------------------------------------------------------
+
+export const GIT_ACTIONS = ['status', 'log', 'diff', 'blame', 'branches', 'switch', 'commit', 'fetch', 'pull', 'push', 'stash', 'stash_pop', 'stash_list', 'rebase', 'rebase_continue', 'rebase_abort', 'cherry_pick', 'merge', 'merge_abort', 'lfs_status', 'lfs_pull', 'lfs_track', 'init'] as const;
+export type GitAction = (typeof GIT_ACTIONS)[number];
+
+export interface GitParams {
+  path?: string;
+  paths?: string[];
+  message?: string;
+  branch?: string;
+  create?: boolean;
+  onto?: string;
+  commit?: string;
+  ref?: string;
+  limit?: number;
+  remote?: string;
+  pattern?: string;
+  url?: string;
+}
+
+/** Actions that change the working tree (the project is re-read from the folder afterwards). */
+const CHANGES_FILES = new Set<GitAction>(['switch', 'pull', 'stash', 'stash_pop', 'rebase', 'rebase_continue', 'rebase_abort', 'cherry_pick', 'merge', 'merge_abort', 'lfs_pull']);
+/** Actions that rewrite history or publish: the user approves them in the editor. */
+const NEEDS_APPROVAL = new Set<GitAction>(['push', 'rebase']);
+
+const safeRef = (v: string | undefined, what: string) => {
+  if (!v || !/^[\w./@{}~^:-]+$/.test(v) || v.startsWith('-')) throw new HostError('E_INVALID', `${what} must be a branch, tag or commit name`);
+  return v;
+};
+const safePath = (root: string, v: string | undefined) => {
+  if (!v) throw new HostError('E_INVALID', 'path is required');
+  return relative(root, inside(root, v)).split(sep).join('/');
+};
+
+/** Fixed argument lists per action; values are checked so none can become an option. */
+export function gitArgs(root: string, action: GitAction, p: GitParams): string[] {
+  const n = Math.min(Math.max(Number(p.limit) || 20, 1), 500);
+  switch (action) {
+    case 'status':
+      return ['status', '--porcelain=v2', '--branch'];
+    case 'log':
+      return ['log', `-n${n}`, '--format=%H%x09%an%x09%aI%x09%s', ...(p.ref ? [safeRef(p.ref, 'ref')] : []), ...(p.path ? ['--', safePath(root, p.path)] : [])];
+    case 'diff':
+      return ['diff', ...(p.ref ? [safeRef(p.ref, 'ref')] : []), '--', ...(p.paths ?? (p.path ? [p.path] : [])).map((x) => safePath(root, x))];
+    case 'blame':
+      return ['blame', '--line-porcelain', ...(p.ref ? [safeRef(p.ref, 'ref')] : []), '--', safePath(root, p.path)];
+    case 'branches':
+      return ['branch', '-a', '--format=%(refname:short)%09%(objectname:short)%09%(upstream:short)%09%(HEAD)'];
+    case 'switch':
+      return ['switch', ...(p.create ? ['-c'] : []), safeRef(p.branch, 'branch')];
+    case 'commit':
+      if (!p.message?.trim()) throw new HostError('E_INVALID', 'message is required');
+      return ['commit', '-m', p.message];
+    case 'fetch':
+      return ['fetch', '--prune', safeRef(p.remote ?? 'origin', 'remote')];
+    case 'pull':
+      return ['pull', '--no-edit', '--ff', safeRef(p.remote ?? 'origin', 'remote'), ...(p.branch ? [safeRef(p.branch, 'branch')] : [])];
+    case 'push':
+      return ['push', '-u', safeRef(p.remote ?? 'origin', 'remote'), safeRef(p.branch ?? 'HEAD', 'branch')];
+    case 'stash':
+      return ['stash', 'push', '--include-untracked', ...(p.message ? ['-m', p.message] : [])];
+    case 'stash_pop':
+      return ['stash', 'pop'];
+    case 'stash_list':
+      return ['stash', 'list'];
+    case 'rebase':
+      return ['rebase', safeRef(p.onto, 'onto')];
+    case 'rebase_continue':
+      return ['-c', 'core.editor=true', 'rebase', '--continue'];
+    case 'rebase_abort':
+      return ['rebase', '--abort'];
+    case 'cherry_pick':
+      return ['cherry-pick', safeRef(p.commit, 'commit')];
+    case 'merge':
+      return ['merge', '--no-edit', safeRef(p.branch, 'branch')];
+    case 'merge_abort':
+      return ['merge', '--abort'];
+    case 'lfs_status':
+      return ['lfs', 'status'];
+    case 'lfs_pull':
+      return ['lfs', 'pull'];
+    case 'lfs_track':
+      if (!p.pattern || p.pattern.startsWith('-')) throw new HostError('E_INVALID', 'pattern is required, e.g. "*.png"');
+      return ['lfs', 'track', p.pattern];
+    case 'init':
+      return ['init', '-b', safeRef(p.branch ?? 'main', 'branch')];
+  }
+}
+
+/** Parse `git status --porcelain=v2 --branch` into something readable. */
+export function parseStatus(out: string) {
+  const r: { branch?: string; upstream?: string; ahead: number; behind: number; changed: { path: string; staged: string; unstaged: string }[]; untracked: string[]; conflicts: string[] } = { ahead: 0, behind: 0, changed: [], untracked: [], conflicts: [] };
+  for (const line of out.split('\n')) {
+    if (line.startsWith('# branch.head ')) r.branch = line.slice(14);
+    else if (line.startsWith('# branch.upstream ')) r.upstream = line.slice(18);
+    else if (line.startsWith('# branch.ab ')) {
+      const [a, b] = line.slice(12).split(' ');
+      r.ahead = Number(a);
+      r.behind = -Number(b);
+    } else if (line.startsWith('1 ') || line.startsWith('2 ')) {
+      const parts = line.split(' ');
+      const xy = parts[1];
+      const path = line.startsWith('2 ') ? parts.slice(9).join(' ').split('\t')[0] : parts.slice(8).join(' ');
+      r.changed.push({ path, staged: xy[0], unstaged: xy[1] });
+    } else if (line.startsWith('u ')) r.conflicts.push(line.split(' ').slice(10).join(' '));
+    else if (line.startsWith('? ')) r.untracked.push(line.slice(2));
+  }
+  return r;
+}
+
+/** Parse `git blame --line-porcelain` into per-line author/commit. */
+export function parseBlame(out: string) {
+  const lines: { line: number; commit: string; author: string; time: string; summary: string; text: string }[] = [];
+  let cur: { commit: string; line: number; author?: string; time?: string; summary?: string } | undefined;
+  for (const l of out.split('\n')) {
+    const head = /^([0-9a-f]{40}) \d+ (\d+)/.exec(l);
+    if (head) cur = { commit: head[1].slice(0, 10), line: Number(head[2]) };
+    else if (cur && l.startsWith('author ')) cur.author = l.slice(7);
+    else if (cur && l.startsWith('author-time ')) cur.time = new Date(Number(l.slice(12)) * 1000).toISOString();
+    else if (cur && l.startsWith('summary ')) cur.summary = l.slice(8);
+    else if (cur && l.startsWith('\t')) {
+      lines.push({ line: cur.line, commit: cur.commit, author: cur.author ?? '', time: cur.time ?? '', summary: cur.summary ?? '', text: l.slice(1) });
+      cur = undefined;
+    }
+  }
+  return lines;
 }

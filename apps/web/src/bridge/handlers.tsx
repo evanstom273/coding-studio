@@ -342,6 +342,15 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       await openAndWait(ws.meta.id);
       return { project: ws.meta.id, files: ws.files.size };
     }
+    case 'confirm_action': {
+      const ok = await confirmDialog({
+        title: str(params.title) ?? 'Claude wants to run a command',
+        message: <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono text-[11.5px]">{String(params.message ?? '')}</pre>,
+        confirm: str(params.confirm) ?? 'Allow',
+        danger: true,
+      });
+      return { approved: ok };
+    }
     case 'confirm_overwrite': {
       const files = Array.isArray(params.files) ? (params.files as string[]) : [];
       const ok = await confirmDialog({

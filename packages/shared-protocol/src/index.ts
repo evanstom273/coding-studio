@@ -61,6 +61,7 @@ export const BRIDGE_METHODS = [
   'host_snapshot',
   'host_import',
   'host_revision',
+  'confirm_action',
 ] as const;
 export type BridgeMethod = (typeof BRIDGE_METHODS)[number];
 

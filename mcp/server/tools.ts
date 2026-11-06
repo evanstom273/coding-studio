@@ -22,13 +22,14 @@ export interface ToolHost {
 }
 
 export interface LocalTasks {
-  open(dir: string, opts?: { name?: string; watch?: boolean }): Promise<unknown>;
+  open(dir: string, opts?: { name?: string; watch?: boolean; cloneUrl?: string }): Promise<unknown>;
   link(dir: string, opts: { project?: string; overwrite?: boolean; watch?: boolean }): Promise<unknown>;
   sync(project?: string): Promise<unknown>;
   install(project?: string, wait?: boolean): Promise<unknown>;
   run(script: string, opts?: { project?: string; wait?: boolean }): Promise<unknown>;
   dev(action: 'start' | 'stop' | 'status', opts?: { project?: string; script?: string }): Promise<unknown>;
   output(id: string | undefined, project?: string): Promise<unknown>;
+  git(action: string, params?: Record<string, unknown>): Promise<unknown>;
 }
 
 const text = (v: unknown) => ({ content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }] });
@@ -377,8 +378,8 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     );
     server.registerTool(
       'open_folder',
-      { title: 'Open a folder', description: 'Open an existing folder on this computer (e.g. a Vite or Godot project) as a new Coding Studio project, linked to it: node_modules, .git and build output are left out, edits in either place reach the other, and install / run_task / dev_server run there.', inputSchema: { folder: z.string().describe('Absolute path'), name: z.string().optional(), watch: z.boolean().optional() } },
-      (a) => run(() => local.open(a.folder, { name: a.name, watch: a.watch })),
+      { title: 'Open a folder', description: 'Open an existing folder on this computer (e.g. a Vite or Godot project) as a new Coding Studio project, linked to it: node_modules, .git and build output are left out, edits in either place reach the other, and install / run_task / dev_server run there.', inputSchema: { folder: z.string().describe('Absolute path'), name: z.string().optional(), watch: z.boolean().optional(), clone_url: z.string().optional().describe('git clone this repository into the (empty) folder first, with the computer\'s own git credentials') } },
+      (a) => run(() => local.open(a.folder, { name: a.name, watch: a.watch, cloneUrl: a.clone_url })),
     );
     server.registerTool('sync_folder', { title: 'Sync folder', description: 'Write the project\'s current files into its linked folder (only what changed).', inputSchema: { project } }, (a) => run(() => local.sync(a.project)));
     server.registerTool('install', { title: 'Install packages', description: 'Run the project\'s package manager install (npm, pnpm or yarn, chosen from the lockfile) in the linked folder. Waits for it unless wait=false.', inputSchema: { project, wait: z.boolean().optional() } }, (a) => run(() => local.install(a.project, a.wait !== false)));
@@ -392,6 +393,16 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
       'dev_server',
       { title: 'Dev server', description: 'start: run the dev script (default "dev", e.g. Vite) in the linked folder and return its local URL once it prints one; it keeps running and reloads on changes. stop: stop it. status: is it running, and where.', inputSchema: { project, action: z.enum(['start', 'stop', 'status']), script: z.string().optional() } },
       (a) => run(() => local.dev(a.action, { project: a.project, script: a.script })),
+    );
+    server.registerTool(
+      'local_git',
+      {
+        title: 'Git (this computer)',
+        description: `Real git in the project's linked folder (link_folder / open_folder first), using the computer's own git and credentials. Use it for what the GitHub tools can't do: rebase, stash, cherry-pick, merge, blame, LFS, other remotes. The editor's files are written to the folder first, and after actions that change files (switch, pull, stash, stash_pop, rebase, cherry_pick, merge, lfs_pull) the project is updated from the folder (one undo step). push and rebase need the user's approval in the editor. On a conflict the result lists the files; fix the markers, then rebase_continue or commit, or *_abort.
+Actions: status · log {ref?, path?, limit?} · diff {ref?, paths?} · blame {path, ref?} · branches · switch {branch, create?} · commit {message, paths? (default all)} · fetch {remote?} · pull {remote?, branch?} · push {remote?, branch?} · stash {message?} · stash_pop · stash_list · rebase {onto} · rebase_continue · rebase_abort · cherry_pick {commit} · merge {branch} · merge_abort · lfs_status · lfs_pull · lfs_track {pattern} · init {branch?}. To clone a repository onto this computer, use open_folder with clone_url.`,
+        inputSchema: { project, action: z.string(), path: z.string().optional(), paths: z.array(z.string()).optional(), message: z.string().optional(), branch: z.string().optional(), create: z.boolean().optional(), onto: z.string().optional(), commit: z.string().optional(), ref: z.string().optional(), limit: z.number().optional(), remote: z.string().optional(), pattern: z.string().optional(), url: z.string().optional() },
+      },
+      ({ action, ...rest }) => run(() => local.git(action, rest)),
     );
     server.registerTool('task_output', { title: 'Task output', description: 'Output and state of a task (by id from install / run_task / dev_server), or a list of this project\'s tasks when id is omitted.', inputSchema: { project, id: z.string().optional() }, annotations: ro }, (a) => run(() => local.output(a.id, a.project)));
   }
