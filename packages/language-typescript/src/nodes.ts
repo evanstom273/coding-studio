@@ -113,6 +113,26 @@ const throwNode: NodeDefinition = {
   lowerExec: (lc) => ({ stmts: [{ k: 'throw', value: { k: 'new', type: T.named('Error'), args: [lc.input('message')] } }] }),
 };
 
+/** super(...) in a class constructor: runs the parent class's constructor first. */
+const superCall: NodeDefinition = {
+  type: 'ts.super',
+  title: 'Call Parent Constructor',
+  category: 'Classes',
+  description: 'In the constructor of a class script that extends another class: run the parent class\'s constructor (super(...)) first, with these arguments (e.g. a Phaser.Scene\'s key). It must come first in the constructor.',
+  keywords: ['super', 'parent', 'constructor', 'base', 'extends', 'inherit'],
+  flavor: 'exec',
+  languages: L,
+  props: [{ key: 'args', label: 'Arguments', kind: 'number', default: 0, description: 'How many values to pass' }],
+  ports: (n) => {
+    const count = typeof n.props.args === 'number' ? Math.max(0, Math.min(8, Math.trunc(n.props.args))) : 0;
+    return [exec.in(), ...Array.from({ length: count }, (_, i) => data.in(`arg_${i}`, `arg ${i + 1}`, T.any, { required: true })), exec.out()];
+  },
+  lowerExec: (lc) => {
+    const count = typeof lc.node.props.args === 'number' ? Math.max(0, Math.min(8, Math.trunc(lc.node.props.args))) : 0;
+    return { stmts: [{ k: 'expr', expr: { k: 'call', name: 'super', args: Array.from({ length: count }, (_, i) => lc.input(`arg_${i}`)) } }], next: 'then' };
+  },
+};
+
 const template: NodeDefinition = {
   type: 'ts.template',
   title: 'Format Text',
@@ -345,8 +365,9 @@ const newObject: NodeDefinition = {
   languages: L,
   props: [
     { key: 'module', label: 'Module', kind: 'string', default: '', description: 'Package or path; empty for a global class.' },
+    { key: 'scriptPath', label: 'From script', kind: 'string', default: '', description: 'A class script of this project (e.g. src/MainScene) instead of a package.' },
     { key: 'name', label: 'Class', kind: 'string', default: 'Date' },
-    { key: 'importKind', label: 'Import', kind: 'select', default: 'named', options: [{ value: 'named', label: 'import { Name }' }, { value: 'default', label: 'import Name (default)' }] },
+    { key: 'importKind', label: 'Import', kind: 'select', default: 'named', options: [{ value: 'named', label: 'import { Name }' }, { value: 'default', label: 'import Name (default)' }, { value: 'namespace', label: 'import * as Name' }] },
     { key: 'argNames', label: 'Argument names', kind: 'string_list', default: [] },
     { key: 'argTypes', label: 'Argument types', kind: 'string_list', default: [] },
     typeProp('type', 'Object type', 'any', 'Leave as any for library classes: TypeScript infers it.'),
@@ -362,9 +383,7 @@ const newObject: NodeDefinition = {
   lowerExec: (lc) => {
     const n = lc.node;
     const parts = str(n.props.name, 'Object').split('.');
-    const module = str(n.props.module);
-    let callee: IRExpr = module ? { k: 'import', module, name: parts[0], kind: str(n.props.importKind, 'named') === 'default' ? 'default' : 'named' } : { k: 'ref', name: parts[0] };
-    for (const p of parts.slice(1)) callee = { k: 'prop', target: callee, name: p };
+    const callee = classExpr(lc.ctx.script.path, str(n.props.scriptPath), str(n.props.module), parts, str(n.props.importKind, parts.length > 1 ? 'namespace' : 'named'));
     const e: IRExpr = { k: 'new', type: T.named(parts[parts.length - 1]), callee, args: list(n.props.argTypes).map((_, i) => lc.input(`arg_${i}`)) };
     return { stmts: lc.bind('object', e, { type: tp(n, lc.ctx, 'type', 'any'), nameHint: parts[parts.length - 1].replace(/^./, (c) => c.toLowerCase()), sideEffect: true }), next: 'then' };
   },
@@ -372,6 +391,38 @@ const newObject: NodeDefinition = {
     { title: 'new Date', category: 'Time', keywords: ['date', 'now', 'time'], props: { name: 'Date', type: 'Date' } },
     { title: 'new URL', category: 'Web', keywords: ['url', 'link', 'parse'], props: { name: 'URL', argNames: ['url'], argTypes: ['string'], type: 'URL' } },
   ],
+};
+
+/** A class as an expression: global, from a package (named / default / namespace import) or from a project script. */
+function classExpr(fromPath: string, scriptPath: string, module: string, parts: string[], importKind: string): IRExpr {
+  const mod = scriptPath ? relativeModule(fromPath, scriptPath.replace(/\.(tsx?|vgraph)$/, '')) : module;
+  let e: IRExpr = mod ? { k: 'import', module: mod, name: parts[0], kind: scriptPath ? 'named' : importKind === 'default' ? 'default' : importKind === 'namespace' ? 'namespace' : 'named' } : { k: 'ref', name: parts[0] };
+  for (const p of parts.slice(1)) e = { k: 'prop', target: e, name: p };
+  return e;
+}
+
+const classRef: NodeDefinition = {
+  type: 'ts.class_ref',
+  title: 'Class',
+  category: 'Classes',
+  description: 'A class itself as a value, e.g. to give a scene class to Phaser (scene: [MainScene]) or register a component. From a class script of this project, a package, or global.',
+  keywords: ['class', 'type', 'constructor', 'scene', 'reference'],
+  flavor: 'pure',
+  languages: L,
+  props: [
+    { key: 'scriptPath', label: 'From script', kind: 'string', default: '', description: 'A class script of this project, e.g. src/MainScene' },
+    { key: 'module', label: 'Or package', kind: 'string', default: '' },
+    { key: 'name', label: 'Class', kind: 'string', default: 'MyClass' },
+  ],
+  displayTitle: (n) => `${str(n.props.name, 'Class')} (class)`,
+  ports: () => [data.out('class', 'Class', T.any)],
+  check: (n, _ctx, report) => {
+    if (!str(n.props.name).split('.').every((p) => IDENT.test(p))) report('E_INVALID_IDENTIFIER', 'Class name must be an identifier (e.g. MainScene or Phaser.Scene).');
+  },
+  lowerExpr: (_p, lc) => {
+    const parts = str(lc.node.props.name, 'MyClass').split('.');
+    return classExpr(lc.ctx.script.path, str(lc.node.props.scriptPath), str(lc.node.props.module), parts, parts.length > 1 ? 'namespace' : 'named');
+  },
 };
 
 const isTag = (t: string) => /^[a-z][a-z0-9-]*$/.test(t) || /^[A-Z][\w$]*(\.[A-Z][\w$]*)*$/.test(t);
@@ -473,5 +524,5 @@ const nullish: NodeDefinition = {
 };
 
 export function typescriptNodes(): NodeDefinition[] {
-  return [awaitNode, tryNode, throwNode, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, newObject, nullish, element, classes];
+  return [awaitNode, tryNode, throwNode, superCall, classRef, template, makeObject, getField, setField, funcRef, closure, callFn, callMethod, newObject, nullish, element, classes];
 }

@@ -8,7 +8,7 @@ export interface CatalogEntry {
   /** Palette category, e.g. "Library/date-fns", "Library/dexie/Dexie". */
   category: string;
   description: string;
-  type: 'ts.call' | 'ts.call_method' | 'ts.new';
+  type: 'ts.call' | 'ts.call_method' | 'ts.new' | 'ts.get_field';
   props: Record<string, JsonValue>;
 }
 

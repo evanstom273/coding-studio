@@ -39,3 +39,20 @@ test('check_project includes TypeScript errors from generated code, and is clean
   expect(bad.problems.some((p: { area: string; message: string }) => p.area === 'types' && /not assignable/.test(p.message))).toBe(true);
   expect(bad.next).toMatch(/fix ALL/);
 });
+
+test('library_nodes: real nodes for a package and for one of its types (Phaser)', async ({ page }) => {
+  test.skip(!process.env.LIVE_NET, 'downloads Phaser types (set LIVE_NET=1)');
+  test.setTimeout(240_000);
+  await freshStart(page);
+  await page.evaluate((port) => localStorage.setItem('coding-studio:bridge', JSON.stringify({ enabled: true, port })), PORT);
+  await page.reload();
+  await expect(page.getByTestId('mcp-indicator')).toContainText('Claude connected');
+  data(await tool('create_project', { name: 'Game', language: 'typescript', template: 'web-app' }));
+  const missing = await tool('library_nodes', { package: 'phaser' });
+  expect(data(missing).error.code).toBe('E_NOT_INSTALLED');
+  await tool('deps_add', { name: 'phaser', range: '^3.88.0' });
+  const scene = data(await tool('library_nodes', { package: 'phaser', type: 'Phaser.Scene', query: 'physics' }));
+  expect(scene.nodes).toEqual(expect.arrayContaining([expect.objectContaining({ node_type: 'ts.get_field', props: expect.objectContaining({ name: 'physics' }) })]));
+  const pkg = data(await tool('library_nodes', { package: 'phaser', query: 'Game' }));
+  expect(pkg.nodes.some((n: { node_type: string; props: { name?: string } }) => n.node_type === 'ts.new' && n.props.name === 'Game')).toBe(true);
+});

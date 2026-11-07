@@ -284,20 +284,22 @@ export async function onCloudMessage(msg: Record<string, unknown>) {
 /** Questions from the cloud (Claude / ChatGPT working there) that only an open editor can answer. */
 async function answer(msg: Record<string, unknown>) {
   const reply = (result: unknown) => sendToCloud({ type: 'answer', id: msg.id, result });
-  if (msg.question !== 'type-check' || typeof msg.projectId !== 'string') return;
+  if ((msg.question !== 'type-check' && msg.question !== 'library') || typeof msg.projectId !== 'string') return;
   const st = useEditor.getState();
   // Only the project open here can be type-checked (its TypeScript service is the one running).
   if (st.project?.id !== msg.projectId) {
-    reply({ unavailable: st.project ? 'TypeScript types were not checked: Coding Studio is open on a different project. Open this project there and run check_project again.' : 'TypeScript types were not checked: Coding Studio is open but no project is. Open this project and run check_project again.' });
+    const why = st.project ? 'Coding Studio is open on a different project' : 'Coding Studio is open but no project is';
+    reply(msg.question === 'library' ? { error: `${why}: open this project there and ask again.` } : { unavailable: `TypeScript types were not checked: ${why}. Open this project there and run check_project again.` });
     return;
   }
   try {
     // Apply any sync for this project first, so the check sees what the cloud has.
     if (reconciling) await reconciling;
     await queue(msg.projectId, async () => undefined);
-    const { editorTypeCheck } = await import('../bridge/handlers');
-    reply(await editorTypeCheck(useEditor.getState().project!));
+    const h = await import('../bridge/handlers');
+    if (msg.question === 'library') reply(await h.editorLibraryNodes(useEditor.getState().project!, (msg.params as Record<string, unknown>) ?? {}));
+    else reply(await h.editorTypeCheck(useEditor.getState().project!));
   } catch (e) {
-    reply({ unavailable: `TypeScript types were not checked: ${e instanceof Error ? e.message : String(e)}` });
+    reply(msg.question === 'library' ? { error: e instanceof Error ? e.message : String(e) } : { unavailable: `TypeScript types were not checked: ${e instanceof Error ? e.message : String(e)}` });
   }
 }

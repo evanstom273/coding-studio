@@ -541,6 +541,13 @@ export class CloudService {
         const secrets = params.template === 'cloudflare' ? await this.cloudflareSecrets(before).catch((e: Error & { code?: string }) => ({ not_set: e.code ?? 'E_CLOUDFLARE', reason: e.message })) : undefined;
         return { added: fs.map((f) => f.path), files: fs, ...(secrets ? { secrets } : {}), note: 'Commit them with git_commit to turn the workflow on.' };
       }
+      case 'library_nodes': {
+        const { project: p } = await this.resolve(params.project);
+        if (!this.askEditor || !this.editorsOpen()) throw new svc.ServiceError('E_EDITOR_NEEDED', 'Looking up a package\'s nodes reads its TypeScript types, which happens in Coding Studio: open the site on this project (any device, with sync on) and ask again.');
+        const r = (await this.askEditor({ question: 'library', projectId: p.id, params }, 45_000)) as { error?: string };
+        if (r && r.error) throw new svc.ServiceError('E_LIBRARY', r.error);
+        return r;
+      }
       case 'check_project': {
         const { project: p } = await this.resolve(params.project);
         const ws = this.store.read(p.id)!;

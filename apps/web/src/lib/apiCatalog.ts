@@ -178,3 +178,37 @@ export async function probeExports(pkg: string) {
     return out;
   });
 }
+
+/**
+ * What an object of a type offers (methods → Call Method nodes, properties → Get Field nodes),
+ * e.g. "Phaser.Scene" from "phaser": this.physics, this.add, this.input… For AI tools.
+ */
+export async function typeMembers(pkg: string, typeName: string): Promise<CatalogEntry[]> {
+  const [root, ...rest] = typeName.split('.');
+  const expr = rest.length ? `__m.${[root === pkg || /^[A-Z]/.test(root) ? '' : root, ...rest].filter(Boolean).join('.')}` : `__m.${root}`;
+  const shown = typeName;
+  // `Phaser.Scene` in a package whose namespace is Phaser: __m.Scene; try both spellings.
+  const candidates = [...new Set([expr, `__m.${typeName}`, `__m.${rest.join('.') || root}`])];
+  for (const c of candidates) {
+    const found = await withModel(pkg, `import * as __m from '${pkg}';\ndeclare const __i: InstanceType<typeof ${c}>;\n__i.`, async (w, file, pos) => {
+      const comp = await w.getCompletionsAtPosition(file, pos);
+      const out: CatalogEntry[] = [];
+      for (const e of (comp?.entries ?? []).filter((x) => x.kind === 'method' || x.kind === 'property' || x.kind === 'getter').slice(0, 150)) {
+        const d = await w.getCompletionEntryDetails(file, pos, e.name);
+        const disp = text(d?.displayParts);
+        const doc = d?.documentation?.length ? `\n\n${text(d.documentation).slice(0, 300)}` : '';
+        if (e.kind === 'method') {
+          const p = parseDisplay(disp);
+          if (!p || p.kind !== 'function') continue;
+          out.push({ title: `${shown}.${p.name}()`, category: `Library/${pkg}/${shown}`, description: `${describe(p, `${shown}.`)}${doc}`, type: 'ts.call_method', props: { name: p.name, ...argProps(p), returnType: p.returnType, await: p.async } });
+        } else {
+          const t = /:\s*(.+)$/s.exec(disp)?.[1]?.trim() ?? 'any';
+          out.push({ title: `${shown}.${e.name}`, category: `Library/${pkg}/${shown}`, description: `${shown}.${e.name}: ${t}${doc}`, type: 'ts.get_field' as CatalogEntry['type'], props: { name: e.name, type: 'any' } });
+        }
+      }
+      return out;
+    }).catch(() => [] as CatalogEntry[]);
+    if (found.length) return found;
+  }
+  return [];
+}

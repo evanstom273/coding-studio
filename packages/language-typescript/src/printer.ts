@@ -29,6 +29,16 @@ const BIN: Record<string, [string, number]> = {
 
 export const IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
+/** Import specifier for another script, relative to this one ("src/game/Player" → "./Player"). */
+function relModule(from: string, to: string): string {
+  const a = from.split('/').slice(0, -1);
+  const b = to.split('/');
+  let i = 0;
+  while (i < a.length && i < b.length - 1 && a[i] === b[i]) i++;
+  const up = a.length - i;
+  return `${up ? '../'.repeat(up) : './'}${b.slice(i).join('/')}`;
+}
+
 /** Collects imports and hands out local names (renaming on clashes). */
 export class ImportManager {
   private named = new Map<string, Map<string, string>>(); // module → imported name → local name
@@ -81,6 +91,11 @@ export class TSPrinter {
   private unit = '\t';
   /** React state in the function being printed: name → setter. */
   private states = new Map<string, string>();
+  /** Class scripts: members reached through `this`, and the names local to the method being printed. */
+  private readonly isClass: boolean;
+  private classFields = new Set<string>();
+  private classMethods = new Set<string>();
+  private scope = new Set<string>();
   /** Names of enums in this module (JS mode prints them as frozen objects). */
   constructor(
     private readonly module: IRModule,
@@ -88,7 +103,35 @@ export class TSPrinter {
   ) {
     const taken = new Set<string>(module.members.map((m) => m.name));
     for (const m of module.members) if (m.k === 'function') m.params.forEach((p) => taken.add(p.name));
+    this.isClass = module.settings.kind === 'class';
+    if (this.isClass) {
+      taken.add(module.name);
+      for (const m of module.members) {
+        if (m.k === 'field') this.classFields.add(m.name);
+        if (m.k === 'function') this.classMethods.add(m.name);
+      }
+    }
     this.imports = new ImportManager(taken);
+  }
+
+  /** Every name a function declares (params, locals, inline-function params): they shadow class members. */
+  private scopeOf(f: IRFunction): Set<string> {
+    const out = new Set<string>(f.params.map((p) => p.name));
+    const visit = (stmts: IRStmt[]) =>
+      walkStmts(stmts, (st) => {
+        if (st.k === 'var') out.add(st.name);
+        if (st.k === 'var_tuple') st.names.forEach((n) => out.add(n));
+        if (st.k === 'for_each' || st.k === 'for_range') out.add((st as { var: string }).var);
+        for (const e of stmtExprs(st))
+          walkExpr(e, (x) => {
+            if (x.k === 'lambda') {
+              x.params.forEach((p) => out.add(p.name));
+              visit(x.body);
+            }
+          });
+      });
+    visit(f.body);
+    return out;
   }
 
   private ann(t: TypeRef | undefined): string {
@@ -114,6 +157,7 @@ export class TSPrinter {
         return [JSON.stringify(v), P.primary];
       }
       case 'ref':
+        if (this.isClass && (this.classFields.has(e.name) || this.classMethods.has(e.name)) && !this.scope.has(e.name)) return [`this.${e.name}`, P.member];
         return [e.name, P.primary];
       case 'self':
         return ['this', P.primary];
@@ -126,6 +170,7 @@ export class TSPrinter {
       case 'un':
         return [e.op === 'not' ? `!${this.expr(e.operand, P.unary)}` : `-${this.expr(e.operand, P.unary)}`, P.unary];
       case 'call':
+        if (!e.target && this.isClass && this.classMethods.has(e.name) && !this.scope.has(e.name)) return [`this.${e.name}(${e.args.map((a) => this.expr(a, P.assign)).join(', ')})`, P.member];
         return [`${e.target ? `${this.expr(e.target, P.member)}.` : ''}${e.name}(${e.args.map((a) => this.expr(a, P.assign)).join(', ')})`, P.member];
       case 'builtin':
         return this.builtin(e.op, e.args);
@@ -387,12 +432,16 @@ export class TSPrinter {
         ? `{ ${f.params.map((p) => `${p.name}${p.default ? ` = ${this.expr(p.default, P.assign)}` : ''}`).join(', ')} }${this.mode === 'ts' ? `: { ${f.params.map((p) => `${p.name}${p.default ? '?' : ''}: ${tsType(p.type)}`).join('; ')} }` : ''}`
         : ''
       : f.params.map((p) => `${p.name}${this.ann(p.type) || (this.mode === 'ts' ? ': any' : '')}${p.default ? ` = ${this.expr(p.default, P.assign)}` : ''}`).join(', ');
-    w.line(`${f.exported ? 'export ' : ''}${f.isAsync ? 'async ' : ''}function ${f.name}(${params})${ret} {`, src);
+    const scopeBefore = this.scope;
+    if (this.isClass) this.scope = this.scopeOf(f);
+    if (this.isClass) w.line(f.name === 'constructor' ? `constructor(${params}) {` : `${f.isAsync ? 'async ' : ''}${f.name}(${params})${ret} {`, src);
+    else w.line(`${f.exported ? 'export ' : ''}${f.isAsync ? 'async ' : ''}function ${f.name}(${params})${ret} {`, src);
     const before = this.states;
     this.states = new Map(before);
     for (const s of f.body) if (s.k === 'var_tuple' && s.init.k === 'invoke' && s.init.callee.k === 'import' && s.init.callee.name === 'useState' && s.names.length === 2) this.states.set(s.names[0], s.names[1]);
     this.block(w, f.body, f.src?.graphId);
     this.states = before;
+    this.scope = scopeBefore;
     w.line('}');
   }
 
@@ -484,6 +533,10 @@ export class TSPrinter {
       body.dedent();
       body.line('}');
     }
+    if (this.isClass) {
+      this.classBody(body, comments);
+      return this.finish(ctx, header, body);
+    }
     const fields = members.filter((m) => m.k === 'field');
     if (fields.length) body.blank();
     for (const f of fields) {
@@ -497,11 +550,54 @@ export class TSPrinter {
       body.blank();
       this.fn(body, m, comments);
     }
+    return this.finish(ctx, header, body);
+  }
+
+  /** class Name extends Base { fields; constructor; methods } */
+  private classBody(body: CodeWriter, comments: boolean) {
+    const st = this.module.settings;
+    const ext = typeof st.extends === 'string' ? st.extends.trim() : '';
+    const from = typeof st.extendsFrom === 'string' ? st.extendsFrom.trim() : '';
+    let base = ext;
+    if (ext && from) {
+      const [root, ...rest] = ext.split('.');
+      // A package: Phaser.Scene → import * as Phaser from 'phaser'; Enemy → import { Enemy } from 'pkg'.
+      // A script path (src/Enemy): import { Enemy } from './Enemy'.
+      const isScript = from.startsWith('.') || from.startsWith('src/') || from.includes('/') && !from.startsWith('@');
+      const module = isScript ? relModule(this.module.path, from.replace(/\.(tsx?|vgraph)$/, '')) : from;
+      const local = this.imports.use(rest.length ? { k: 'import', kind: 'namespace', module, name: root } : { k: 'import', kind: 'named', module, name: root });
+      base = [local, ...rest].join('.');
+    }
+    body.blank();
+    if (comments && this.module.doc) this.doc(body, this.module.doc);
+    body.line(`export class ${this.module.name}${base ? ` extends ${base}` : ''} {`);
+    body.indent();
+    const fields = this.module.members.filter((m) => m.k === 'field');
+    for (const f of fields) {
+      if (f.k !== 'field') continue;
+      if (comments && f.doc) this.doc(body, f.doc);
+      const init = f.init ? ` = ${this.expr(f.init, P.assign)}` : '';
+      // Without a starting value a typed field is filled in later (e.g. in create()): `!` says so.
+      const bang = !f.init && this.mode === 'ts' && f.type && f.type.kind !== 'any' ? '!' : '';
+      // Class fields need a type under strict TypeScript (untyped = implicit any error).
+      const ann = this.ann(f.type) || (this.mode === 'ts' ? ': any' : '');
+      body.line(`${f.constant ? 'readonly ' : ''}${f.name}${bang}${ann}${init};`, f.src);
+    }
+    const fns = this.module.members.filter((m): m is IRFunction => m.k === 'function');
+    for (const m of [...fns.filter((x) => x.name === 'constructor'), ...fns.filter((x) => x.name !== 'constructor')]) {
+      body.blank();
+      this.fn(body, m, comments);
+    }
+    body.dedent();
+    body.line('}');
+  }
+
+  private finish(ctx: CompilationContext, header: string, body: CodeWriter): ReturnType<CodeWriter['result']> {
     const b = body.result();
     // Header + imports, then the body shifted by that many lines in the source map.
     const head: string[] = [];
     if (ctx.settings.header) head.push(...header.split('\n').map((l) => `// ${l}`));
-    if (this.module.doc && comments) head.push(...this.module.doc.split('\n').map((l) => `// ${l}`));
+    if (this.module.doc && ctx.settings.comments && !this.isClass) head.push(...this.module.doc.split('\n').map((l) => `// ${l}`));
     const imports = this.imports.lines();
     if (imports.length) {
       if (head.length) head.push('');

@@ -94,6 +94,7 @@ Operations (fields in brackets are optional; script/graph default to the active 
 Node props that reference variables/functions/signals/enums accept their id or name.
 TypeScript nodes: ts.call {module (npm package) | scriptPath (another script of the project) | neither (globals like fetch, JSON.parse), name, argNames[], argTypes[], returnType, await} · ts.call_method {name, argTypes[], returnType, await, optional} · ts.await {type} · ts.try (exec outs try/catch/finally/then, data out error) · ts.throw · ts.template {template "Hi {name}"} · ts.object {keys[]} · ts.get_field / ts.set_field {name, optional} · ts.function_ref {function} · ts.default_value (??) · ts.closure {function} (an inline arrow function). Imports are written automatically.
 React (TypeScript): add_function {…, component:true} makes a component (params = props, returns elements); a local variable with attributes {state:true} is React state (Set Variable calls its setter); ts.element {tag, attributes[], children} builds JSX (inputs attr_<name>, child_<i>; tag can be a component; module/scriptPath imports it); handlers are ts.closure inline functions; ts.classes {classes, conditional[]} builds a Tailwind className (inputs when_<i>); hooks (use…) must be at the top of a component, not in branches/loops.
+Classes (TypeScript): a script whose settings have kind:"class" is a class (update_script {settings:{kind:"class", extends:"Phaser.Scene", extendsFrom:"phaser"}}, or add_script {template:"class"}): its variables are fields and its functions methods; a function named "constructor" is the constructor — start it with ts.super {args:N} (super(...)) when it extends something. core.self is \`this\` (wire it into ts.get_field / ts.call_method for inherited members like this.physics.add.sprite). ts.class_ref {scriptPath | module, name} gives a class as a value (e.g. scene: [MainScene]); ts.new {scriptPath | module, name} makes an object. For a package's real functions, classes, methods and properties, call library_nodes instead of guessing.
 Inline functions (closures, TypeScript): add_function {kind:"lambda", owner:<function>, name, params, returnType, [async], ref} creates a function whose graph can read/write the owner's params and locals (get_var/set_var by name); put a ts.closure {function:"$ref"} node in the owner's graph to use it as a value (callbacks, handlers, array.map…). Deleting the owner deletes its inline functions.
 Execution flow: connect exec output "then" (or "true"/"false", "body", "completed"…) to exec input "exec". Every function graph starts at its Entry node (output "then", plus one data output per parameter, keyed by parameter id or name).`;
 
@@ -242,6 +243,16 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     (a) => batch({ project: a.project }, [{ op: 'update_project', entry: a.function === null ? null : { function: a.function, ...(a.script ? { script: a.script } : {}), ...(a.host ? { host: a.host } : {}) } }]),
   );
 
+  server.registerTool(
+    'library_nodes',
+    {
+      title: 'Nodes for a package',
+      description: 'Ready-made nodes for an installed npm package, read from its real TypeScript types: its functions (Call), classes (New) and their methods (Call Method). With type (e.g. "Phaser.Scene", "Phaser.Physics.Arcade.Sprite"), what an object of that type offers: methods and properties (Get Field) — e.g. this.physics, this.input in a Phaser scene. Use these instead of guessing names. query filters by name/description. Needs the package in package.json (deps_add).',
+      inputSchema: { project, package: z.string(), type: z.string().optional(), query: z.string().optional(), limit: z.number().optional() },
+      annotations: ro,
+    },
+    (a) => call('library_nodes', a, 90_000),
+  );
   server.registerTool(
     'check_project',
     {

@@ -25,6 +25,7 @@ export const TS_TEMPLATES: ScriptTemplate[] = [
   { id: 'async-module', name: 'Async module', description: 'A module with an exported async main() (use Await, fetch…).', settings: { output: 'ts' }, events: [], functions: [{ name: 'main', exported: true, async: true }] },
   { id: 'web-app', name: 'Web app (React + Tailwind + Dexie)', description: 'A Vite project: the App component as a graph, a Dexie database and a todo list. Runs in Preview.', settings: { output: 'ts' }, events: [] },
   { id: 'empty', name: 'Empty module', description: 'No functions yet.', settings: { output: 'ts' }, events: [] },
+  { id: 'class', name: 'Class', description: 'A class: variables become fields, functions become methods. Set "Extends" to build on another class, from a package (e.g. Phaser.Scene from phaser) or your project.', settings: { output: 'ts', kind: 'class', extends: '', extendsFrom: '' }, events: [] },
 ];
 
 export const stateSetter = (name: string) => `set${name.replace(/^./, (c) => c.toUpperCase())}`;
@@ -66,6 +67,9 @@ export const typescriptAdapter: LanguageAdapter = {
   },
   scriptSettings: [
     { key: 'output', label: 'Output', kind: 'select', default: 'ts', options: [{ value: 'ts', label: 'TypeScript (.ts)' }, { value: 'js', label: 'JavaScript (.js)' }], description: 'Write typed TypeScript or plain JavaScript (ES modules).' },
+    { key: 'kind', label: 'Script is a', kind: 'select', default: 'module', options: [{ value: 'module', label: 'Module (functions and variables)' }, { value: 'class', label: 'Class (fields and methods; this)' }], description: 'A class can extend another class and use Self (this). A function named "constructor" becomes its constructor.' },
+    { key: 'extends', label: 'Extends', kind: 'text', default: '', description: 'Class: the class it builds on, e.g. Phaser.Scene, Phaser.Physics.Arcade.Sprite, THREE.Mesh, or another script\'s class name. Empty = none.' },
+    { key: 'extendsFrom', label: 'Extends — from package', kind: 'text', default: '', description: 'Where that class comes from: an npm package (phaser, three) or a script path (src/Enemy). Empty if it\'s a global (like Error or HTMLElement).' },
   ],
   events: [],
   templates: TS_TEMPLATES,
@@ -88,7 +92,17 @@ export const typescriptAdapter: LanguageAdapter = {
   validateScript(script, report) {
     const s = script.settings;
     if (s.output !== undefined && s.output !== 'ts' && s.output !== 'js') report({ severity: 'error', code: 'E_INVALID_SETTING', message: 'Output must be "ts" or "js".' });
-    for (const k of Object.keys(s)) if (k !== 'output') report({ severity: 'warning', code: 'W_UNKNOWN_SETTING', message: `Unknown script setting "${k}" is ignored.` });
+    for (const k of Object.keys(s)) if (!['output', 'kind', 'extends', 'extendsFrom'].includes(k)) report({ severity: 'warning', code: 'W_UNKNOWN_SETTING', message: `Unknown script setting "${k}" is ignored.` });
+    const isClass = s.kind === 'class';
+    if (s.kind !== undefined && s.kind !== 'module' && s.kind !== 'class') report({ severity: 'error', code: 'E_INVALID_SETTING', message: 'Script kind must be "module" or "class".' });
+    const ext = typeof s.extends === 'string' ? s.extends.trim() : '';
+    if (ext && !isClass) report({ severity: 'warning', code: 'W_EXTENDS_IGNORED', message: '"Extends" only applies when the script is a class.' });
+    if (ext && !/^[A-Za-z_$][\w$]*(\.[A-Za-z_$][\w$]*)*$/.test(ext)) report({ severity: 'error', code: 'E_INVALID_SETTING', message: `"${ext}" isn't a class name (e.g. Phaser.Scene or Enemy).` });
+    if (isClass) {
+      if (script.functions.some((f) => f.component)) report({ severity: 'error', code: 'E_INVALID_SETTING', message: 'A class script can\'t have React components; make them in a module script.' });
+      const ctor = script.functions.find((f) => f.name === 'constructor');
+      if (ctor?.async) report({ severity: 'error', code: 'E_ASYNC_CONSTRUCTOR', message: 'A constructor can\'t be async.', functionId: ctor.id });
+    } else if (script.functions.some((f) => f.name === 'constructor')) report({ severity: 'error', code: 'E_INVALID_NAME', message: 'Only a class script can have a "constructor"; set "Script is a" to Class.' });
     for (const f of script.functions) {
       for (const l of f.locals) {
         if (l.attributes?.state !== true) continue;
@@ -121,7 +135,7 @@ export const typescriptAdapter: LanguageAdapter = {
       walkStmts(m.body, (s) => {
         for (const e of stmtExprs(s))
           walkExpr(e, (x) => {
-            if (x.k === 'self') out.push({ severity: 'error', code: 'E_NO_THIS', message: `${m.name}: a module has no "self"/this. Connect an object to the node's target instead.`, scriptId: module.scriptId, ...(s.src?.graphId ? { graphId: s.src.graphId } : {}), ...(s.src?.nodeId ? { nodeId: s.src.nodeId } : {}) });
+            if (x.k === 'self' && module.settings.kind !== 'class') out.push({ severity: 'error', code: 'E_NO_THIS', message: `${m.name}: a module has no "self"/this. Make the script a Class (Script settings → Script is a), or connect an object to the node's target.`, scriptId: module.scriptId, ...(s.src?.graphId ? { graphId: s.src.graphId } : {}), ...(s.src?.nodeId ? { nodeId: s.src.nodeId } : {}) });
           });
       });
     }

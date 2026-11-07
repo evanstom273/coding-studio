@@ -73,6 +73,38 @@ function generatedFiles() {
 }
 
 /**
+ * Nodes for a package (from its real types, like the palette's Library section), or for the
+ * members of one of its types. Waits for the package's types to load.
+ */
+export async function editorLibraryNodes(p: Project, params: Record<string, unknown>) {
+  const pkg = str(params.package);
+  if (!pkg) throw new BridgeHandlerError('E_INVALID', 'package is required, e.g. "phaser"');
+  const manifest = useEditor.getState().workspace!.files.get('package.json')?.text ?? '';
+  if (!new RegExp(`"${pkg.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}"\\s*:`).test(manifest)) throw new BridgeHandlerError('E_NOT_INSTALLED', `"${pkg}" isn't in package.json yet. Add it with deps_add first, then ask again.`);
+  void p;
+  const api = await import('@web/lib/apiCatalog');
+  const type = str(params.type);
+  let entries: Awaited<ReturnType<typeof api.buildCatalog>> = [];
+  // The package's types load in the background after it's added: retry for a few seconds.
+  for (let i = 0; i < 8 && !entries.length; i++) {
+    entries = type ? await api.typeMembers(pkg, type) : await api.buildCatalog(pkg);
+    if (!entries.length) await new Promise((r) => setTimeout(r, 1500));
+  }
+  const q = str(params.query)?.toLowerCase();
+  const hits = q ? entries.filter((e) => `${e.title} ${e.description}`.toLowerCase().includes(q)) : entries;
+  const limit = Math.min(Number(params.limit) || 60, 200);
+  return {
+    package: pkg,
+    ...(type ? { type } : {}),
+    count: hits.length,
+    nodes: hits.slice(0, limit).map((e) => ({ title: e.title, node_type: e.type, props: e.props, description: e.description.split('\n')[0] })),
+    ...(hits.length > limit ? { note: `${hits.length - limit} more: narrow with query.` } : {}),
+    ...(!entries.length ? { note: `No types found for ${type ? `${type} in ` : ''}${pkg}. Check the spelling (types like "Phaser.Scene" or "Scene"), or the package may ship no TypeScript types.` } : {}),
+    how: 'Add a node with {op:"add_node", type: node_type, props} (batch_edit). Get Field / Call Method nodes need an object wired into "object" (e.g. Self in a class script for this.physics).',
+  };
+}
+
+/**
  * The editor's TypeScript check for the open project, as check_project problems. Waits for package
  * types to arrive (they load in the background) so "cannot find module" isn't reported too early.
  */
@@ -290,6 +322,10 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const r = svc.configEdit(path, cur?.text, params.edits);
       useEditor.getState().applyFiles([{ op: 'write_file', path, content: r.content, expectedHash: cur ? cur.hash : null }], `Claude: edit ${path.split('/').pop()}`, { source: 'mcp' });
       return { path, hash: useEditor.getState().workspace!.files.get(path)?.hash, problems: r.problems };
+    }
+    case 'library_nodes': {
+      const p = await ensureOpen(params.project);
+      return editorLibraryNodes(p, params);
     }
     case 'check_project': {
       const p = await ensureOpen(params.project);
