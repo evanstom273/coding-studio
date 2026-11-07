@@ -84,6 +84,8 @@ export class EditorBridge {
   private wss: WebSocketServer | null = null;
   private http: Server | null = null;
   private owner: { ws: WebSocket; sessionId: string; origin: string } | null = null;
+  /** Requests from the editor to this computer (the Computer panel); set by the local server. */
+  hostHandler?: (method: string, params: Record<string, unknown>) => Promise<unknown>;
   private pending = new Map<string, Pending>();
   private seq = 0;
   private heartbeat: NodeJS.Timeout | null = null;
@@ -209,8 +211,16 @@ export class EditorBridge {
         }
         identified = true;
         this.owner = { ws, sessionId: msg.sessionId, origin };
-        this.send(ws, { type: 'welcome', protocol: BRIDGE_PROTOCOL_VERSION, serverVersion: SERVER_VERSION });
+        this.send(ws, { type: 'welcome', protocol: BRIDGE_PROTOCOL_VERSION, serverVersion: SERVER_VERSION, ...(this.hostHandler ? { host: true } : {}) });
         log(`Coding Studio connected (${origin})`);
+        return;
+      }
+      const hostMsg = msg as unknown as { type: string; id?: string; method?: string; params?: Record<string, unknown> };
+      if (this.owner?.ws === ws && hostMsg.type === 'host-request' && hostMsg.id && hostMsg.method) {
+        const id = hostMsg.id;
+        const reply = (body: Record<string, unknown>) => ws.readyState === WebSocket.OPEN && ws.send(JSON.stringify({ type: 'host-response', id, ...body }));
+        if (!this.hostHandler) reply({ ok: false, error: { code: 'E_NO_HOST', message: 'This server cannot run things on the computer.' } });
+        else this.hostHandler(hostMsg.method, hostMsg.params ?? {}).then((result) => reply({ ok: true, result }), (e: unknown) => reply({ ok: false, error: errorPayload(e) }));
         return;
       }
       if (this.owner?.ws !== ws || msg.type !== 'response') return;

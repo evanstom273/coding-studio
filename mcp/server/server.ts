@@ -24,8 +24,10 @@ import { LocalHost } from './host';
 
 /** The local server's host functions: open the built-in editor, write exports to disk safely. */
 export function localHost(bridge: EditorBridge, exportRoots: string[]): ToolHost {
+  const local = new LocalHost((method, params, timeout) => bridge.request(method as never, params, timeout));
+  bridge.hostHandler = (method, params) => local.fromEditor(method, params);
   return {
-    local: new LocalHost((method, params, timeout) => bridge.request(method as never, params, timeout)),
+    local,
     openEditorDescription: `Open Coding Studio in the user's default browser. The editor is served by this MCP server itself at http://localhost:<port> and connects to Claude automatically. Use this when status says Coding Studio isn't open.`,
     async openEditor() {
       const url = bridge.editorUrl;

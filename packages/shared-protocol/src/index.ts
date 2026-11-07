@@ -92,7 +92,7 @@ export interface BridgeHello {
 }
 
 /** Server → editor after hello. */
-export type BridgeWelcome = { type: 'welcome'; protocol: number; serverVersion: string } | { type: 'rejected'; reason: 'busy' | 'protocol'; message: string } | { type: 'revoked'; message: string };
+export type BridgeWelcome = { type: 'welcome'; protocol: number; serverVersion: string; /** the server can run tasks and git on this computer */ host?: boolean } | { type: 'rejected'; reason: 'busy' | 'protocol'; message: string } | { type: 'revoked'; message: string };
 
 export type BridgeMessage = BridgeRequest | BridgeResponse | BridgeHello | BridgeWelcome;
 

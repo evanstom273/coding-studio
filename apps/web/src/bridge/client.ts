@@ -31,6 +31,8 @@ interface BridgeState {
   statusText: string;
   /** True when this page is served by the local MCP server. */
   servedByMcp: boolean;
+  /** The local server can run tasks and git on this computer (Computer panel). */
+  host: boolean;
   // remote connector
   remoteEnabled: boolean;
   remoteKey: string;
@@ -97,6 +99,7 @@ export const useBridge = create<BridgeState>()((set, get) => ({
   remoteStatus: 'off',
   remoteStatusText: 'Claude connector is off',
   servedByMcp: false,
+  host: false,
   log: [],
   setEnabled(enabled) {
     set({ enabled });
@@ -152,7 +155,7 @@ interface LinkConfig {
   keepAlive?: number;
   /** Messages other than the request/response protocol (e.g. cloud "project-updated"). */
   onMessage?(msg: Record<string, unknown>): void;
-  onWelcome?(): void;
+  onWelcome?(msg: Record<string, unknown>): void;
 }
 
 class Link {
@@ -215,7 +218,7 @@ class Link {
         this.retryDelay = 1000;
         this.cfg.setStatus('connected', `Connected (${this.cfg.name})`);
         bridgeLog({ method: 'connected', ok: true, ms: 0, text: `This tab now accepts edits from Claude (${this.cfg.name})` });
-        this.cfg.onWelcome?.();
+        this.cfg.onWelcome?.(msg as unknown as Record<string, unknown>);
         return;
       }
       if (msg.type !== 'request' && msg.type !== 'rejected' && msg.type !== 'revoked') {
@@ -289,8 +292,17 @@ const local = new Link({
   name: 'Claude on this computer',
   enabled: () => useBridge.getState().enabled,
   url: () => `ws://127.0.0.1:${useBridge.getState().port}`,
-  setStatus: (status, statusText) => useBridge.setState({ status, statusText: status === 'connected' ? 'Connected to Claude on this computer' : statusText }),
+  setStatus: (status, statusText) => useBridge.setState({ status, statusText: status === 'connected' ? 'Connected to Claude on this computer' : statusText, ...(status === 'connected' ? {} : { host: false }) }),
   offText: 'Claude Code access is off',
+  onWelcome: (msg) => useBridge.setState({ host: msg.host === true }),
+  onMessage: (msg) => {
+    if (msg.type !== 'host-response' || typeof msg.id !== 'string') return;
+    const p = hostPending.get(msg.id);
+    if (!p) return;
+    hostPending.delete(msg.id);
+    if (msg.ok) p.resolve(msg.result);
+    else p.reject(Object.assign(new Error((msg.error as { message?: string })?.message ?? 'Failed'), { code: (msg.error as { code?: string })?.code }));
+  },
   unreachableText: () => `MCP server not reachable on 127.0.0.1:${useBridge.getState().port}. Is Claude running with the coding-studio server? Retrying…`,
 });
 
@@ -305,6 +317,22 @@ const remote = new Link({
   onWelcome: () => void import('../sync/cloud').then((m) => m.onCloudConnected()),
   onMessage: (msg) => void import('../sync/cloud').then((m) => m.onCloudMessage(msg)),
 });
+
+const hostPending = new Map<string, { resolve(v: unknown): void; reject(e: Error): void }>();
+let hostSeq = 0;
+/** Ask the local server to do something on this computer (link a folder, run a script, git…). */
+export function hostRequest<T = unknown>(method: string, params: Record<string, unknown> = {}, timeoutMs = 600_000): Promise<T> {
+  if (!useBridge.getState().host) return Promise.reject(new Error('Not connected to Claude on this computer'));
+  const id = `h${++hostSeq}`;
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      hostPending.delete(id);
+      reject(new Error('The computer did not answer in time'));
+    }, timeoutMs);
+    hostPending.set(id, { resolve: (v) => (clearTimeout(timer), resolve(v as T)), reject: (e) => (clearTimeout(timer), reject(e)) });
+    local.send({ type: 'host-request', id, method, params });
+  });
+}
 
 /** Send a message on the connector socket (e.g. which project is open). */
 export function sendToCloud(msg: unknown) {

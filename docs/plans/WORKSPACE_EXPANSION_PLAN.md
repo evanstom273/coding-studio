@@ -402,7 +402,7 @@ Each phase ends with: typecheck, lint, all existing tests green (including the 1
 - Acceptance: a working todo app (React + Dexie + Tailwind) built visually, type-checks, previews in the browser, and builds with Vite on the host in phase 9.
 - Tests: golden TSX, rules-of-hooks enforcement tests, preview smoke test.
 
-### Phase 9 — Local execution host (optional, laptop) — done: MCP tools `open_folder`, `link_folder`, `sync_folder`, `install`, `run_task`, `run_tests`, `dev_server`, `task_output` (see docs/MCP.md); no editor panel for it yet
+### Phase 9 — Local execution host (optional, laptop) — done: MCP tools `open_folder`, `link_folder`, `sync_folder`, `install`, `run_task`, `run_tests`, `dev_server`, `task_output` (see docs/MCP.md) and the editor's Computer panel
 - Prereqs: 1, 3 (and 8 for the showcase).
 - Deliverables: single-file "Coding Studio host" (existing MCP server + companion merged): disk workspaces (open folder), file watching, install, run scripts, Vite dev server proxied into a preview tab, test runner integration with results linked to files/nodes, output console, wrangler deploy; command allow-list + confirmations; MCP tools `run_task`, `run_tests`, `dev_server`, `install`.
 - Acceptance: open an existing Vite repo from disk, install, run dev server, edit visually and see hot reload, run tests from the IDE.
@@ -425,7 +425,7 @@ Each phase ends with: typecheck, lint, all existing tests green (including the 1
 - Deliverables: same host protocol running in a hosted container (live dev server + preview from a phone).
 - Only if needed; has a monthly cost.
 
-### Phase 11 — Git via the host + source-control MCP tools
+### Phase 11 — Git via the host + source-control MCP tools — done: `local_git` (rebase, stash, cherry-pick, merge, blame, LFS, any remote) and git in the Computer panel
 - Prereqs: 9–10.
 - Deliverables: companion git provider (rebase, stash, cherry-pick, blame, LFS), same SCM panel, MCP `git_*` / `prepare_commit` / `create_pull_request` with confirmations.
 - Acceptance: identical UI flows over both providers; large repo (≥ 50k files) usable via host.
