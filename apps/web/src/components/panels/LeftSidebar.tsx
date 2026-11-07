@@ -10,6 +10,7 @@ import { useCatalog } from '@web/lib/catalogStore';
 import { Monitor, Package } from 'lucide-react';
 import { GitBranch } from 'lucide-react';
 import type { ScriptDoc } from '@cs/graph-core';
+import { matchesQuery } from '@cs/node-registry';
 import type { EditOp } from '@cs/project-format';
 import { createBackup } from '@web/db/projects';
 import { DND_MIME, type DragNodePayload } from '@web/lib/dnd';
@@ -41,7 +42,7 @@ function NodeLibrary() {
   const entries = useMemo(() => (script && fn ? paletteEntries(tc, script, fn, project.scripts, wsFiles?.values(), catalog).filter((e) => !e.key.includes(':')) : []), [tc, script, fn, project.scripts, wsFiles, catalog]);
   const filtered = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    return entries.filter((e) => words.every((w) => `${e.title} ${e.category} ${(e.def.keywords ?? []).join(' ')} ${e.type}`.toLowerCase().includes(w)));
+    return entries.filter((e) => matchesQuery(`${e.title} ${e.category} ${(e.def.keywords ?? []).join(' ')} ${e.type}`.toLowerCase(), words.join(' ')));
   }, [entries, q]);
   const groups = useMemo(() => {
     const m = new Map<string, MenuEntry[]>();

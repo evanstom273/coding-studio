@@ -12,7 +12,7 @@ import { navigate } from '@web/lib/router';
 import { backupToWorkspace, createBackup, deleteProject, duplicateProject, getBackup, insertProject, insertWorkspace, listBackups, listProjects } from '@web/db/projects';
 import { buildWebStarter } from '@cs/examples';
 import { newId } from '@cs/graph-core';
-import { CONFIG_PATH, configOf, defaultConfig, makeRecord, serializeConfig, workspaceRevision, type FileRecord, type Workspace } from '@cs/workspace';
+import { CONFIG_PATH, configOf, detectedConfig, makeRecord, serializeConfig, workspaceRevision, type FileRecord, type Workspace } from '@cs/workspace';
 import { readState } from '@cs/git';
 import { cloneRepo, commitOpen, github, openOutputs, publishOpen, pullOpen, setCloudflareSecrets, switchOpen } from '@web/lib/git';
 import { saveNow } from '@web/hooks/useAutosave';
@@ -371,7 +371,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
     case 'git_commit': {
       await ensureOpen(params.project);
       await saveNow();
-      const r = await commitOpen(String(params.message ?? ''), { paths: Array.isArray(params.paths) ? params.paths.map(String) : undefined, newBranch: str(params.new_branch) }, 'mcp');
+      const r = await commitOpen(String(params.message ?? ''), { paths: Array.isArray(params.paths) ? params.paths.map(String) : undefined, newBranch: str(params.new_branch), ...(typeof params.confirm_deletions === 'number' ? { confirmDeletions: params.confirm_deletions } : {}) }, 'mcp');
       return { commit: r.commit, branch: r.branch, files: r.files };
     }
     case 'git_pull': {
@@ -474,7 +474,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const files = new Map<string, FileRecord>();
       for (const f of list) files.set(f.path, makeRecord(f.path, f.base64 !== undefined ? Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0)) : (f.text ?? ''), now));
       const name = str(params.name) ?? 'Folder';
-      if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(files.has('package.json') || files.has('tsconfig.json') ? defaultConfig(name, 'typescript', 'es2022') : defaultConfig(name)), now));
+      if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(detectedConfig(name, files.keys())), now));
       await saveNow();
       const ws = await insertWorkspace(svc.stripGenerated({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files }));
       await openAndWait(ws.meta.id);

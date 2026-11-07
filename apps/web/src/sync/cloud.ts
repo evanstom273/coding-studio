@@ -10,6 +10,7 @@
  * changed on both → the cloud copy wins and the user is told (never silently merged).
  */
 import { makeRecord, type FileKind, type FileRecord, type Workspace } from '@cs/workspace';
+import { planSync } from './plan';
 import { deleteProject, getSetting, listProjects, loadWorkspace, projectEvents, saveWorkspace, setSetting, type SavedDetail } from '@web/db/projects';
 import { useBridge, sendToCloud } from '@web/bridge/client';
 import { useEditor } from '@web/store/editor';
@@ -101,8 +102,11 @@ async function pushFiles(ws: Workspace, paths: string[], base: (p: string) => st
     if (r.status === 409) return false;
     throw new Error(`Cloud sync failed (${r.status}${r.body?.error ? `: ${r.body.error}` : ''})`);
   };
-  // codingstudio.json first, so the cloud knows the project's name as soon as anything arrives.
-  const ordered = [...paths].sort((a, b) => (a === 'codingstudio.json' ? -1 : b === 'codingstudio.json' ? 1 : 0));
+  // codingstudio.json first, so the cloud knows the project's name as soon as anything arrives;
+  // the git state last, so an upload that stops partway never carries "these files are on GitHub"
+  // without the files themselves (a device opening that copy would see them all as deleted).
+  const rank = (p: string) => (p === 'codingstudio.json' ? 0 : p === '.codingstudio/git.json' ? 2 : 1);
+  const ordered = [...paths].sort((a, b) => rank(a) - rank(b));
   for (const p of ordered) {
     const f = ws.files.get(p);
     const change = f ? { path: p, base: base(p), kind: f.kind, ...(f.kind === 'binary' ? { base64: b64(f.data ?? new Uint8Array()) } : { text: f.text ?? '' }) } : { path: p, base: base(p), delete: true };
@@ -136,26 +140,13 @@ async function syncOne(id: string, label: string, cloud?: CloudWorkspace) {
   if (!local && !remote) return;
 
   const cIdx = new Map((remote?.files ?? []).map((f) => [f.path, f]));
-  const paths = new Set([...(local?.files.keys() ?? []), ...cIdx.keys()]);
-  const push: string[] = [];
-  const pull: string[] = [];
-  let conflicts = 0;
   const localNewer = (local?.meta.updatedAt ?? 0) > (remote?.updatedAt ?? 0);
-  for (const p of paths) {
-    const l = local?.files.get(p)?.hash;
-    const c = cIdx.get(p)?.hash;
-    if (l === c) continue;
-    const b = base?.[p];
-    if (base && l === b) pull.push(p);
-    else if (base && c === b) push.push(p);
-    else if (!remote) push.push(p);
-    else if (!local) pull.push(p);
-    else if (!base) (localNewer ? push : pull).push(p);
-    else {
-      pull.push(p); // changed on both sides: the cloud wins
-      conflicts++;
-    }
-  }
+  const { push, pull, conflicts } = planSync(
+    local ? new Map([...local.files].map(([p, f]) => [p, f.hash])) : undefined,
+    remote ? new Map([...cIdx].map(([p, f]) => [p, f.hash])) : undefined,
+    base,
+    localNewer,
+  );
 
   let ws: Workspace | undefined = local;
   if (pull.length) {

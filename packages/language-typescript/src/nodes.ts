@@ -139,7 +139,7 @@ const template: NodeDefinition = {
   title: 'Format Text',
   category: 'Strings',
   description: 'Text with values filled in: write {name} where a value goes ("Hello {name}, you have {count} messages"). Use {{ and }} for literal braces.',
-  keywords: ['template', 'format', 'interpolate', 'string', '`'],
+  keywords: ['template', 'template string', 'template literal', 'format', 'interpolate', 'interpolation', 'string', 'f-string', 'sprintf', 'placeholder', '`'],
   flavor: 'pure',
   languages: L,
   props: [{ key: 'template', label: 'Template', kind: 'text', default: 'Hello {name}!' }],

@@ -23,6 +23,18 @@ export function resolveType(adapter: LanguageAdapter, text: string | undefined):
   }
 }
 
+/** A function followed by the functions that enclose it (an inline function sees its owners' parameters and locals, nearest first). */
+export function scopeChain(script: ScriptDoc, fn: FunctionDecl): FunctionDecl[] {
+  const chain: FunctionDecl[] = [fn];
+  for (let f = fn; f.kind === 'lambda' && f.owner; ) {
+    const o = script.functions.find((x) => x.id === f.owner);
+    if (!o || chain.includes(o)) break;
+    chain.push(o);
+    f = o;
+  }
+  return chain;
+}
+
 export function makeNodeContext(tc: Toolchain, script: ScriptDoc, fn: FunctionDecl): NodeContext {
   const { adapter } = tc;
   const typeCache = new Map<string, TypeRef>();
@@ -35,14 +47,7 @@ export function makeNodeContext(tc: Toolchain, script: ScriptDoc, fn: FunctionDe
     }
     return t;
   };
-  // A closure also sees its owners' parameters and locals (nearest first).
-  const chain: FunctionDecl[] = [fn];
-  for (let f = fn; f.kind === 'lambda' && f.owner; ) {
-    const o = script.functions.find((x) => x.id === f.owner);
-    if (!o || chain.includes(o)) break;
-    chain.push(o);
-    f = o;
-  }
+  const chain = scopeChain(script, fn);
   const vars = (): ResolvedVariable[] => [
     ...chain.flatMap((f) => [
       ...f.params.map((p) => ({ id: p.id, name: p.name, type: type(p.type), scope: 'param' as const, constant: false, decl: p })),

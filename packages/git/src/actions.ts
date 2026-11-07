@@ -177,7 +177,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-${yaml}${s.build ? `      - name: Build\n        run: ${run(pm, "build")}\n` : ""}      - name: Deploy to Cloudflare
+${yaml}${s.build ? `      - name: Build\n        run: ${run(pm, "build")}\n` : hasDep(ctx.packageJson, "vite") ? `      - name: Build\n        run: ${pm === "npm" ? "npx" : `${pm} exec`} vite build\n` : ""}      - name: Deploy to Cloudflare
         run: ${wrangler} deploy
         env:
           CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -264,7 +264,7 @@ function Canvas() {
     };
     // Double-click in the node library: add at the centre of the visible canvas.
     const addType = (ev: Event) => {
-      const e = (ev as CustomEvent<{ type: string; props?: Record<string, never>; newClosure?: boolean }>).detail;
+      const e = (ev as CustomEvent<{ type: string; props?: Record<string, never>; newClosure?: boolean; newState?: { component: string } }>).detail;
       const el = document.querySelector('.react-flow');
       const r = el?.getBoundingClientRect();
       if (!r) return;

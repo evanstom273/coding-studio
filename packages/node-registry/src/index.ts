@@ -270,10 +270,9 @@ export class NodeRegistry {
     const q = query.trim().toLowerCase();
     const list = this.available(language, caps);
     if (!q) return list;
-    const words = q.split(/\s+/);
     const score = (d: NodeDefinition) => {
       const hay = `${d.title} ${d.type} ${d.category} ${(d.keywords ?? []).join(' ')} ${d.description}`.toLowerCase();
-      if (!words.every((w) => hay.includes(w))) return -1;
+      if (!matchesQuery(hay, q)) return -1;
       const t = d.title.toLowerCase();
       return (t === q ? 100 : 0) + (t.startsWith(q) ? 50 : 0) + (t.includes(q) ? 20 : 0) + ((d.keywords ?? []).some((k) => k.toLowerCase() === q) ? 30 : 0);
     };
@@ -287,6 +286,56 @@ export class NodeRegistry {
   summary(def: NodeDefinition): NodeSummary {
     return { type: def.type, title: def.title, category: def.category, description: def.description, flavor: def.flavor, keywords: def.keywords ?? [], languages: def.languages, requires: def.requires };
   }
+}
+
+// Words people bring from other languages and engines, so search finds the node whatever it's called here.
+const SYNONYM_GROUPS: string[][] = [
+  ['template', 'interpolate', 'interpolation', 'fstring', 'f-string', 'sprintf', 'format', 'placeholder'],
+  ['concat', 'concatenate', 'join', 'combine', 'append'],
+  ['if', 'branch', 'condition', 'conditional', 'else'],
+  ['print', 'log', 'console', 'debug', 'trace', 'echo'],
+  ['loop', 'for', 'foreach', 'repeat', 'iterate', 'each', 'while'],
+  ['array', 'list', 'vector', 'collection'],
+  ['dictionary', 'dict', 'map', 'object', 'record', 'hash', 'hashmap', 'table'],
+  ['function', 'method', 'procedure', 'func', 'def', 'subroutine'],
+  ['call', 'invoke', 'run', 'execute'],
+  ['lambda', 'arrow', 'closure', 'callback', 'anonymous', 'inline', 'handler'],
+  ['variable', 'var', 'let', 'field', 'property'],
+  ['state', 'usestate', 'useState'],
+  ['length', 'size', 'count', 'len'],
+  ['random', 'rand', 'rng'],
+  ['wait', 'delay', 'sleep', 'timeout', 'settimeout', 'timer'],
+  ['string', 'text', 'str'],
+  ['number', 'int', 'integer', 'float', 'num', 'double'],
+  ['bool', 'boolean'],
+  ['null', 'none', 'nil', 'undefined'],
+  ['equal', 'equals', 'compare', 'same'],
+  ['not', 'negate', 'invert'],
+  ['and', 'both'],
+  ['or', 'either'],
+  ['fetch', 'http', 'request', 'ajax', 'download'],
+  ['tostring', 'stringify', 'str'],
+  ['parse', 'tonumber', 'parseint', 'parsefloat'],
+  ['substring', 'slice', 'substr'],
+  ['uppercase', 'upper', 'capitalize', 'toupper'],
+  ['lowercase', 'lower', 'tolower'],
+  ['remove', 'delete', 'erase'],
+  ['add', 'plus', 'sum'],
+  ['subtract', 'minus'],
+  ['multiply', 'times', 'product'],
+  ['divide', 'division', 'quotient'],
+  ['remainder', 'modulo', 'mod'],
+  ['element', 'tag', 'jsx', 'html', 'div'],
+  ['event', 'signal', 'emit', 'listener'],
+  ['self', 'this'],
+];
+const SYNONYMS = new Map<string, string[]>();
+for (const g of SYNONYM_GROUPS) for (const w of g) SYNONYMS.set(w.toLowerCase(), [...(SYNONYMS.get(w.toLowerCase()) ?? []), ...g.map((x) => x.toLowerCase())]);
+
+/** Whether every word of `query` (or a common synonym of it) appears in `hay` (lower-case). */
+export function matchesQuery(hay: string, query: string): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return words.every((w) => hay.includes(w) || (SYNONYMS.get(w) ?? []).some((x) => hay.includes(x)));
 }
 
 /** Default prop values for a new node of this type. */

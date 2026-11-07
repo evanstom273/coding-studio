@@ -20,6 +20,7 @@ import {
   gitStatus,
   pullOpen,
   recoverDeletedBranch,
+  restoreMissing,
   switchOpen,
   saveToken,
   takeTheirs,
@@ -98,6 +99,7 @@ export function SourceControl() {
   const extras = useCompile((s) => s.extras);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const changes = useMemo(() => gitStatus(ws), [ws, lastGood, extras]);
+  const missingCount = changes.filter((c) => c.status === "deleted").length;
   const compact = useCompact();
   const [login, setLogin] = useState<string | null | undefined>(undefined);
   const [msg, setMsg] = useState("");
@@ -340,6 +342,27 @@ export function SourceControl() {
           }}
         />
       )}
+      {view === "changes" && missingCount >= 10 && (
+        <div className="border-b border-red-400/30 bg-red-500/10 px-3 py-2" data-testid="git-missing">
+          <div className="font-medium text-red-100">{missingCount} files are missing compared with GitHub</div>
+          <div className="mt-0.5 text-[11.5px] text-muted">
+            If you didn't delete them, the project didn't load completely. Don't commit: committing would delete them from the repository.
+          </div>
+          <button
+            className="mt-1.5 rounded bg-red-500/80 px-2.5 py-1 text-white hover:bg-red-500"
+            disabled={!!busy}
+            data-testid="git-restore-missing"
+            onClick={() =>
+              run("restore", async () => {
+                const n = await restoreMissing();
+                toast("success", `Restored ${n} file(s) from GitHub`);
+              })
+            }
+          >
+            {busy === "restore" ? "Restoring…" : "Restore them from GitHub"}
+          </button>
+        </div>
+      )}
       {view === "changes" && conflicts.length > 0 && (
         <div
           className="border-b border-amber-400/30 bg-amber-400/10 px-3 py-2"
@@ -421,10 +444,21 @@ export function SourceControl() {
               data-testid="commit-push"
               onClick={() =>
                 run("commit", async () => {
-                  const r = await commitOpen(
-                    msg,
-                    newBranch ? { newBranch: branchName.trim() } : {},
-                  );
+                  const opts = newBranch ? { newBranch: branchName.trim() } : {};
+                  let r;
+                  try {
+                    r = await commitOpen(msg, opts);
+                  } catch (e) {
+                    const n = (e as { code?: string; deletions?: number }).code === "E_MASS_DELETE" ? (e as { deletions: number }).deletions : undefined;
+                    if (n === undefined) throw e;
+                    // A project that didn't load completely looks like one whose files were deleted.
+                    const typed = window.prompt(`${(e as Error).message}\n\nType ${n} to delete them from GitHub anyway.`);
+                    if (typed?.trim() !== String(n)) {
+                      toast("info", "Not committed. Nothing was changed on GitHub.");
+                      return;
+                    }
+                    r = await commitOpen(msg, { ...opts, confirmDeletions: n });
+                  }
                   toast("success", `Pushed ${r.files} file(s) to ${r.branch}`);
                   setMsg("");
                   if (newBranch) setPr({ branch: r.branch, url: undefined });

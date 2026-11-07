@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FunctionDecl, JsonValue, ScriptDoc } from '@cs/graph-core';
-import { checkConnection, makeNodeContext, nodeInfo, type Toolchain } from '@cs/compiler-core';
-import { defaultProps, type NodeDefinition, type PortSpec } from '@cs/node-registry';
+import { checkConnection, makeNodeContext, nodeInfo, scopeChain, type Toolchain } from '@cs/compiler-core';
+import { defaultProps, matchesQuery, type NodeDefinition, type PortSpec } from '@cs/node-registry';
 import type { EditOp } from '@cs/project-format';
 import { toolchainFor } from '@web/lib/toolchain';
 import { useEditor } from '@web/store/editor';
@@ -27,11 +27,23 @@ export interface MenuEntry {
   def: NodeDefinition;
   /** Creating the node also creates a new inline function owned by the current one. */
   newClosure?: boolean;
+  /** Creating the node also creates a new React state variable in the enclosing component. */
+  newState?: { component: string };
 }
 
 /** Edit operations that add a palette entry's node (with `ref: 'n'`) at a position. */
-export function opsForEntry(e: Pick<MenuEntry, 'type' | 'props' | 'newClosure'>, fn: FunctionDecl, script: ScriptDoc, position: { x: number; y: number }): EditOp[] {
+export function opsForEntry(e: Pick<MenuEntry, 'type' | 'props' | 'newClosure' | 'newState'>, fn: FunctionDecl, script: ScriptDoc, position: { x: number; y: number }): EditOp[] {
   const at = { x: Math.round(position.x), y: Math.round(position.y) };
+  if (e.newState) {
+    const owner = script.functions.find((f) => f.id === e.newState!.component);
+    const taken = new Set([...script.variables, ...script.functions, ...scopeChain(script, fn).flatMap((f) => [...f.params, ...f.locals])].map((x) => x.name));
+    let name = 'count';
+    for (let i = 2; taken.has(name) || taken.has(`set${name[0].toUpperCase()}${name.slice(1)}`); i++) name = `count${i}`;
+    return [
+      { op: 'add_variable', ref: 'v', function: owner?.id ?? fn.id, name, type: 'number', default: 0, attributes: { state: true } },
+      { op: 'add_node', ref: 'n', graph: fn.id, type: 'core.get_var', position: at, props: { variable: '$v' } },
+    ];
+  }
   if (e.newClosure) {
     const taken = new Set(script.functions.map((f) => f.name));
     let name = 'callback';
@@ -53,7 +65,14 @@ export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDec
   const out: MenuEntry[] = [];
   const reg = tc.registry;
   const def = (t: string) => reg.get(t)!;
-  const vars = [...fn.params.map((p) => ({ ...p, scope: 'parameter' })), ...fn.locals.map((v) => ({ ...v, scope: 'local' })), ...script.variables.map((v) => ({ ...v, scope: v.constant ? 'constant' : 'member' }))];
+  const [own, ...outer] = scopeChain(script, fn);
+  const vars = [
+    ...own.params.map((p) => ({ ...p, scope: 'parameter' })),
+    ...own.locals.map((v) => ({ ...v, scope: v.constant ? 'constant' : 'local' })),
+    // Inline functions see the parameters and locals of the functions around them.
+    ...outer.flatMap((o) => [...o.params.map((p) => ({ ...p, scope: `${o.name} parameter` })), ...o.locals.map((v) => ({ ...v, scope: v.constant ? 'constant' : `${o.name} local` }))]),
+    ...script.variables.map((v) => ({ ...v, scope: v.constant ? 'constant' : 'member' })),
+  ];
   for (const v of vars) {
     out.push({ key: `get:${v.id}`, title: `Get ${v.name}`, category: 'Variables', description: `Read ${v.scope} ${v.name}: ${v.type}`, type: 'core.get_var', props: { variable: v.id }, def: def('core.get_var') });
     if (v.scope !== 'constant') out.push({ key: `set:${v.id}`, title: `Set ${v.name}`, category: 'Variables', description: `Assign ${v.scope} ${v.name}: ${v.type}`, type: 'core.set_var', props: { variable: v.id }, def: def('core.set_var') });
@@ -70,6 +89,9 @@ export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDec
     out.push({ key: d.type, title: d.title, category: d.category, description: d.description, type: d.type, def: d });
     d.presets?.forEach((p, i) => out.push({ key: `${d.type}#${i}`, title: p.title, category: p.category ?? d.category, description: p.description ?? d.description, type: d.type, props: p.props, def: d }));
   }
+  // React state: offered in a component or hook, and in the inline functions inside one.
+  const component = tc.adapter.id === 'typescript' ? scopeChain(script, fn).find((f) => f.component || /^use[A-Z]/.test(f.name)) : undefined;
+  if (component) out.push({ key: 'state#new', title: 'New React State', category: 'Variables', description: `Add a state variable to ${component.name} (useState) and read it. Change it with Set: the component re-renders.`, type: 'core.get_var', newState: { component: component.id }, def: def('core.get_var') });
   const closure = reg.get('ts.closure');
   if (closure && tc.adapter.capabilities.closures) {
     out.push({ key: 'closure#new', title: 'New Inline Function', category: 'Functions', description: closure.description, type: 'ts.closure', newClosure: true, def: closure });
@@ -113,9 +135,8 @@ export function paletteEntries(tc: Toolchain, script: ScriptDoc, fn: FunctionDec
 
 function score(e: MenuEntry, q: string): number {
   if (!q) return 1;
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const hay = `${e.title} ${e.category} ${e.type} ${(e.def.keywords ?? []).join(' ')}`.toLowerCase();
-  if (!words.every((w) => hay.includes(w))) return 0;
+  if (!matchesQuery(hay, q)) return 0;
   const t = e.title.toLowerCase();
   return 1 + (t === q.toLowerCase() ? 100 : 0) + (t.startsWith(q.toLowerCase()) ? 40 : 0) + (t.includes(q.toLowerCase()) ? 15 : 0) + (e.key.includes(':') ? 5 : 0);
 }

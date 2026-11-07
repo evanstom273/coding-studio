@@ -21,7 +21,7 @@ import { CloudStore, diffFiles, type StoreBackend } from './cloud-store';
 import { CloudflareVault } from './cloudflare';
 import { GitHubVault } from './github';
 import { cloneFiles, commitAndPush, createRepoFor, switchBranch, GitHubError, pull, readState, stateRecord } from '@cs/git';
-import { defaultConfig, serializeConfig } from '@cs/workspace';
+import { detectedConfig, serializeConfig } from '@cs/workspace';
 
 export interface ProjectSummary {
   id: string;
@@ -456,7 +456,7 @@ export class CloudService {
       case 'git_commit': {
         const { project: p } = await this.resolve(params.project);
         const ws = this.store.read(p.id)!;
-        const r = await commitAndPush(await this.github().client(), ws, String(params.message ?? ''), { paths: Array.isArray(params.paths) ? params.paths.map(String) : undefined, newBranch: svc.str(params.new_branch), generated: svc.generatedOutputs(p, { strict: true }) });
+        const r = await commitAndPush(await this.github().client(), ws, String(params.message ?? ''), { paths: Array.isArray(params.paths) ? params.paths.map(String) : undefined, newBranch: svc.str(params.new_branch), generated: svc.generatedOutputs(p, { strict: true }), ...(typeof params.confirm_deletions === 'number' ? { confirmDeletions: params.confirm_deletions } : {}) });
         const files = new Map(ws.files);
         files.set('.codingstudio/git.json', stateRecord(r.state));
         await this.commit(ws, { meta: ws.meta, files }, 'claude', { label: `Claude: commit "${String(params.message).split('\n')[0]}"`, source: 'claude' });
@@ -528,7 +528,7 @@ export class CloudService {
         const c = await cloneFiles(await this.github().client(), owner, repo, svc.str(params.branch));
         const now = Date.now();
         const files = new Map(c.files.map((f) => [f.path, f]));
-        if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(defaultConfig(c.state.repo)), now));
+        if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(detectedConfig(c.state.repo, files.keys())), now));
         const ws: Workspace = svc.stripGenerated({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files });
         await this.commit(undefined, ws, 'claude');
         await this.select(ws.meta.id);

@@ -378,7 +378,7 @@ Code and graphs live side by side: write ordinary code files directly; change vi
   server.registerTool('git_status', { title: 'Git status', description: 'Repository, branch and the files changed (added/modified/deleted) since the last commit or pull.', inputSchema: { project }, annotations: ro }, (a) => call('git_status', a));
   server.registerTool(
     'git_commit',
-    { title: 'Commit & push', description: `Commit all changes (or only "paths") and push to GitHub. new_branch commits to a new branch made from the current one (then open a PR with git_create_pr). Refused with E_NOT_FAST_FORWARD if GitHub has newer commits — git_pull first. ${gitNote}`, inputSchema: { project, message: z.string(), paths: z.array(z.string()).optional(), new_branch: z.string().optional() } },
+    { title: 'Commit & push', description: `Commit all changes (or only "paths") and push to GitHub. new_branch commits to a new branch made from the current one (then open a PR with git_create_pr). Refused with E_NOT_FAST_FORWARD if GitHub has newer commits — git_pull first. Refused with E_MASS_DELETE when it would delete 10+ files: that almost always means the project didn't load completely, so STOP and tell the user; only pass confirm_deletions (the exact number) if the user explicitly asked for those files to be deleted. ${gitNote}`, inputSchema: { project, message: z.string(), paths: z.array(z.string()).optional(), new_branch: z.string().optional(), confirm_deletions: z.number().int().optional().describe('Only when the user asked to delete those files: the exact number of deletions E_MASS_DELETE reported.') } },
     (a) => call('git_commit', a, 300_000),
   );
   server.registerTool(

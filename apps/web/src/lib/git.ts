@@ -3,7 +3,7 @@
  * adds the token kept in your Durable Object — the token never lives in this browser.
  */
 import { branchExists, cloneFiles, commitAndPush, createRepoFor, switchBranch, type GeneratedFile, GitHub, GIT_STATE_PATH, pull, readState, remoteFile, stateRecord, status, type Fetch, type GitState } from '@cs/git';
-import { CONFIG_PATH, defaultConfig, makeRecord, serializeConfig, type FileRecord, type Workspace, type WorkspaceOp } from '@cs/workspace';
+import { CONFIG_PATH, detectedConfig, makeRecord, serializeConfig, type FileRecord, type Workspace, type WorkspaceOp } from '@cs/workspace';
 import { newId } from '@cs/graph-core';
 import { useBridge } from '@web/bridge/client';
 import { insertWorkspace } from '@web/db/projects';
@@ -65,7 +65,7 @@ export async function cloneRepo(owner: string, repo: string, branch?: string, on
   const c = await cloneFiles(github(), owner, repo, branch, onProgress);
   const now = Date.now();
   const files = new Map<string, FileRecord>(c.files.map((f) => [f.path, f]));
-  if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(defaultConfig(c.state.repo)), now));
+  if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(detectedConfig(c.state.repo, files.keys())), now));
   return insertWorkspace(stripGenerated({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files }));
 }
 
@@ -94,7 +94,7 @@ const b64 = (u: Uint8Array) => {
 export const writeOp = (f: FileRecord): WorkspaceOp => (f.kind === 'binary' ? { op: 'write_file', path: f.path, base64: b64(f.data ?? new Uint8Array()) } : { op: 'write_file', path: f.path, content: f.text ?? '' });
 
 /** Commit and push the open project (all changes, or `paths`). */
-export async function commitOpen(message: string, opts: { paths?: string[]; newBranch?: string } = {}, source: 'user' | 'mcp' = 'user') {
+export async function commitOpen(message: string, opts: { paths?: string[]; newBranch?: string; confirmDeletions?: number } = {}, source: 'user' | 'mcp' = 'user') {
   const ws = useEditor.getState().workspace;
   if (!ws) throw new Error('No project is open');
   const r = await commitAndPush(github(), ws, message, { ...opts, generated: openOutputs(true) });
@@ -155,6 +155,27 @@ export async function takeTheirs(path: string) {
   const st = readState(ws)!;
   const f = await remoteFile(github(), st, path, 'base');
   useEditor.getState().applyFiles([f ? writeOp(f) : { op: 'delete', path }], `Use GitHub's ${path}`);
+}
+
+/** Download GitHub's copy of every file this project is missing (deleted here, or never loaded), as one undoable step. */
+export async function restoreMissing(onProgress?: (done: number, total: number) => void): Promise<number> {
+  const ws = useEditor.getState().workspace!;
+  const st = readState(ws)!;
+  const missing = status(ws, st).filter((c) => c.status === 'deleted').map((c) => c.path);
+  const gh = github();
+  const ops: WorkspaceOp[] = [];
+  let done = 0;
+  const queue = [...missing];
+  const worker = async () => {
+    for (let p = queue.shift(); p; p = queue.shift()) {
+      const f = await remoteFile(gh, st, p, 'base');
+      if (f) ops.push(writeOp(f));
+      onProgress?.(++done, missing.length);
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  if (ops.length) useEditor.getState().applyFiles(ops, `Restore ${ops.length} file(s) from GitHub`);
+  return ops.length;
 }
 
 /** GitHub's version of a file at the last synced commit (for diffs). */

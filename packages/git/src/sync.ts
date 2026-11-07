@@ -135,7 +135,19 @@ export interface CommitResult {
  * Commit every change (or only `paths`) and push. With `newBranch` the commit goes to a new
  * branch made from the current one. Refused with E_NOT_FAST_FORWARD if GitHub moved on — pull first.
  */
-export async function commitAndPush(gh: GitHub, ws: Workspace, message: string, opts: { paths?: string[]; newBranch?: string; generated?: GeneratedFile[] } = {}): Promise<CommitResult> {
+/**
+ * Deleting many files in one commit has to be confirmed with the exact number. A project that
+ * didn't load completely (an interrupted download or sync) looks exactly like one whose files
+ * were deleted, and committing it would wipe the repository.
+ */
+export const MASS_DELETE_THRESHOLD = 10;
+export function massDeletion(changes: Change[], st: GitState): { count: number; tracked: number; sample: string[] } | null {
+  const del = changes.filter((c) => c.status === 'deleted');
+  if (del.length < MASS_DELETE_THRESHOLD) return null;
+  return { count: del.length, tracked: Object.keys(st.tree).length, sample: del.slice(0, 8).map((c) => c.path) };
+}
+
+export async function commitAndPush(gh: GitHub, ws: Workspace, message: string, opts: { paths?: string[]; newBranch?: string; generated?: GeneratedFile[]; confirmDeletions?: number } = {}): Promise<CommitResult> {
   ws = withGenerated(ws, opts.generated);
   const st = readState(ws);
   if (!st) throw new GitHubError('E_NOT_LINKED', 'This project is not linked to a GitHub repository.');
@@ -146,6 +158,15 @@ export async function commitAndPush(gh: GitHub, ws: Workspace, message: string, 
     changes = changes.filter((c) => want.has(c.path));
   }
   if (!changes.length) throw new GitHubError('E_NOTHING_TO_COMMIT', 'Nothing to commit: no files differ from GitHub.');
+  const mass = massDeletion(changes, st);
+  if (mass && opts.confirmDeletions !== mass.count)
+    throw Object.assign(
+      new GitHubError(
+        'E_MASS_DELETE',
+        `Not committed: this would delete ${mass.count} of the repository's ${mass.tracked} files (${mass.sample.join(', ')}${mass.count > mass.sample.length ? ', …' : ''}). If you didn't delete them yourself, the project probably didn't load completely: don't commit. Re-open the repository from GitHub instead. To delete them on purpose, confirm the deletion of exactly ${mass.count} files.`,
+      ),
+      { deletions: mass.count },
+    );
   const { owner, repo } = st;
   const branch = opts.newBranch?.trim() || st.branch;
   if (!opts.newBranch) {

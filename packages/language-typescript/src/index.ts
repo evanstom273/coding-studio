@@ -130,6 +130,22 @@ export const typescriptAdapter: LanguageAdapter = {
       }
     };
     for (const m of module.members) if (m.k === 'function' && (m.component || /^use[A-Z]/.test(m.name))) nested(m.body, m.name, true);
+    // Setting state while rendering re-renders, which sets it again: React gives up with "Too many re-renders".
+    const blocksOf = (s: IRStmt): IRStmt[][] => (s.k === 'if' ? [s.then, s.else ?? []] : s.k === 'while' || s.k === 'for_range' || s.k === 'for_each' ? [s.body] : s.k === 'match' ? [...s.arms.map((a) => a.body), s.default ?? []] : s.k === 'try' ? [s.body, s.handler ?? [], s.finally ?? []] : []);
+    for (const m of module.members) {
+      if (m.k !== 'function' || !(m.component || /^use[A-Z]/.test(m.name))) continue;
+      const states = new Set<string>();
+      for (const s of m.body) if (s.k === 'var_tuple' && s.init.k === 'invoke' && s.init.callee.k === 'import' && s.init.callee.name === 'useState') states.add(s.names[0]);
+      if (!states.size) continue;
+      const scan = (stmts: IRStmt[]) => {
+        for (const s of stmts) {
+          if (s.k === 'assign' && s.target.k === 'ref' && states.has(s.target.name))
+            out.push({ severity: 'error', code: 'E_SET_STATE_IN_RENDER', message: `${m.name}: "${s.target.name}" is set while the component is drawing. That redraws it, which sets it again, forever (React stops with "Too many re-renders").`, suggestion: `Set ${s.target.name} inside an event handler (an Inline Function wired to onClick, onChange…) or an effect, not in ${m.name}'s main flow.`, scriptId: module.scriptId, ...(s.src?.graphId ? { graphId: s.src.graphId } : {}), ...(s.src?.nodeId ? { nodeId: s.src.nodeId } : {}) });
+          for (const b of blocksOf(s)) scan(b);
+        }
+      };
+      scan(m.body);
+    }
     for (const m of module.members) {
       if (m.k !== 'function') continue;
       walkStmts(m.body, (s) => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { FunctionDecl, JsonValue, ParamDecl, ScriptDoc, VariableDecl } from '@cs/graph-core';
-import { makeNodeContext, nodeInfo, resolveType } from '@cs/compiler-core';
+import { makeNodeContext, nodeInfo, resolveType, scopeChain } from '@cs/compiler-core';
 import type { PropSchema } from '@cs/node-registry';
 import type { EditOp, ParamInput } from '@cs/project-format';
 import { toolchainFor } from '@web/lib/toolchain';
@@ -100,9 +100,12 @@ function PropEditor({ prop, value, onChange, script, fn }: { prop: PropSchema; v
       return <TypeInput value={String(value ?? '')} onCommit={(v) => onChange(v)} testId={`prop-${prop.key}`} />;
     case 'variable': {
       const scopes = prop.variableScopes ?? ['member', 'local', 'param'];
+      const [own, ...outer] = scopeChain(script, fn);
       const groups: [string, (VariableDecl | ParamDecl)[]][] = [
-        ['Parameters', scopes.includes('param') ? fn.params : []],
-        ['Local variables', scopes.includes('local') ? fn.locals : []],
+        ['Parameters', scopes.includes('param') ? own.params : []],
+        ['Local variables', scopes.includes('local') ? own.locals : []],
+        // An inline function can use the variables of the functions around it.
+        ...outer.map((o): [string, (VariableDecl | ParamDecl)[]] => [`From ${o.name}`, [...(scopes.includes('param') ? o.params : []), ...(scopes.includes('local') ? o.locals : [])]]),
         ['Script variables', scopes.includes('member') ? script.variables : []],
       ];
       return (

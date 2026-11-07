@@ -97,6 +97,23 @@ export function defaultConfig(name: string, language = 'gdscript', languageVersi
   return { version: 1, name, language, languageVersion, compiler: { ...DEFAULT_COMPILER_SETTINGS } };
 }
 
+/**
+ * The config for files that arrive without one (a GitHub repository, a zip): the language comes
+ * from what's in them. Godot only when there is a Godot project (project.godot / .gd files);
+ * anything else opens as TypeScript, where every file is still editable as it is.
+ */
+export function detectedConfig(name: string, paths: Iterable<string>): WorkspaceConfig {
+  let gd = 0;
+  let js = 0;
+  let godotProject = false;
+  for (const p of paths) {
+    if (p === 'project.godot' || p.endsWith('/project.godot')) godotProject = true;
+    else if (/\.(gd|tscn|tres)$/.test(p)) gd++;
+    else if (/\.(m?[jt]sx?|cjs|cts)$/.test(p) || /(^|\/)(package\.json|tsconfig\.json)$/.test(p)) js++;
+  }
+  return godotProject || gd > js ? defaultConfig(name) : defaultConfig(name, 'typescript', 'es2022');
+}
+
 export function serializeConfig(c: WorkspaceConfig): string {
   return JSON.stringify(c, null, 2) + '\n';
 }

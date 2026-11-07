@@ -4,7 +4,7 @@
  * junk are skipped on import (and reported).
  */
 import { unzipSync, zipSync, type Zippable } from 'fflate';
-import { CONFIG_PATH, defaultConfig, makeRecord, serializeConfig, WORKSPACE_SCHEMA_VERSION, type FileRecord, type Workspace } from './model';
+import { CONFIG_PATH, detectedConfig, makeRecord, serializeConfig, WORKSPACE_SCHEMA_VERSION, type FileRecord, type Workspace } from './model';
 import { normalizePath } from './paths';
 import { applyWorkspaceOps } from './ops';
 
@@ -69,7 +69,7 @@ export function zipToWorkspace(bytes: Uint8Array, id: string, fallbackName: stri
   }
   if (!ws.files.has(CONFIG_PATH)) {
     const f = new Map(ws.files);
-    f.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(defaultConfig(fallbackName)), now));
+    f.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(detectedConfig(fallbackName, f.keys())), now));
     ws = { meta: ws.meta, files: f };
   }
   return { workspace: ws, skipped, issues };
