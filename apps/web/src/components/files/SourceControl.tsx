@@ -25,7 +25,8 @@ import {
 } from "@web/lib/git";
 import { Button, cx, inputCls } from "../ui/primitives";
 import { iconFor } from "./FileExplorer";
-import { DIFF_PREFIX } from "@web/lib/fileTypes";
+import { DIFF_PREFIX, GEN_PREFIX } from "@web/lib/fileTypes";
+import { useCompile } from "@web/compile/store";
 import { ActionsPanel } from "./ActionsPanel";
 import { PullRequests, RepoSettings } from "./PullRequests";
 import { stateRecord } from "@cs/git";
@@ -90,7 +91,10 @@ export function TokenForm({ onDone }: { onDone: (login: string) => void }) {
 export function SourceControl() {
   const ws = useEditor((s) => s.workspace)!;
   const st = useMemo(() => gitState(ws), [ws]);
-  const changes = useMemo(() => gitStatus(ws), [ws]);
+  const lastGood = useCompile((s) => s.lastGood);
+  const extras = useCompile((s) => s.extras);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const changes = useMemo(() => gitStatus(ws), [ws, lastGood, extras]);
   const compact = useCompact();
   const [login, setLogin] = useState<string | null | undefined>(undefined);
   const [msg, setMsg] = useState("");
@@ -175,11 +179,12 @@ export function SourceControl() {
       </div>
     );
 
+  const isGenerated = (path: string) => !ws.files.has(path);
   const open = (path: string, status: string) => {
     // New files open directly; changed and deleted ones as a comparison with GitHub.
     useEditor
       .getState()
-      .openTab(status === "added" ? path : `${DIFF_PREFIX}${path}`);
+      .openTab(!ws.files.has(path) && status !== "deleted" ? (status === "added" && !isGenerated(path) ? path : `${GEN_PREFIX}${path}`) : status === "added" ? path : `${DIFF_PREFIX}${path}`);
     if (compact) useUI.getState().set({ drawer: null });
   };
 
@@ -409,6 +414,9 @@ export function SourceControl() {
               >
                 {iconFor(c.path)}
                 <span className="truncate">{c.path}</span>
+                {isGenerated(c.path) && c.status !== "deleted" && (
+                  <span className="shrink-0 rounded bg-panel-2 px-1 text-[10px] text-muted" title="Generated from a visual script; committed so the repository builds">generated</span>
+                )}
                 <span
                   className={cx(
                     "ml-auto w-3 text-center font-mono text-[11px]",

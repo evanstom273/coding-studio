@@ -411,12 +411,12 @@ export class CloudService {
         const idx = this.store.index(p.id);
         const state = this.store.readPaths(p.id, ['.codingstudio/git.json'])[0];
         const files = new Map(idx.map((e) => [e.path, e.path === state?.path ? state : { ...e, kind: e.kind }]));
-        return svc.gitStatusView({ meta: { id: p.id, schemaVersion: 2, createdAt: 0, updatedAt: 0 }, files } as Workspace);
+        return svc.gitStatusView({ meta: { id: p.id, schemaVersion: 2, createdAt: 0, updatedAt: 0 }, files } as Workspace, svc.generatedOutputs(p));
       }
       case 'git_commit': {
         const { project: p } = await this.resolve(params.project);
         const ws = this.store.read(p.id)!;
-        const r = await commitAndPush(await this.github().client(), ws, String(params.message ?? ''), { paths: Array.isArray(params.paths) ? params.paths.map(String) : undefined, newBranch: svc.str(params.new_branch) });
+        const r = await commitAndPush(await this.github().client(), ws, String(params.message ?? ''), { paths: Array.isArray(params.paths) ? params.paths.map(String) : undefined, newBranch: svc.str(params.new_branch), generated: svc.generatedOutputs(p, { strict: true }) });
         const files = new Map(ws.files);
         files.set('.codingstudio/git.json', stateRecord(r.state));
         await this.commit(ws, { meta: ws.meta, files }, 'claude', { label: `Claude: commit "${String(params.message).split('\n')[0]}"`, source: 'claude' });
@@ -425,7 +425,7 @@ export class CloudService {
       case 'git_pull': {
         const { project: p } = await this.resolve(params.project);
         const ws = this.store.read(p.id)!;
-        const r = await pull(await this.github().client(), ws);
+        const r = await pull(await this.github().client(), ws, new Set(svc.generatedOutputs(p).map((g) => g.path)));
         if (!r.upToDate) {
           const files = new Map(ws.files);
           for (const [path, f] of r.updates) {
@@ -457,11 +457,12 @@ export class CloudService {
         const { project: p } = await this.resolve(params.project);
         const ws = this.store.read(p.id)!;
         if (readState(ws)) throw new svc.ServiceError('E_INVALID', 'This project is already linked to a GitHub repository.');
+        const generated = svc.generatedOutputs(p, { strict: true }); // refuse before creating the repository
         const gh = await this.github().client();
         const { state, url } = await createRepoFor(gh, { name: String(params.name ?? ''), description: svc.str(params.description), private: params.private !== false, org: svc.str(params.org) });
         const linked = new Map(ws.files);
         linked.set('.codingstudio/git.json', stateRecord(state));
-        const r = await commitAndPush(gh, { meta: ws.meta, files: linked }, svc.str(params.message) ?? 'First commit from Coding Studio');
+        const r = await commitAndPush(gh, { meta: ws.meta, files: linked }, svc.str(params.message) ?? 'First commit from Coding Studio', { generated });
         linked.set('.codingstudio/git.json', stateRecord(r.state));
         await this.commit(ws, { meta: ws.meta, files: linked }, 'claude', { label: `Claude: publish to ${state.owner}/${state.repo}`, source: 'claude' });
         return { repository: `${state.owner}/${state.repo}`, url, branch: r.branch, commit: r.commit, files: r.files };
@@ -473,10 +474,10 @@ export class CloudService {
         const now = Date.now();
         const files = new Map(c.files.map((f) => [f.path, f]));
         if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(defaultConfig(c.state.repo)), now));
-        const ws: Workspace = { meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files };
+        const ws: Workspace = svc.stripGenerated({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files });
         await this.commit(undefined, ws, 'claude');
         await this.select(ws.meta.id);
-        return { project: ws.meta.id, files: files.size, ...svc.gitStatusView(ws) };
+        return { project: ws.meta.id, files: ws.files.size, ...svc.gitStatusView(ws, svc.workspaceOutputs(ws, false)) };
       }
       case 'git_repos':
         return (await (await this.github().client()).repos()).map((r) => ({ repository: r.full_name, private: r.private, default_branch: r.default_branch, updated: r.updated_at }));

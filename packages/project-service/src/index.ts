@@ -185,6 +185,34 @@ export function compileAll(p: Project) {
   return { ok: r.ok, files: r.files.map((f) => ({ path: f.path, content: f.content })), diagnostics: r.diagnostics, ...(entry ? { entry: { host: entry.host, how_to_run: entry.instructions } } : {}) };
 }
 
+/**
+ * Every generated source file of the project, for anything that leaves the editor as a real
+ * project (GitHub commits and publishing, the project ZIP, a linked folder). With `strict`, a
+ * project whose graphs have errors is refused with those errors, so an incomplete build is never
+ * pushed.
+ */
+export function generatedOutputs(p: Project | undefined, opts: { strict?: boolean } = {}): { path: string; content: string }[] {
+  if (!p || !p.scripts.length) return [];
+  const r = compileAll(p);
+  if (!r.ok && opts.strict) {
+    const errors = r.diagnostics.filter((d) => d.severity === 'error');
+    const where = (d: (typeof errors)[number]) => {
+      const sc = p.scripts.find((s) => s.id === d.scriptId);
+      const fn = sc?.functions.find((f) => f.id === d.functionId);
+      return [sc?.path ?? sc?.name, fn?.name].filter(Boolean).join(' › ');
+    };
+    throw new ServiceError(
+      'E_COMPILE_ERRORS',
+      `Not pushed: ${errors.length} error${errors.length === 1 ? '' : 's'} in the visual scripts, so their code can't be generated and the repository wouldn't build.\n${errors
+        .slice(0, 8)
+        .map((d) => `• ${where(d) ? `${where(d)}: ` : ''}${d.message}`)
+        .join('\n')}${errors.length > 8 ? `\n…and ${errors.length - 8} more` : ''}\nFix them (Errors panel / validate_graph), then commit again.`,
+      { diagnostics: diagSummary(r.diagnostics) },
+    );
+  }
+  return r.files;
+}
+
 export function exportFiles(p: Project, scriptRef?: unknown, includeProject = false) {
   const r = compileProject(toolchainFor(p.language), p);
   const ref = str(scriptRef);

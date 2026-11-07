@@ -104,7 +104,7 @@ export function ActionsPanel({ st }: { st: GitState }) {
                 toast('success', `Started ${w.name} on ${st.branch}`);
                 setTimeout(() => void refresh(), 1500);
               } catch (e) {
-                toast('error', `${errMsg(e)} (the workflow needs "on: workflow_dispatch" to be run by hand)`);
+                toast('error', /403|permission/i.test(errMsg(e)) ? `${errMsg(e)} Running a workflow by hand needs the token's "Actions: Read and write".` : `${errMsg(e)} (to be run by hand the workflow needs "on: workflow_dispatch")`);
               } finally {
                 setBusy(false);
               }

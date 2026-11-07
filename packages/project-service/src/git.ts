@@ -1,12 +1,13 @@
 /** Shapes of the git MCP results (shared by the editor handlers and the cloud service). */
 import { cleanLogLine, parseLogProblems, readState, runState, status, summarizeRun, WORKFLOW_TEMPLATES, type GitHub, type GitState, type PullResult } from '@cs/git';
-import type { Workspace } from '@cs/workspace';
-import { ServiceError } from './index';
+import { deriveProject, type Workspace } from '@cs/workspace';
+import { generatedOutputs, ServiceError } from './index';
 
-export function gitStatusView(ws: Workspace) {
+export function gitStatusView(ws: Workspace, generated: { path: string; content: string }[] = []) {
   const st = readState(ws);
   if (!st) return { linked: false, note: 'This project is not linked to GitHub. Use git_clone to open a repository as a project.' };
-  const changes = status(ws, st);
+  const gen = new Set(generated.map((g) => g.path));
+  const changes = status(ws, st, generated).map((c) => (gen.has(c.path) && !ws.files.has(c.path) ? { ...c, generated: true } : c));
   return { linked: true, repository: `${st.owner}/${st.repo}`, branch: st.branch, commit: st.commit, changes, clean: !changes.length };
 }
 
@@ -165,4 +166,27 @@ export async function githubCall(method: string, gh: GitHub, params: Record<stri
     }
   }
   throw new ServiceError('E_INVALID', `Unknown GitHub call ${method}`);
+}
+
+/**
+ * Generated code in a freshly cloned repository is rebuilt from its graphs, so it isn't kept as
+ * an editable file (the graph stays the one source of truth); the git state still knows GitHub's
+ * copy, so a changed graph shows up as a modified generated file.
+ */
+export function stripGenerated(ws: Workspace): Workspace {
+  let gen: { path: string }[];
+  try {
+    gen = generatedOutputs(deriveProject(ws).project);
+  } catch {
+    return ws;
+  }
+  if (!gen.some((g) => ws.files.has(g.path))) return ws;
+  const files = new Map(ws.files);
+  for (const g of gen) files.delete(g.path);
+  return { meta: ws.meta, files };
+}
+
+/** Generated files of a workspace's project (strict: refuses with the graph errors). */
+export function workspaceOutputs(ws: Workspace, strict = true) {
+  return generatedOutputs(deriveProject(ws).project, { strict });
 }

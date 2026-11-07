@@ -2,12 +2,13 @@
  * GitHub from the editor. Calls go through this site's Worker (`/github/<key>/api/...`), which
  * adds the token kept in your Durable Object — the token never lives in this browser.
  */
-import { cloneFiles, commitAndPush, createRepoFor, GitHub, GIT_STATE_PATH, pull, readState, remoteFile, stateRecord, status, type Fetch, type GitState } from '@cs/git';
+import { cloneFiles, commitAndPush, createRepoFor, type GeneratedFile, GitHub, GIT_STATE_PATH, pull, readState, remoteFile, stateRecord, status, type Fetch, type GitState } from '@cs/git';
 import { CONFIG_PATH, defaultConfig, makeRecord, serializeConfig, type FileRecord, type Workspace, type WorkspaceOp } from '@cs/workspace';
 import { newId } from '@cs/graph-core';
 import { useBridge } from '@web/bridge/client';
 import { insertWorkspace } from '@web/db/projects';
 import { useEditor } from '@web/store/editor';
+import { generatedOutputs, stripGenerated } from '@cs/project-service';
 
 const base = () => {
   useBridge.getState().saveRemoteKey();
@@ -52,7 +53,15 @@ export async function cloneRepo(owner: string, repo: string, branch?: string, on
   const now = Date.now();
   const files = new Map<string, FileRecord>(c.files.map((f) => [f.path, f]));
   if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(defaultConfig(c.state.repo)), now));
-  return insertWorkspace({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files });
+  return insertWorkspace(stripGenerated({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files }));
+}
+
+/**
+ * The open project's generated code, as it goes to GitHub (the same compile as exports and the
+ * linked folder). Strict (for commits) refuses with the graph errors.
+ */
+export function openOutputs(strict: boolean): GeneratedFile[] {
+  return generatedOutputs(useEditor.getState().project ?? undefined, { strict });
 }
 
 export function gitState(ws: Workspace | null): GitState | null {
@@ -61,7 +70,7 @@ export function gitState(ws: Workspace | null): GitState | null {
 
 export function gitStatus(ws: Workspace) {
   const st = readState(ws);
-  return st ? status(ws, st) : [];
+  return st ? status(ws, st, openOutputs(false)) : [];
 }
 
 const b64 = (u: Uint8Array) => {
@@ -75,7 +84,7 @@ export const writeOp = (f: FileRecord): WorkspaceOp => (f.kind === 'binary' ? { 
 export async function commitOpen(message: string, opts: { paths?: string[]; newBranch?: string } = {}, source: 'user' | 'mcp' = 'user') {
   const ws = useEditor.getState().workspace;
   if (!ws) throw new Error('No project is open');
-  const r = await commitAndPush(github(), ws, message, opts);
+  const r = await commitAndPush(github(), ws, message, { ...opts, generated: openOutputs(true) });
   useEditor.getState().applyFiles([writeOp(stateRecord(r.state))], `Commit "${message.split('\n')[0]}"`, { source });
   return r;
 }
@@ -85,6 +94,7 @@ export async function publishOpen(p: { name: string; description?: string; priva
   const ws = useEditor.getState().workspace;
   if (!ws) throw new Error('No project is open');
   if (readState(ws)) throw new Error('This project is already linked to a GitHub repository.');
+  openOutputs(true); // refuse before creating anything if the graphs can't be compiled
   const { state, url } = await createRepoFor(github(), p);
   useEditor.getState().applyFiles([writeOp(stateRecord(state))], `Link to ${state.owner}/${state.repo}`, { source });
   const r = await commitOpen(message, {}, source);
@@ -95,7 +105,7 @@ export async function publishOpen(p: { name: string; description?: string; priva
 export async function pullOpen(source: 'user' | 'mcp' = 'user') {
   const ws = useEditor.getState().workspace;
   if (!ws) throw new Error('No project is open');
-  const r = await pull(github(), ws);
+  const r = await pull(github(), ws, new Set(openOutputs(false).map((g) => g.path)));
   if (r.upToDate) return r;
   const ops: WorkspaceOp[] = [...r.updates].map(([p, f]) => (f ? writeOp(f) : { op: 'delete', path: p }));
   ops.push(writeOp(stateRecord(r.state)));

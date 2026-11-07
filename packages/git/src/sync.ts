@@ -49,7 +49,23 @@ export interface Change {
   status: 'added' | 'modified' | 'deleted';
 }
 
-export function status(ws: Workspace, st: GitState): Change[] {
+/** Code generated from the project's visual scripts: committed with it, but never edited as a file. */
+export type GeneratedFile = { path: string; content: string };
+
+/**
+ * The workspace as it goes to GitHub: its files plus the generated code (a hand-written file at
+ * the same path wins, so nothing the user wrote is replaced).
+ */
+export function withGenerated(ws: Workspace, generated: GeneratedFile[] = []): Workspace {
+  if (!generated.length) return ws;
+  const files = new Map(ws.files);
+  const now = Date.now();
+  for (const g of generated) if (!files.has(g.path)) files.set(g.path, makeRecord(g.path, g.content, now, 'text'));
+  return { meta: ws.meta, files };
+}
+
+export function status(ws: Workspace, st: GitState, generated: GeneratedFile[] = []): Change[] {
+  ws = withGenerated(ws, generated);
   const out: Change[] = [];
   for (const [p, f] of ws.files) {
     if (isInternal(p)) continue;
@@ -119,7 +135,8 @@ export interface CommitResult {
  * Commit every change (or only `paths`) and push. With `newBranch` the commit goes to a new
  * branch made from the current one. Refused with E_NOT_FAST_FORWARD if GitHub moved on — pull first.
  */
-export async function commitAndPush(gh: GitHub, ws: Workspace, message: string, opts: { paths?: string[]; newBranch?: string } = {}): Promise<CommitResult> {
+export async function commitAndPush(gh: GitHub, ws: Workspace, message: string, opts: { paths?: string[]; newBranch?: string; generated?: GeneratedFile[] } = {}): Promise<CommitResult> {
+  ws = withGenerated(ws, opts.generated);
   const st = readState(ws);
   if (!st) throw new GitHubError('E_NOT_LINKED', 'This project is not linked to a GitHub repository.');
   if (!message.trim()) throw new GitHubError('E_INVALID', 'A commit message is required.');
@@ -179,7 +196,7 @@ export interface PullResult {
  * where they overlap); graphs and binaries changed on both keep your version and are reported
  * so you can choose.
  */
-export async function pull(gh: GitHub, ws: Workspace): Promise<PullResult> {
+export async function pull(gh: GitHub, ws: Workspace, generatedPaths: Set<string> = new Set()): Promise<PullResult> {
   const st = readState(ws);
   if (!st) throw new GitHubError('E_NOT_LINKED', 'This project is not linked to a GitHub repository.');
   const { owner, repo } = st;
@@ -190,6 +207,7 @@ export async function pull(gh: GitHub, ws: Workspace): Promise<PullResult> {
   const theirs = new Map(tree.map((e) => [e.path, e.sha]));
   const paths = new Set([...Object.keys(st.tree), ...theirs.keys()]);
   const need = tree.filter((e) => {
+    if (generatedPaths.has(e.path) && !ws.files.has(e.path)) return false;
     const local = ws.files.get(e.path)?.hash;
     return e.sha !== st.tree[e.path] && e.sha !== local;
   });
@@ -207,6 +225,8 @@ export async function pull(gh: GitHub, ws: Workspace): Promise<PullResult> {
     const t = theirs.get(p);
     const local = ws.files.get(p);
     if (t) nextTree[p] = t;
+    // Generated code is rebuilt from the graphs: GitHub's copy never becomes an editable file.
+    if (generatedPaths.has(p) && !local) continue;
     if (t === base) continue; // unchanged on GitHub: keep whatever is here
     if (local?.hash === t) continue; // same change on both sides
     const localChanged = (local?.hash ?? undefined) !== base;

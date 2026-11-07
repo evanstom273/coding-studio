@@ -1,5 +1,6 @@
 import { createProject, parseProjectFile } from '@cs/project-format';
 import { configOf, zipToWorkspace, type Workspace } from '@cs/workspace';
+import { stripGenerated } from '@cs/project-service';
 import { newId } from '@cs/graph-core';
 import { buildWebStarter, exampleById } from '@cs/examples';
 import { insertProject, insertWorkspace } from '@web/db/projects';
@@ -34,7 +35,8 @@ export async function importProjectFile(file: File): Promise<Workspace | null> {
     if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
       const z = zipToWorkspace(bytes, newId('p'), file.name.replace(/\.zip$/i, '') || 'Imported');
       if (z) {
-        const ws = await insertWorkspace(z.workspace);
+        // Generated code in the zip is rebuilt from the graphs, not kept as editable copies.
+        const ws = await insertWorkspace(stripGenerated(z.workspace));
         const notes = [z.skipped ? `${z.skipped} file(s) from .git / node_modules skipped` : '', z.issues.length ? `${z.issues.length} problem(s): ${z.issues[0]}` : ''].filter(Boolean);
         toast(notes.length ? 'warning' : 'success', `Imported "${configOf(ws).name}" (${ws.files.size} files)${notes.length ? ` — ${notes.join('; ')}` : ''}`);
         navigate({ name: 'project', id: ws.meta.id });

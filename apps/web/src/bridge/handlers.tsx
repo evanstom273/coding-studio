@@ -14,7 +14,7 @@ import { buildWebStarter } from '@cs/examples';
 import { newId } from '@cs/graph-core';
 import { CONFIG_PATH, configOf, defaultConfig, makeRecord, serializeConfig, workspaceRevision, type FileRecord, type Workspace } from '@cs/workspace';
 import { readState } from '@cs/git';
-import { cloneRepo, commitOpen, github, publishOpen, pullOpen } from '@web/lib/git';
+import { cloneRepo, commitOpen, github, openOutputs, publishOpen, pullOpen } from '@web/lib/git';
 import { saveNow } from '@web/hooks/useAutosave';
 import { useEditor } from '@web/store/editor';
 import { compileNow } from '@web/compile/store';
@@ -69,8 +69,7 @@ const describeProject = (p: Project) => {
 const { describeGraph, diagSummary, isSubstantial } = svc;
 
 function generatedFiles() {
-  const p = useEditor.getState().project;
-  return p ? svc.compileAll(p).files : [];
+  return svc.generatedOutputs(useEditor.getState().project ?? undefined);
 }
 
 function describeOp(o: { op: string; path?: string; from?: string; to?: string }) {
@@ -276,7 +275,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
     }
     case 'git_status':
       await ensureOpen(params.project);
-      return svc.gitStatusView(useEditor.getState().workspace!);
+      return svc.gitStatusView(useEditor.getState().workspace!, openOutputs(false));
     case 'git_commit': {
       await ensureOpen(params.project);
       await saveNow();
@@ -310,7 +309,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       await saveNow();
       const ws = await cloneRepo(owner, repo, str(params.branch));
       await openAndWait(ws.meta.id);
-      return { project: ws.meta.id, files: ws.files.size, ...svc.gitStatusView(ws) };
+      return { project: ws.meta.id, files: ws.files.size, ...svc.gitStatusView(ws, svc.workspaceOutputs(ws, false)) };
     }
     case 'git_repos':
       return (await github().repos()).map((r) => ({ repository: r.full_name, private: r.private, default_branch: r.default_branch, updated: r.updated_at }));
@@ -361,7 +360,7 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const name = str(params.name) ?? 'Folder';
       if (!files.has(CONFIG_PATH)) files.set(CONFIG_PATH, makeRecord(CONFIG_PATH, serializeConfig(files.has('package.json') || files.has('tsconfig.json') ? defaultConfig(name, 'typescript', 'es2022') : defaultConfig(name)), now));
       await saveNow();
-      const ws = await insertWorkspace({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files });
+      const ws = await insertWorkspace(svc.stripGenerated({ meta: { id: newId('p'), schemaVersion: 2, createdAt: now, updatedAt: now }, files }));
       await openAndWait(ws.meta.id);
       return { project: ws.meta.id, files: ws.files.size };
     }

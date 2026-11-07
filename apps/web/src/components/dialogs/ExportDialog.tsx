@@ -1,6 +1,7 @@
 import { Clipboard, FileArchive, FileCode2, FileJson, Package } from 'lucide-react';
 import { buildArchive, buildSourceZip, projectToJson } from '@cs/project-format';
 import { workspaceToZip } from '@cs/workspace';
+import { generatedOutputs } from '@cs/project-service';
 import { FolderArchive } from 'lucide-react';
 import { compileNow } from '@web/compile/store';
 import { useEditor } from '@web/store/editor';
@@ -59,8 +60,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         testId="export-workspace"
         icon={<FolderArchive size={18} />}
         title={`${base}.zip`}
-        desc={`Every file in the project (${useEditor.getState().workspace!.files.size}), graphs included. Import it back from the projects page.`}
-        action={() => downloadBytes(`${base}.zip`, workspaceToZip(useEditor.getState().workspace!), 'application/zip')}
+        desc={`Every file in the project (${useEditor.getState().workspace!.files.size}), graphs included, plus the generated code (${r.ok ? `${r.files.length} file(s)` : 'only from graphs without errors'}), so it builds as it is. Import it back from the projects page.`}
+        action={() => downloadBytes(`${base}.zip`, workspaceToZip(useEditor.getState().workspace!, generatedOutputs(project)), 'application/zip')}
       />
       <Item testId="export-archive" icon={<FileArchive size={18} />} title={`${base}.vproj`} desc="Portable archive with all graphs (+ the generated sources for reference). Re-import it anywhere." action={() => downloadBytes(`${base}.vproj`, buildArchive(project, r.ok ? r.files : []), 'application/zip')} />
       <Item testId="export-json" icon={<FileJson size={18} />} title={`${base}.vproj.json`} desc="Plain JSON project document — the format the Godot plugin opens." action={() => downloadBytes(`${base}.vproj.json`, projectToJson(project), 'application/json')} />

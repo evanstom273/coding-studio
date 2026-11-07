@@ -165,7 +165,58 @@ test('create a GitHub repository from a project that has none', async ({ page })
   await page.getByTestId('publish-name').fill('fresh-game');
   await page.getByTestId('publish-create').click();
   await expect(page.getByTestId('git-branch')).toContainText('lyra/fresh-game · main');
-  await expect.poll(() => Object.keys(fake.files('main')).sort()).toEqual(expect.arrayContaining(['README.md', 'codingstudio.json', 'main.vgraph']));
+  await expect.poll(() => Object.keys(fake.files('main')).sort()).toEqual(expect.arrayContaining(['README.md', 'codingstudio.json', 'main.vgraph', 'main.gd']));
+  expect(fake.files('main')['main.gd']).toContain('extends Node');
   expect(fake.files('main')['.codingstudio/git.json']).toBeUndefined();
   await expect(page.getByTestId('git-change')).toHaveCount(0);
+});
+
+test('a visual React project is pushed with its generated code; graph edits show as generated changes; broken graphs are not pushed', async ({ page }) => {
+  const fake = new FakeGitHub('lyra', 'unused');
+  await freshStart(page);
+  await serveGitHub(page, fake);
+  await page.getByTestId('new-project').click();
+  await page.getByTestId('project-name').fill('Web');
+  await page.getByTestId('project-language').selectOption('typescript');
+  await page.locator('button', { hasText: 'Web app' }).click();
+  await page.getByTestId('create-project').click();
+  await page.getByTestId('left-tab-git').click();
+  await page.getByTestId('github-token').fill('github_pat_1234567890abcdefghij');
+  await page.getByTestId('github-token-save').click();
+  await page.getByTestId('publish-name').fill('web-app');
+  await page.getByTestId('publish-create').click();
+  await expect.poll(() => fake.files('main')['src/App.tsx'] ?? '').toContain('export function App()');
+  expect(Object.keys(fake.files('main'))).toEqual(expect.arrayContaining(['src/App.vgraph', 'src/main.tsx', 'package.json']));
+  await expect(page.locator('[data-testid="git-change"][data-path="src/App.tsx"]')).toHaveCount(0);
+
+  // edit the heading in the graph → App.tsx is listed as a generated change and gets pushed
+  type W = { codingStudio: { editor: { getState(): { project: { scripts: { functions: { id: string; name: string; graph: { nodes: { id: string; type: string; props: { tag?: string } }[] } }[] }[] }; dispatch(o: unknown[], l: string): void } } } };
+  await page.evaluate(() => {
+    const st = (window as never as W).codingStudio.editor.getState();
+    const fn = st.project.scripts[0].functions.find((f) => f.name === 'App')!;
+    const h1 = fn.graph.nodes.find((n) => n.type === 'ts.element' && n.props.tag === 'h1')!;
+    st.dispatch([{ op: 'update_node', graph: fn.id, node: h1.id, inputs: { child_0: 'Pushed heading' } }], 'test');
+  });
+  const row = page.locator('[data-testid="git-change"][data-path="src/App.tsx"]');
+  await expect(row).toContainText('generated');
+  await page.getByTestId('commit-message').fill('New heading');
+  await page.getByTestId('commit-push').click();
+  await expect.poll(() => fake.files('main')['src/App.tsx']).toContain('Pushed heading');
+
+  // a graph with an error: the commit is refused with the error, nothing is pushed
+  const head = fake.refs.get('main');
+  await page.evaluate(() => {
+    type E = { codingStudio: { editor: { getState(): { workspace: { files: Map<string, { text?: string }> }; applyFiles(o: unknown[], l: string): void } } } };
+    const st = (window as never as E).codingStudio.editor.getState();
+    const doc = JSON.parse(st.workspace.files.get('src/App.vgraph')!.text!);
+    const g = doc.script.functions.find((f: { name: string }) => f.name === 'App').graph;
+    const entry = g.nodes.find((n: { type: string }) => n.type === 'core.entry');
+    g.nodes.push({ id: 'n_broken', type: 'core.no_such_node', position: { x: 0, y: 0 }, props: {}, inputs: {} });
+    g.edges.push({ id: 'e_broken', from: { node: entry.id, port: 'then' }, to: { node: 'n_broken', port: 'exec' } });
+    st.applyFiles([{ op: 'write_file', path: 'src/App.vgraph', content: JSON.stringify(doc, null, 2) }], 'break it');
+  });
+  await page.getByTestId('commit-message').fill('Broken');
+  await page.getByTestId('commit-push').click();
+  await expect(page.getByRole('button', { name: /Not pushed: \d+ errors? in the visual scripts/ })).toContainText('Unknown node type');
+  expect(fake.refs.get('main')).toBe(head);
 });
