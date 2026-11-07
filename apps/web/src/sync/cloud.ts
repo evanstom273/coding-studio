@@ -266,6 +266,7 @@ export async function onCloudConnected() {
 }
 
 export async function onCloudMessage(msg: Record<string, unknown>) {
+  if (msg.type === 'ask' && typeof msg.id === 'string') return void answer(msg);
   if (msg.type !== 'workspace-updated' || typeof msg.id !== 'string') return;
   const id = msg.id;
   if (reconciling) await reconciling;
@@ -278,4 +279,25 @@ export async function onCloudMessage(msg: Record<string, unknown>) {
     if (known.get(id) === msg.revision) return;
     await syncOne(id, msg.by === 'claude' ? 'Claude edit' : 'Update from another device', { id, name: '', revision: String(msg.revision), createdAt: 0, updatedAt: 0 });
   }).catch((e) => toast('error', `Cloud sync: ${e instanceof Error ? e.message : String(e)}`));
+}
+
+/** Questions from the cloud (Claude / ChatGPT working there) that only an open editor can answer. */
+async function answer(msg: Record<string, unknown>) {
+  const reply = (result: unknown) => sendToCloud({ type: 'answer', id: msg.id, result });
+  if (msg.question !== 'type-check' || typeof msg.projectId !== 'string') return;
+  const st = useEditor.getState();
+  // Only the project open here can be type-checked (its TypeScript service is the one running).
+  if (st.project?.id !== msg.projectId) {
+    reply({ unavailable: st.project ? 'TypeScript types were not checked: Coding Studio is open on a different project. Open this project there and run check_project again.' : 'TypeScript types were not checked: Coding Studio is open but no project is. Open this project and run check_project again.' });
+    return;
+  }
+  try {
+    // Apply any sync for this project first, so the check sees what the cloud has.
+    if (reconciling) await reconciling;
+    await queue(msg.projectId, async () => undefined);
+    const { editorTypeCheck } = await import('../bridge/handlers');
+    reply(await editorTypeCheck(useEditor.getState().project!));
+  } catch (e) {
+    reply({ unavailable: `TypeScript types were not checked: ${e instanceof Error ? e.message : String(e)}` });
+  }
 }

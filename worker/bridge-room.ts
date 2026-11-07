@@ -45,8 +45,35 @@ export class BridgeRoom extends DurableObject<Env> {
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
 
+  /** Questions sent to open editors (e.g. "type-check this project"), answered over their socket. */
+  private asks = new Map<string, (v: unknown) => void>();
+  private askEditors(msg: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
+    const open = this.ctx.getWebSockets().filter((w) => w.readyState === WebSocket.OPEN);
+    if (!open.length) return Promise.reject(new Error('no editor open'));
+    const id = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => {
+        this.asks.delete(id);
+        reject(new Error('the editor did not answer in time'));
+      }, timeoutMs);
+      this.asks.set(id, (v) => {
+        clearTimeout(t);
+        this.asks.delete(id);
+        resolve(v);
+      });
+      const text = JSON.stringify({ ...msg, type: 'ask', id });
+      for (const ws of open) {
+        try {
+          ws.send(text);
+        } catch {
+          /* closing */
+        }
+      }
+    });
+  }
+
   private service(site: string) {
-    return new CloudService(
+    const cloud = new CloudService(
       this.ctx.storage as unknown as KvLike,
       { sql: this.ctx.storage.sql as unknown as SqlLike, transaction: (fn) => this.ctx.storage.transactionSync(fn) },
       (msg) => {
@@ -62,6 +89,8 @@ export class BridgeRoom extends DurableObject<Env> {
       site,
       () => this.ctx.getWebSockets().filter((w) => w.readyState === WebSocket.OPEN).length,
     );
+    cloud.askEditor = (msg, timeoutMs) => this.askEditors(msg, timeoutMs);
+    return cloud;
   }
 
   override async fetch(request: Request): Promise<Response> {
@@ -153,10 +182,14 @@ export class BridgeRoom extends DurableObject<Env> {
 
   override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
     if (typeof message !== 'string' || message.length > BRIDGE_MAX_PAYLOAD) return;
-    let msg: { type?: string; projectId?: string; scriptId?: string; functionId?: string };
+    let msg: { type?: string; projectId?: string; scriptId?: string; functionId?: string; id?: string; result?: unknown };
     try {
       msg = JSON.parse(message);
     } catch {
+      return;
+    }
+    if (msg.type === 'answer' && typeof msg.id === 'string') {
+      this.asks.get(msg.id)?.(msg.result);
       return;
     }
     if (msg.type === 'hello') {

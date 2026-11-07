@@ -59,6 +59,7 @@ export const BRIDGE_METHODS = [
   'git_branches',
   'git_switch_branch',
   'ci_cloudflare_secrets',
+  'check_project',
   'read_config',
   'edit_config',
   'ci_status',

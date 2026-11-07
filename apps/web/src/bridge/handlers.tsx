@@ -72,6 +72,44 @@ function generatedFiles() {
   return svc.generatedOutputs(useEditor.getState().project ?? undefined);
 }
 
+/**
+ * The editor's TypeScript check for the open project, as check_project problems. Waits for package
+ * types to arrive (they load in the background) so "cannot find module" isn't reported too early.
+ */
+export async function editorTypeCheck(p: Project): Promise<{ problems: svc.TypeProblem[] } | { unavailable: string }> {
+  if (p.language !== 'typescript' && ![...useEditor.getState().workspace!.files.keys()].some((x) => /\.(tsx?|jsx?)$/.test(x))) return { problems: [] };
+  try {
+    const ts = await import('@web/lib/tsProject');
+    const { useTsCheck } = await import('@web/lib/tsCheckStore');
+    compileNow(p);
+    await new Promise((r) => setTimeout(r, 300));
+    await ts.runCheck();
+    // Types for packages arrive asynchronously: check again until two runs agree (max ~6 s).
+    let last = '';
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      await ts.runCheck();
+      const s = useTsCheck.getState();
+      const sig = JSON.stringify([s.files.length, s.nodes.length]);
+      if (sig === last) break;
+      last = sig;
+    }
+    const s = useTsCheck.getState();
+    const names = (d: { scriptId?: string; functionId?: string }) => {
+      const sc = p.scripts.find((x) => x.id === d.scriptId);
+      return [sc?.path ?? sc?.name, sc?.functions.find((f) => f.id === d.functionId)?.name].filter(Boolean).join(' › ');
+    };
+    return {
+      problems: [
+        ...s.files.map((f) => ({ path: f.path, line: f.line, message: `${f.code}: ${f.message}`, severity: f.severity })),
+        ...s.nodes.map((d) => ({ path: '', message: d.message.replace(/^TypeScript: /, ''), severity: d.severity === 'error' ? ('error' as const) : ('warning' as const), ...(d.nodeId ? { nodeId: d.nodeId } : {}), where: `${names(d)}${d.nodeId ? ` (node ${d.nodeId})` : ''} — ${d.suggestion ?? ''}`.trim() })),
+      ],
+    };
+  } catch (e) {
+    return { unavailable: `The TypeScript check couldn't run (${e instanceof Error ? e.message : String(e)}).` };
+  }
+}
+
 function describeOp(o: { op: string; path?: string; from?: string; to?: string }) {
   return `${o.op.replace(/_/g, ' ')}${o.path ? ` ${o.path}` : o.from ? ` ${o.from} → ${o.to}` : ''}`;
 }
@@ -252,6 +290,11 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const r = svc.configEdit(path, cur?.text, params.edits);
       useEditor.getState().applyFiles([{ op: 'write_file', path, content: r.content, expectedHash: cur ? cur.hash : null }], `Claude: edit ${path.split('/').pop()}`, { source: 'mcp' });
       return { path, hash: useEditor.getState().workspace!.files.get(path)?.hash, problems: r.problems };
+    }
+    case 'check_project': {
+      const p = await ensureOpen(params.project);
+      await saveNow();
+      return svc.checkProject(p, useEditor.getState().workspace!.files, await editorTypeCheck(p));
     }
     case 'search_files': {
       await ensureOpen(params.project);

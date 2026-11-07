@@ -68,6 +68,8 @@ export class CloudService {
   /** GitHub (token in this Durable Object). Overridable for tests. */
   github = () => new GitHubVault(this.kv);
   cloudflare = () => new CloudflareVault(this.kv);
+  /** Ask an open editor something only it can do (the TypeScript check); set by the room. */
+  askEditor: ((msg: Record<string, unknown>, timeoutMs: number) => Promise<unknown>) | null = null;
 
   // --- meta ----------------------------------------------------------------------------------
 
@@ -538,6 +540,17 @@ export class CloudService {
         // The Cloudflare deploy needs its two repository secrets: set them from the saved credentials.
         const secrets = params.template === 'cloudflare' ? await this.cloudflareSecrets(before).catch((e: Error & { code?: string }) => ({ not_set: e.code ?? 'E_CLOUDFLARE', reason: e.message })) : undefined;
         return { added: fs.map((f) => f.path), files: fs, ...(secrets ? { secrets } : {}), note: 'Commit them with git_commit to turn the workflow on.' };
+      }
+      case 'check_project': {
+        const { project: p } = await this.resolve(params.project);
+        const ws = this.store.read(p.id)!;
+        const tsProject = p.language === 'typescript' || [...ws.files.keys()].some((x) => /\.(tsx?|jsx?)$/.test(x));
+        let types: { problems: svc.TypeProblem[] } | { unavailable: string } | undefined;
+        if (tsProject) {
+          if (!this.askEditor || !this.editorsOpen()) types = { unavailable: 'TypeScript types were not checked: no Coding Studio tab is open. Open the site on any device (with sync on) and run check_project again to include them; everything else was checked.' };
+          else types = ((await this.askEditor({ question: 'type-check', projectId: p.id }, 45_000).catch((e: Error) => ({ unavailable: `TypeScript types were not checked: ${e.message}.` }))) as typeof types) ?? { unavailable: 'TypeScript types were not checked.' };
+        }
+        return svc.checkProject(p, ws.files, types);
       }
       case 'ci_cloudflare_secrets': {
         const { project: p } = await this.resolve(params.project);

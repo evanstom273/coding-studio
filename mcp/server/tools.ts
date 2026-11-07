@@ -102,7 +102,7 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     { name: 'coding-studio', version: SERVER_VERSION },
     {
       instructions:
-        'Coding Studio is a VISUAL programming tool: everything is built visually, by people and by AI alike. Never write source code. Build program logic as graphs (batch_edit / workspace_batch "graph" operations: nodes, wires, variables, functions); the source code is generated from them. Change settings with edit_config, packages with deps_add / deps_remove. Writing code, CSS, HTML, config text or .vgraph JSON directly is refused (E_VISUAL_ONLY); only notes (.md, .txt) and assets can be written as files.',
+        'Coding Studio is a VISUAL programming tool: everything is built visually, by people and by AI alike. Never write source code. Build program logic as graphs (batch_edit / workspace_batch "graph" operations: nodes, wires, variables, functions); the source code is generated from them. Change settings with edit_config, packages with deps_add / deps_remove. Writing code, CSS, HTML, config text or .vgraph JSON directly is refused (E_VISUAL_ONLY); only notes (.md, .txt) and assets can be written as files. FINISH THE JOB: before telling the user anything is done (and before committing for a deploy), call check_project and fix every error it lists, not just the first; repeat until it reports 0 errors. Don\'t stop halfway to report partial progress unless you are genuinely blocked.',
     },
   );
   const call = async (method: BridgeMethod, params: Record<string, unknown> = {}, timeout?: number) => {
@@ -240,6 +240,18 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
       inputSchema: { project, function: z.string().nullable().describe('Function id or name; null clears the entry point'), script, host: z.string().optional() },
     },
     (a) => batch({ project: a.project }, [{ op: 'update_project', entry: a.function === null ? null : { function: a.function, ...(a.script ? { script: a.script } : {}), ...(a.host ? { host: a.host } : {}) } }]),
+  );
+
+  server.registerTool(
+    'check_project',
+    {
+      title: 'Check the whole project',
+      description:
+        'Every problem in the project at once: graph errors, TypeScript type errors (the same check `npm run build` runs, when Coding Studio is open on the project on any device), config files that are invalid, packages the code imports but package.json doesn\'t list, and build/deploy configuration that would fail. Fix ALL the errors it lists, then call it again; the task is only finished when it reports 0 errors. Call it before telling the user something is done, and before committing for a deploy.',
+      inputSchema: { project },
+      annotations: ro,
+    },
+    (a) => call('check_project', a, 90_000),
   );
 
   // --- compilation ------------------------------------------------------------------------------
