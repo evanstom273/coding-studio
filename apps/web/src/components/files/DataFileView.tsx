@@ -61,7 +61,7 @@ export function DataFileView({ path }: { path: string }) {
         <div className="ml-auto flex items-center gap-0.5">
           {schema && tab('form', 'Form', <SlidersHorizontal size={12} />)}
           {tab('tree', 'Tree', <ListTree size={12} />)}
-          {tab('text', 'Source', <Code2 size={12} />)}
+          {tab('text', 'Text', <Code2 size={12} />)}
         </div>
       </div>
       {mode === 'text' ? (

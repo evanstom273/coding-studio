@@ -246,18 +246,15 @@ describe('workspace MCP tools (cloud)', () => {
     expect(after.files.map((f) => f.path).sort()).toEqual(['codingstudio.json', 'main.vgraph']);
   });
 
-  it('visual-only: code, config text and graph JSON cannot be written by AI; notes and assets can', async () => {
+  it('AI can write code files directly; a .vgraph written as text must be a valid graph', async () => {
     const cloud = svc2();
-    await cloud.handle('create_project', { name: 'Visual', language: 'typescript', template: 'module' });
-    for (const path of ['src/util.ts', 'app.js', 'player.gd', 'style.css', 'index.html', 'package.json', 'config.yml', 'main.vgraph', 'Main.java', 'tool.py']) {
-      await expect(cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path, content: 'x' }] })).rejects.toMatchObject({ code: 'E_VISUAL_ONLY' });
-    }
-    // a refused op fails the whole batch: nothing changes
-    await expect(cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'notes.md', content: 'ok' }, { op: 'write_file', path: 'x.ts', content: 'x' }] })).rejects.toMatchObject({ code: 'E_VISUAL_ONLY' });
+    await cloud.handle('create_project', { name: 'Coded', language: 'typescript', template: 'module' });
+    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'src/util.ts', content: 'export const twice = (n: number) => n * 2;\n' }, { op: 'write_file', path: 'style.css', content: 'body { margin: 0; }\n' }, { op: 'write_file', path: 'index.html', content: '<div id="root"></div>\n' }] });
+    expect(((await cloud.handle('read_files', { paths: ['src/util.ts'] })) as { files: { text: string }[] }).files[0].text).toContain('twice');
+    // a broken graph file is refused, and nothing in the batch applies
+    await expect(cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'notes.md', content: 'x' }, { op: 'write_file', path: 'main.vgraph', content: '{ not a graph' }] })).rejects.toMatchObject({ code: 'E_INVALID_GRAPH' });
     expect(((await cloud.handle('read_files', { paths: ['notes.md'] })) as { files: { error?: string }[] }).files[0].error).toBe('E_NOT_FOUND');
-    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'notes.md', content: 'ok' }, { op: 'write_file', path: 'LICENSE', content: 'MIT' }, { op: 'write_file', path: 'img/logo.png', base64: 'iVBORw0KGgo=' }] });
-    // settings still change visually (structured edits), and graphs through graph operations
-    expect(await cloud.handle('edit_config', { path: 'package.json', edits: [{ op: 'set', path: ['name'], value: 'visual' }] })).toMatchObject({ problems: [] });
+    // graphs still change through graph operations
     expect(((await cloud.handle('batch_edit', { operations: [{ op: 'add_variable', name: 'score', type: 'int', default: 0 }] })) as { revision: string }).revision).toBeTruthy();
   });
 

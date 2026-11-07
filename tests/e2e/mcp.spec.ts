@@ -146,9 +146,9 @@ test('Claude works with files: atomic multi-file batch, stale hashes rejected, e
   await expect(page.getByTestId('project-title')).toHaveText('Files By Claude');
   await page.getByTestId('left-tab-files').click();
 
-  // visual-only: Claude can't write code
-  const refused = await tool('write_file', { path: 'src/hack.ts', content: 'export {}' });
-  expect(data(refused).error.code).toBe('E_VISUAL_ONLY');
+  // Claude can write code files directly
+  const code = await tool('write_file', { path: 'src/hack.ts', content: 'export const ok = true;\n' });
+  expect(code.isError).toBeFalsy();
   const b = data(
     await tool('workspace_batch', {
       operations: [

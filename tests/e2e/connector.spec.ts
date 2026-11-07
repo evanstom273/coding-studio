@@ -162,7 +162,7 @@ test('the connector has the file tools and the editor follows them live', async 
     await page.getByTestId('project-card').filter({ hasText: 'Cloud Files' }).click();
     await expect(page.getByTestId('project-title')).toHaveText('Cloud Files');
     await page.getByTestId('left-tab-files').click();
-    expect(data(await call('write_file', { project: created.id, path: 'web/index.html', content: '<h1>hi</h1>' })).error.code).toBe('E_VISUAL_ONLY');
+    expect((await call('write_file', { project: created.id, path: 'site/index.html', content: '<h1>hi</h1>' })).isError).toBeFalsy();
     const r = data(await call('workspace_batch', { project: created.id, operations: [{ op: 'write_file', path: 'web/notes.md', content: '# hi' }, { op: 'graph', ops: [{ op: 'add_script', name: 'Hud', path: 'ui/hud' }] }] }));
     expect(r.changed.length).toBe(2);
     await expect(page.locator('[data-testid="file-row"][data-path="web"]')).toBeVisible({ timeout: 10_000 });

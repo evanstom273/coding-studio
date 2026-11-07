@@ -7,7 +7,6 @@
  *    (test, build, lint…), and the dev server (long-running; its URL is detected from its output).
  *    Commands are always the project's package manager with fixed arguments: never a shell.
  */
-import { isDirectlyWritable } from "../../packages/workspace/src/model";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -649,9 +648,7 @@ export class LocalHost {
 
   /** Edits made in the folder go back into the project (one undo step per burst). */
   private async pullBack(projectId: string, all: HostFile[]) {
-    // Visual-only: code edited in the folder never comes into the project (only notes and assets).
-    const files = all.filter((f) => isDirectlyWritable(f.path));
-    if (!files.length) return;
+    const files = all;
     try {
       await this.request(
         "workspace_batch",
@@ -760,17 +757,12 @@ export class LocalHost {
     );
     const { files } = link.folder.readAll();
     const ops: Record<string, unknown>[] = [];
-    const skipped: string[] = [];
     const onDisk = new Set<string>();
     for (const f of files) {
       if (generated.has(f.path)) continue;
       onDisk.add(f.path);
       const m = mine.get(f.path);
       if (m && m.text === f.text && m.base64 === f.base64) continue;
-      if (!isDirectlyWritable(f.path)) {
-        skipped.push(f.path);
-        continue;
-      }
       ops.push({
         op: "write_file",
         path: f.path,

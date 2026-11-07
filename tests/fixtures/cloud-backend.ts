@@ -51,8 +51,7 @@ export function memoryKv(): KvLike & { map: Map<string, unknown> } {
 
 /**
  * Put files into the open cloud project the way the editor's sync does (as an imported project or
- * a GitHub pull would bring them). AI tools can't write code (visual-only); tests use this to set
- * up projects that already contain such files.
+ * a GitHub pull would bring them).
  */
 export async function seedFiles(cloud: import('../../worker/cloud-service').CloudService, files: Record<string, string | null>) {
   const st = (await cloud.handle('status', {})) as { openProject: { id: string } | null };

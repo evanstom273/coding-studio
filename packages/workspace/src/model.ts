@@ -186,16 +186,22 @@ export function workspaceRevision(ws: Workspace): string {
 }
 
 /**
- * Coding Studio is visual-only: nobody (a person or an AI) types source code into a project.
- * Code comes from graphs; config, styles and packages are changed with visual editors that make
- * structured edits. What can still be written directly as a file: plain writing (README, notes)
- * and assets (images, sounds, fonts…).
+ * Code can be written by hand (people and AI alike), alongside visual scripts. Visual scripts'
+ * .vgraph files are best changed with graph operations; written as text they must at least be a
+ * valid graph file (see checkGraphText), so a bad write can't break the project.
  */
-const PROSE = /\.(md|markdown|txt|text|rst)$/i;
-const PROSE_NAMES = /(^|\/)(README|LICENSE|LICENCE|NOTICE|AUTHORS|CHANGELOG|CONTRIBUTING)$/i;
-export function isDirectlyWritable(path: string): boolean {
-  if (path.endsWith(GRAPH_EXT)) return false;
-  return PROSE.test(path) || PROSE_NAMES.test(path) || kindForPath(path) === 'binary';
+export function isDirectlyWritable(_path: string): boolean {
+  return true;
 }
 
-export const VISUAL_ONLY_MESSAGE = 'Coding Studio is visual-only: code and config files can\'t be written as text. Build logic with graph operations (batch_edit, or workspace_batch op "graph"); change JSON/YAML/TOML/XML settings with edit_config; packages with deps_add / deps_remove; CSS with the visual style tools. Only plain writing (.md, .txt) and assets (images, sounds, fonts) can be written directly.';
+/** Why this text isn't a valid .vgraph file (undefined = it is). */
+export function checkGraphText(text: string): string | undefined {
+  try {
+    parseGraph(text);
+    return undefined;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+export const GRAPH_TEXT_MESSAGE = '.vgraph files are visual scripts: change them with graph operations (batch_edit, or workspace_batch op "graph") rather than writing their JSON.';

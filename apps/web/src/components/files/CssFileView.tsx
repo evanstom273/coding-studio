@@ -58,7 +58,7 @@ export function CssFileView({ path }: { path: string }) {
         <div className="ml-auto flex items-center gap-0.5">
           {(['visual', 'text'] as const).map((m) => (
             <button key={m} type="button" onClick={() => setMode(m)} className={cx('flex h-[32px] items-center gap-1 rounded px-2 text-[11.5px] sm:h-[24px]', mode === m ? 'bg-panel-2 text-text' : 'text-muted hover:text-text')} data-testid={`css-mode-${m}`}>
-              {m === 'visual' ? <Paintbrush size={12} /> : <Code2 size={12} />} {m === 'visual' ? 'Visual' : 'Source'}
+              {m === 'visual' ? <Paintbrush size={12} /> : <Code2 size={12} />} {m === 'visual' ? 'Visual' : 'Text'}
             </button>
           ))}
         </div>

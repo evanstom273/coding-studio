@@ -36,9 +36,10 @@ test('folders, files, editing, rename/move with tabs following, undo across file
   await expect(row(page, 'main.vgraph')).toBeVisible();
   await newEntry(page, 'folder', 'src');
   await expect(row(page, 'src')).toBeVisible();
-  // visual-only: code files can't be made by typing
+  // code files can be made and typed in
   await newEntry(page, 'file', 'code.ts', 'src');
-  await expect(row(page, 'src/code.ts')).toHaveCount(0);
+  await typeInEditor(page, 'export const answer = 42;');
+  await expect.poll(() => fileText(page, 'src/code.ts')).toBe('export const answer = 42;');
   await newEntry(page, 'file', 'app.md', 'src');
   await expect(tab(page, 'src/app.md')).toHaveAttribute('aria-selected', 'true');
   await typeInEditor(page, 'the answer is 42');

@@ -15,8 +15,6 @@ import { useEditor } from '@web/store/editor';
 import { generatedFiles, useCompile } from '@web/compile/store';
 import { toast } from '@web/store/toasts';
 import { downloadBytes } from '@web/lib/files';
-import { isDirectlyWritable } from '@cs/workspace';
-import { formatFor } from '@cs/structured-data';
 import { DIFF_PREFIX, formatSize, GEN_PREFIX, mimeType, monacoLanguage, previewKind } from '@web/lib/fileTypes';
 import { baseVersion } from '@web/lib/git';
 import { editorOwned, scheduleCheck } from '@web/lib/tsProject';
@@ -45,7 +43,6 @@ export function TextFileView({ path }: { path: string }) {
   const write = () => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
-    if (!isDirectlyWritable(path)) return; // visual-only: code is never typed
     const m = ed.current?.getModel();
     const b = base.current;
     if (!m || !b) return;
@@ -98,7 +95,6 @@ export function TextFileView({ path }: { path: string }) {
   }, [reveal]);
 
   if (!rec) return <Empty>This file no longer exists.</Empty>;
-  const readOnly = !isDirectlyWritable(path);
   if (rec.size > EDIT_LIMIT)
     return (
       <Empty>
@@ -121,12 +117,7 @@ export function TextFileView({ path }: { path: string }) {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col" data-testid="text-editor" data-path={path} data-readonly={readOnly ? 'true' : undefined}>
-      {readOnly && (
-        <div className="shrink-0 border-b border-border bg-panel-2 px-3 py-1.5 text-[11.5px] text-muted" data-testid="visual-only-note">
-          Read-only: Coding Studio is visual. {formatFor(path) ? 'Change these settings in the Form or Tree view.' : /\.css$/i.test(path) ? 'Change styles with the visual style editor.' : 'Program logic is built from visual scripts (graphs), which generate the code.'}
-        </div>
-      )}
+    <div className="flex h-full min-h-0 flex-col" data-testid="text-editor" data-path={path}>
       {conflict && (
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-amber-400/40 bg-amber-400/10 px-3 py-1.5 text-[12px] text-amber-100" data-testid="file-conflict">
           <span className="flex-1">This file was changed elsewhere (e.g. by Claude) while you were typing.</span>
@@ -154,7 +145,7 @@ export function TextFileView({ path }: { path: string }) {
         </div>
       )}
       <div className="min-h-0 flex-1">
-        <Editor height="100%" theme="coding-studio" path={`file:///${path}`} defaultLanguage={monacoLanguage(path)} defaultValue={rec.text ?? ''} onMount={onMount} options={readOnly ? { ...editorOptions, readOnly: true, domReadOnly: true } : editorOptions} keepCurrentModel />
+        <Editor height="100%" theme="coding-studio" path={`file:///${path}`} defaultLanguage={monacoLanguage(path)} defaultValue={rec.text ?? ''} onMount={onMount} options={editorOptions} keepCurrentModel />
       </div>
     </div>
   );

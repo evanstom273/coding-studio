@@ -103,7 +103,7 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     { name: 'coding-studio', version: SERVER_VERSION },
     {
       instructions:
-        'Coding Studio is a VISUAL programming tool: everything is built visually, by people and by AI alike. Never write source code. Build program logic as graphs (batch_edit / workspace_batch "graph" operations: nodes, wires, variables, functions); the source code is generated from them. Change settings with edit_config, packages with deps_add / deps_remove. Writing code, CSS, HTML, config text or .vgraph JSON directly is refused (E_VISUAL_ONLY); only notes (.md, .txt) and assets can be written as files. FINISH THE JOB: before telling the user anything is done (and before committing for a deploy), call check_project and fix every error it lists, not just the first; repeat until it reports 0 errors. Don\'t stop halfway to report partial progress unless you are genuinely blocked.',
+        'Coding Studio projects mix ordinary code files with visual scripts (graphs). Write real code (TypeScript, JavaScript, CSS, HTML, JSON…) with write_file / workspace_batch whenever that is clearer, which for you as an AI usually means code. Use graphs (batch_edit / workspace_batch "graph" operations) when the user wants that part visual or asks for it; change .vgraph files only through graph operations, never by writing their JSON. Settings: edit_config; packages: deps_add / deps_remove; a package\'s real API: library_nodes / read its types. FINISH THE JOB: before telling the user anything is done (and before committing for a deploy), call check_project and fix every error it lists, not just the first; repeat until it reports 0 errors. Don\'t stop halfway to report partial progress unless you are genuinely blocked.',
     },
   );
   const call = async (method: BridgeMethod, params: Record<string, unknown> = {}, timeout?: number) => {
@@ -318,8 +318,8 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     (a) => call('search_files', a),
   );
   const WS_DOC = `Change the project's files atomically: all operations succeed or nothing changes, and the batch is ONE undo step.
-VISUAL-ONLY: Coding Studio never takes hand-written code, from people or AI. You cannot write source code, CSS, HTML, JSON/YAML/TOML/XML text or .vgraph JSON. Build programs with "graph" operations (nodes and wires; the code is generated), change settings with edit_config, packages with deps_add / deps_remove. write_file is only for plain writing (.md, .txt, README) and assets (images, sounds, fonts, as base64); anything else is refused with E_VISUAL_ONLY. Operations:
-- {op:"write_file", path, content | base64, [expected_hash]}  create or replace a .md / .txt file or an asset. expected_hash = the hash you read (refused if the file changed since); null = must not exist yet. Parent folders are created.
+Code and graphs live side by side: write ordinary code files directly; change visual scripts (.vgraph) only with "graph" operations (a .vgraph written as text must be a valid graph file or it is refused with E_INVALID_GRAPH). Operations:
+- {op:"write_file", path, content | base64, [expected_hash]}  create or replace any file (code, styles, config, notes, assets as base64). expected_hash = the hash you read (refused if the file changed since); null = must not exist yet. Parent folders are created.
 - {op:"create_dir", path} · {op:"delete", path, [recursive], [expected_hash]} (folders need recursive:true) · {op:"move"|"copy", from, to, [overwrite]} (files or folders)
 - {op:"graph", ops:[…batch_edit operations…], [script: "path/to.vgraph" | name | id], [graph]}  edit visual scripts in the same atomic batch (see batch_edit for the operation list). Create a new visual script with {op:"graph", ops:[{op:"add_script", name, path}]}.
 - {op:"config", patch:{name?, description?, language?, languageVersion?, compiler?}}  edit codingstudio.json.
@@ -352,7 +352,7 @@ VISUAL-ONLY: Coding Studio never takes hand-written code, from people or AI. You
   );
   server.registerTool(
     'write_file',
-    { title: 'Write a note', description: 'Create or replace a plain-writing file (.md, .txt, README…). Coding Studio is visual-only: code and config files can\'t be written (E_VISUAL_ONLY) — build logic with graph operations (batch_edit), settings with edit_config, packages with deps_add. Pass expected_hash from read_files to avoid overwriting a newer version; null means the file must not exist yet.', inputSchema: { project, path: z.string(), content: z.string(), expected_hash: z.string().nullable().optional() } },
+    { title: 'Write file', description: 'Create or replace one text file (folders are created): code, styles, config or notes. Pass expected_hash from read_files to avoid overwriting a newer version; null means the file must not exist yet. Visual scripts (.vgraph) are changed with batch_edit instead.', inputSchema: { project, path: z.string(), content: z.string(), expected_hash: z.string().nullable().optional() } },
     (a) => call('workspace_batch', { project: a.project, operations: [{ op: 'write_file', path: a.path, content: a.content, ...(a.expected_hash !== undefined ? { expectedHash: a.expected_hash } : {}) }] }),
   );
   server.registerTool(

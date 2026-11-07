@@ -119,7 +119,7 @@ test("link a project to a folder, run its tests and dev server there, and get fo
     dev.id,
   ]);
 
-  // a note edited in the folder (e.g. in VS Code) → appears in the editor; code edited there does not (visual-only)
+  // edited in the folder (e.g. in VS Code) → appears in the editor, code and notes alike
   writeFileSync(join(dir, "check.cjs"), "console.log('edited outside')");
   writeFileSync(join(dir, "notes.md"), "plan, edited outside\n");
   await expect
@@ -129,7 +129,9 @@ test("link a project to a folder, run its tests and dev server there, and get fo
       { timeout: 10_000 },
     )
     .toBe("plan, edited outside\n");
-  expect(data(await tool("read_files", { paths: ["check.cjs"] })).files[0].text).toContain("generated code is here");
+  await expect
+    .poll(async () => data(await tool("read_files", { paths: ["check.cjs"] })).files[0].text, { timeout: 10_000 })
+    .toBe("console.log('edited outside')");
   expect(readFileSync(join(dir, "package.json"), "utf8")).toBe(
     JSON.stringify(pkg),
   );

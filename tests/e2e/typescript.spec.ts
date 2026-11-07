@@ -53,7 +53,7 @@ test('types: add an interface in the Script panel, edit fields, see it in the Ty
   await expect(await generatedCode(page)).toContainText('field: string;');
 });
 
-test('TypeScript language service: errors in files and in generated graph code, read-only code, cross-file imports', async ({ page }) => {
+test('TypeScript language service: errors in files and in generated graph code, completions, cross-file imports', async ({ page }) => {
   await freshStart(page);
   await page.getByTestId('new-project').click();
   await page.getByTestId('project-name').fill('Checked');
@@ -71,9 +71,12 @@ test('TypeScript language service: errors in files and in generated graph code, 
   await page.getByTestId('file-diagnostic').click();
   await expect(page.locator('[data-testid="tab"][data-tab="util.ts"]')).toHaveAttribute('aria-selected', 'true');
 
-  // visual-only: the code is shown read-only (no typing, so no completions)
-  await expect(page.getByTestId('text-editor')).toHaveAttribute('data-readonly', 'true');
-  await expect(page.getByTestId('visual-only-note')).toBeVisible();
+  // completions
+  await page.locator('[data-testid="text-editor"] .view-lines').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('\nconsole.lo');
+  await expect(page.locator('.suggest-widget')).toContainText('log', { timeout: 15_000 });
+  await page.keyboard.press('Escape');
 
   // a type error in generated code points at the node that produced it
   await page.evaluate(() => {

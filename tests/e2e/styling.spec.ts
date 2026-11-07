@@ -97,7 +97,7 @@ test('a CSS file opens as styles; visual edits keep comments and unknown declara
   await expect.poll(text).toContain('.card {\n  display: flex;\n  gap: 16px;\n}');
   expect(await text()).toContain('/* Buttons */');
   await page.getByTestId('css-mode-text').click();
-  await expect(page.getByTestId('text-editor')).toHaveAttribute('data-readonly', 'true');
+  await expect(page.getByTestId('text-editor')).toBeVisible();
 });
 
 test('the style editor fits a phone screen', async ({ page }) => {
