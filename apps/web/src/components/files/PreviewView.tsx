@@ -3,7 +3,7 @@
  * edit. Build errors link to their file and line; the page's console output is shown below.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, RefreshCw, Trash2 } from 'lucide-react';
 import { useEditor } from '@web/store/editor';
 import { generatedFiles, useCompile } from '@web/compile/store';
 import type { PreviewBuild } from '@cs/preview';
@@ -12,6 +12,23 @@ import { Button, cx } from '../ui/primitives';
 interface LogLine {
   level: string;
   text: string;
+}
+
+const PREF = 'coding-studio:preview-console';
+function readPref<T>(k: string, d: T): T {
+  try {
+    const v = JSON.parse(localStorage.getItem(PREF) ?? '{}')[k];
+    return v === undefined ? d : (v as T);
+  } catch {
+    return d;
+  }
+}
+function writePref(k: string, v: unknown) {
+  try {
+    localStorage.setItem(PREF, JSON.stringify({ ...JSON.parse(localStorage.getItem(PREF) ?? '{}'), [k]: v }));
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 export function PreviewView() {
@@ -23,6 +40,11 @@ export function PreviewView() {
   const [auto, setAuto] = useState(true);
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [nonce, setNonce] = useState(0);
+  // The console starts as a slim bar; open it when you need it, drag its edge to resize.
+  const [consoleOpen, setConsoleOpenState] = useState(() => readPref('open', false));
+  const [consoleHeight, setConsoleHeightState] = useState(() => readPref('height', 180));
+  const setConsoleOpen = (v: boolean) => (setConsoleOpenState(v), writePref('open', v));
+  const setConsoleHeight = (v: number) => (setConsoleHeightState(v), writePref('height', v));
   const frame = useRef<HTMLIFrameElement>(null);
   const htmlRef = useRef<string | null>(null);
   htmlRef.current = html;
@@ -67,6 +89,7 @@ export function PreviewView() {
   }, []);
 
   const errors = build?.errors ?? [];
+  const errorCount = logs.filter((l) => l.level === 'error').length;
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="preview-view">
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1 text-[11.5px] text-muted">
@@ -97,14 +120,42 @@ export function PreviewView() {
       <div className="min-h-0 flex-1 bg-white">
         {html !== null && <iframe key={nonce} ref={frame} title="Preview" src="/preview-frame" sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin" className="h-full w-full border-0" data-testid="preview-frame" />}
       </div>
-      <div className="flex h-[28%] min-h-[80px] shrink-0 flex-col border-t border-border bg-[#0f1218]">
-        <div className="flex items-center gap-2 px-3 py-0.5 text-[11px] text-muted">
-          Console ({logs.length})
-          <button className="ml-auto hover:text-text" aria-label="Clear console" onClick={() => setLogs([])}>
-            <Trash2 size={11} />
+      <div className="flex shrink-0 flex-col border-t border-border bg-[#0f1218]" style={consoleOpen ? { height: consoleHeight } : undefined} data-testid="preview-console-panel">
+        {consoleOpen && (
+          <div
+            className="h-[10px] shrink-0 cursor-row-resize touch-none bg-transparent hover:bg-accent/30"
+            role="separator"
+            aria-label="Resize console"
+            data-testid="preview-console-resize"
+            onPointerDown={(e) => {
+              const startY = e.clientY;
+              const start = consoleHeight;
+              const el = e.currentTarget;
+              el.setPointerCapture(e.pointerId);
+              const move = (ev: PointerEvent) => setConsoleHeightState(Math.max(60, Math.min(window.innerHeight * 0.8, start + (startY - ev.clientY))));
+              const up = (ev: PointerEvent) => {
+                el.removeEventListener('pointermove', move);
+                el.removeEventListener('pointerup', up);
+                setConsoleHeight(Math.max(60, Math.min(window.innerHeight * 0.8, start + (startY - ev.clientY))));
+              };
+              el.addEventListener('pointermove', move);
+              el.addEventListener('pointerup', up);
+            }}
+          />
+        )}
+        <div className="flex h-[32px] shrink-0 items-center gap-2 px-3 text-[11.5px] text-muted">
+          <button className="flex h-full flex-1 items-center gap-1.5 text-left hover:text-text" onClick={() => setConsoleOpen(!consoleOpen)} aria-expanded={consoleOpen} data-testid="preview-console-toggle">
+            {consoleOpen ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+            Console ({logs.length})
+            {errorCount > 0 && <span className="rounded-full bg-red-500/80 px-1.5 text-[10.5px] text-white" data-testid="preview-console-errors">{errorCount} error{errorCount === 1 ? '' : 's'}</span>}
           </button>
+          {consoleOpen && (
+            <button className="hover:text-text" aria-label="Clear console" onClick={() => setLogs([])}>
+              <Trash2 size={12} />
+            </button>
+          )}
         </div>
-        <div className="min-h-0 flex-1 overflow-auto px-3 pb-1 font-mono text-[11.5px]" data-testid="preview-console">
+        <div className={cx('min-h-0 flex-1 overflow-auto px-3 pb-1 font-mono text-[11.5px]', !consoleOpen && 'hidden')} data-testid="preview-console">
           {logs.map((l, i) => (
             <div key={i} className={cx('whitespace-pre-wrap border-b border-border/30 py-0.5', l.level === 'error' ? 'text-red-300' : l.level === 'warn' ? 'text-amber-200' : 'text-[#c3c9d4]')}>
               {l.text}
