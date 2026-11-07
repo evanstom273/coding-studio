@@ -21,6 +21,8 @@ export const aliases: Record<string, string> = {
   '@cs/git': r('./packages/git/src/index.ts'),
   '@cs/preview': r('./packages/preview/src/index.ts'),
   '@cs/dependencies': r('./packages/dependencies/src/index.ts'),
+  '@cs/styling': r('./packages/styling/src/index.ts'),
+  '@cs/structured-data': r('./packages/structured-data/src/index.ts'),
   '@cs/language-typescript': r('./packages/language-typescript/src/index.ts'),
   '@web': r('./apps/web/src'),
 };

@@ -35,6 +35,8 @@
       "@cs/git": ["packages/git/src/index.ts"],
       "@cs/preview": ["packages/preview/src/index.ts"],
       "@cs/dependencies": ["packages/dependencies/src/index.ts"],
+      "@cs/styling": ["packages/styling/src/index.ts"],
+      "@cs/structured-data": ["packages/structured-data/src/index.ts"],
       "@cs/language-typescript": ["packages/language-typescript/src/index.ts"],
       "@web/*": ["apps/web/src/*"]
     }

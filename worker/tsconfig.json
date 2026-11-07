@@ -64,6 +64,12 @@
       "@cs/dependencies": [
         "packages/dependencies/src/index.ts"
       ],
+      "@cs/styling": [
+        "packages/styling/src/index.ts"
+      ],
+      "@cs/structured-data": [
+        "packages/structured-data/src/index.ts"
+      ],
       "@cs/language-typescript": [
         "packages/language-typescript/src/index.ts"
       ]
