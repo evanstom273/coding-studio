@@ -56,6 +56,8 @@ export const BRIDGE_METHODS = [
   'git_repo_update',
   'git_repo_delete',
   'git_publish',
+  'read_config',
+  'edit_config',
   'ci_status',
   'ci_run',
   'ci_run_details',

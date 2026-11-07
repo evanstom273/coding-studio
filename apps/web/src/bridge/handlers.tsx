@@ -241,6 +241,19 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const ws = useEditor.getState().workspace!;
       return svc.readFilesView(params.paths, (p) => ws.files.get(p), (p) => generatedFiles().find((f) => f.path === p)?.content);
     }
+    case 'read_config': {
+      await ensureOpen(params.project);
+      const path = String(params.path ?? '');
+      return svc.configView(path, useEditor.getState().workspace!.files.get(path)?.text);
+    }
+    case 'edit_config': {
+      await ensureOpen(params.project);
+      const path = String(params.path ?? '');
+      const cur = useEditor.getState().workspace!.files.get(path);
+      const r = svc.configEdit(path, cur?.text, params.edits);
+      useEditor.getState().applyFiles([{ op: 'write_file', path, content: r.content, expectedHash: cur ? cur.hash : null }], `Claude: edit ${path.split('/').pop()}`, { source: 'mcp' });
+      return { path, hash: useEditor.getState().workspace!.files.get(path)?.hash, problems: r.problems };
+    }
     case 'search_files': {
       await ensureOpen(params.project);
       return svc.searchView(useEditor.getState().workspace!.files.values(), params);

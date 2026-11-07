@@ -24,6 +24,7 @@ import { McpDialog } from './dialogs/McpDialog';
 import { NewProjectDialog } from './dialogs/NewProjectDialog';
 import { TabBar } from './files/TabBar';
 import { BinaryFileView, DiffFileView, GeneratedFileView, TextFileView } from './files/FileView';
+import { DataFileView, isDataFile } from './files/DataFileView';
 import { isDiffTab, isGenTab, isLogTab, isPreviewTab } from '@web/lib/fileTypes';
 import { PreviewView } from './files/PreviewView';
 import { LogView } from './files/LogView';
@@ -125,7 +126,7 @@ export default function EditorShell({ projectId }: { projectId: string }) {
           </ErrorBoundary>
         ) : (
           <ErrorBoundary label="File" key={activeTab}>
-            {activeKind === 'gen' ? <GeneratedFileView id={activeTab!} /> : activeKind === 'diff' ? <DiffFileView id={activeTab!} /> : activeKind === 'log' ? <LogView id={activeTab!} /> : activeKind === 'preview' ? <PreviewView /> : activeKind === 'binary' ? <BinaryFileView path={activeTab!} /> : <TextFileView key={activeTab} path={activeTab!} />}
+            {activeKind === 'gen' ? <GeneratedFileView id={activeTab!} /> : activeKind === 'diff' ? <DiffFileView id={activeTab!} /> : activeKind === 'log' ? <LogView id={activeTab!} /> : activeKind === 'preview' ? <PreviewView /> : activeKind === 'binary' ? <BinaryFileView path={activeTab!} /> : isDataFile(activeTab!) ? <DataFileView key={activeTab} path={activeTab!} /> : <TextFileView key={activeTab} path={activeTab!} />}
           </ErrorBoundary>
         )}
       </div>

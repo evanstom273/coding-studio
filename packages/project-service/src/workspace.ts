@@ -6,6 +6,7 @@ import type { ScriptDoc } from '@cs/graph-core';
 import type { EditOp, Project } from '@cs/project-format';
 import { GRAPH_EXT, normalizePath, searchFiles, type FileRecord, type WorkspaceOp } from '@cs/workspace';
 import { ServiceError, str } from './index';
+import { editData, formatFor, parseData, schemaFor, validate, type Edit } from '@cs/structured-data';
 
 /** A script by id, name, path ("player/player") or graph file ("player/player.vgraph"). */
 export function matchScript(s: ScriptDoc, ref: unknown): boolean {
@@ -148,4 +149,31 @@ export function hostSnapshot(p: Project, files: Iterable<FileRecord>, generated:
   }
   for (const g of generated) if (!seen.has(g.path)) out.push({ path: g.path, text: g.content, generated: true });
   return { project: p.id, name: p.name, files: out };
+}
+
+/** read_config: a config file's data (any supported format) and what its schema says is wrong. */
+export function configView(path: string, text: string | undefined) {
+  const format = formatFor(path);
+  if (!format) throw new ServiceError('E_INVALID', `${path} isn't a JSON, YAML, TOML, XML or .properties file.`);
+  if (text === undefined) throw new ServiceError('E_NOT_FOUND', `${path} does not exist.`);
+  const p = parseData(format, text);
+  if (p.errors.length) return { path, format, parse_errors: p.errors };
+  const schema = schemaFor(path);
+  const issues = validate(p.value, schema);
+  return { path, format, ...(schema?.title ? { kind: schema.title } : {}), value: p.value ?? null, problems: issues.map((i) => ({ field: i.path.join('.'), message: i.message, severity: i.severity })) };
+}
+
+/** edit_config: apply structured edits, changing only the affected text. Returns the new text. */
+export function configEdit(path: string, text: string | undefined, edits: unknown): { content: string; problems: { field: string; message: string; severity: string }[] } {
+  const format = formatFor(path);
+  if (!format) throw new ServiceError('E_INVALID', `${path} isn't a JSON, YAML, TOML, XML or .properties file.`);
+  if (!Array.isArray(edits) || !edits.length) throw new ServiceError('E_INVALID', 'edits must be a non-empty array');
+  for (const [i, e] of edits.entries()) {
+    const ok = e && typeof e === 'object' && ['set', 'delete', 'rename', 'move', 'insert'].includes((e as { op?: string }).op ?? '') && Array.isArray((e as { path?: unknown }).path);
+    if (!ok) throw new ServiceError('E_INVALID', `Edit ${i + 1}: expected {op: set|delete|rename|move|insert, path: [keys/indexes], …}`);
+  }
+  if (text !== undefined && parseData(format, text).errors.length) throw new ServiceError('E_INVALID', `${path} can't be parsed, so it wasn't changed. Fix it with write_file first.`);
+  const content = editData(format, text ?? '', edits as Edit[]);
+  const issues = validate(parseData(format, content).value, schemaFor(path));
+  return { content, problems: issues.map((i) => ({ field: i.path.join('.'), message: i.message, severity: i.severity })) };
 }

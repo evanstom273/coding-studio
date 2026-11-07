@@ -414,3 +414,21 @@ describe('npm dependencies through the connector', () => {
     }
   });
 });
+
+describe('config files through the connector', () => {
+  it('read_config / edit_config change only the fields asked for and report schema problems', async () => {
+    const cloud = new CloudService(kv(), backend(), () => undefined, 'https://site', () => 0);
+    await cloud.handle('create_project', { name: 'Cfg', language: 'typescript', template: 'module' });
+    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'mods.toml', content: '# NeoForge\nmodLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n\n[[mods]]\nmodId="examplemod"\n' }] });
+    const r = (await cloud.handle('edit_config', { path: 'mods.toml', edits: [{ op: 'set', path: ['mods', 0, 'displayName'], value: 'Example' }] })) as { problems: unknown[] };
+    expect(r.problems).toEqual([]);
+    const text = ((await cloud.handle('read_files', { paths: ['mods.toml'] })) as { files: { text: string }[] }).files[0].text;
+    expect(text).toBe('# NeoForge\nmodLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n\n[[mods]]\nmodId="examplemod"\ndisplayName = "Example"\n');
+    const bad = (await cloud.handle('edit_config', { path: 'mods.toml', edits: [{ op: 'set', path: ['mods', 0, 'modId'], value: 'Bad Id' }] })) as { problems: { field: string }[] };
+    expect(bad.problems[0].field).toBe('mods.0.modId');
+    expect(await cloud.handle('read_config', { path: 'mods.toml' })).toMatchObject({ kind: 'NeoForge mod', value: { mods: [{ modId: 'Bad Id' }] } });
+    await expect(cloud.handle('edit_config', { path: 'x.ts', edits: [{ op: 'set', path: ['a'], value: 1 }] })).rejects.toMatchObject({ code: 'E_INVALID' });
+    await cloud.handle('undo', {});
+    expect(((await cloud.handle('read_config', { path: 'mods.toml' })) as { value: { mods: { modId: string }[] } }).value.mods[0].modId).toBe('examplemod');
+  });
+});

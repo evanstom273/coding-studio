@@ -5,7 +5,7 @@
  * The editors see a projection: an element with only text is a string; otherwise an object whose
  * keys are "@attribute", child element names (an array when a name repeats) and "#text".
  */
-import { applyToValue, canonical, isObject, type Edit, type Path, type Value } from './model';
+import { applyToValue, canonical, getIn, isObject, type Edit, type Path, type Value } from './model';
 
 export interface XmlElement {
   name: string;
@@ -210,6 +210,16 @@ function tryEdit(text: string, e: Edit): string | null {
       const ind = lineIndent(text, loc.parent.start) + step;
       return appendChild(text, loc.parent, toXml(loc.name, e.value, ind, step));
     }
+    // Missing parents: add them under the deepest element that exists.
+    for (let n = e.path.length - 2; n >= 1; n--) {
+      const at = locate(root, e.path.slice(0, n));
+      if (!at.el) continue;
+      const rest = e.path.slice(n).filter((x): x is string => typeof x === 'string');
+      if (rest.length !== e.path.length - n || rest.some((x) => x.startsWith('@') || x === '#text')) return null;
+      let v: Value = e.value;
+      for (let i = rest.length - 1; i >= 1; i--) v = { [rest[i]]: v };
+      return appendChild(text, at.el, toXml(rest[0], v, lineIndent(text, at.el.start) + step, step));
+    }
     return null;
   }
   if (e.op === 'delete') {
@@ -266,8 +276,10 @@ export function editXml(text: string, edits: Edit[]): string {
   for (const raw of edits) {
     const e = 'value' in raw ? ({ ...raw, value: str(raw.value) } as Edit) : raw;
     const before = parseXml(out).value ?? {};
-    const want = applyToValue(before, [e]);
-    let attempt: string | null = null;
+    // A repeated element that currently appears once is projected as a single value: inserting makes it a list.
+    const cur = e.op === 'insert' ? getIn(before, e.path) : undefined;
+    const want = e.op === 'insert' && cur !== undefined && !Array.isArray(cur) ? applyToValue(before, [{ op: 'set', path: e.path, value: (e.index === 0 ? [e.value, cur] : [cur, e.value]) as Value }]) : applyToValue(before, [e]);
+    let attempt: string | null;
     try {
       attempt = out.trim() ? tryEdit(out, e) : null;
     } catch {

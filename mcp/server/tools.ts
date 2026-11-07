@@ -294,6 +294,20 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
 - {op:"graph", ops:[…batch_edit operations…], [script: "path/to.vgraph" | name | id], [graph]}  edit visual scripts in the same atomic batch (see batch_edit for the operation list). Create a new visual script with {op:"graph", ops:[{op:"add_script", name, path}]}.
 - {op:"config", patch:{name?, description?, language?, languageVersion?, compiler?}}  edit codingstudio.json.
 .vgraph files are visual scripts: prefer "graph" ops over writing their JSON. codingstudio.json can't be deleted or moved. A backup is taken before deletes and large batches.`;
+  server.registerTool('read_config', { title: 'Read a config file', description: 'A JSON / YAML / TOML / XML / .properties file as data, plus what is wrong with it for known kinds (package.json, tsconfig, fabric.mod.json, neoforge.mods.toml, pom.xml, .csproj, pyproject.toml, GitHub workflows, wrangler, gradle.properties). XML elements appear as keys ("@name" = attribute; repeated elements are lists).', inputSchema: { project, path: z.string() }, annotations: ro }, (a) => call('read_config', a));
+  server.registerTool(
+    'edit_config',
+    {
+      title: 'Edit a config file',
+      description: 'Change fields in a JSON / YAML / TOML / XML / .properties file without rewriting it: comments, key order and other fields stay as they are (the same edits the visual editor makes). One undo step. Creates the file if missing. Returns any problems the file\'s schema finds afterwards.',
+      inputSchema: {
+        project,
+        path: z.string(),
+        edits: z.array(z.looseObject({ op: z.enum(['set', 'delete', 'rename', 'move', 'insert']), path: z.array(z.union([z.string(), z.number()])).describe('Keys and list indexes, e.g. ["scripts","dev"] or ["mods",0,"modId"]'), value: z.unknown().optional(), to: z.union([z.string(), z.number()]).optional().describe('rename: new key; move: new index'), index: z.number().optional().describe('insert: position (default: end)') })).min(1),
+      },
+    },
+    (a) => call('edit_config', a),
+  );
   server.registerTool(
     'workspace_batch',
     { title: 'Edit files (batch)', description: WS_DOC, inputSchema: { project, expected_revision: wsRevision, operations: z.array(z.looseObject({ op: z.enum(['write_file', 'create_dir', 'delete', 'move', 'copy', 'graph', 'config']) })).min(1).max(2000) } },

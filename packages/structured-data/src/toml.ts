@@ -75,9 +75,8 @@ function scan(text: string): Line[] {
 /** Line indexes [start, end) of the table at `path` ([] = top level). */
 function section(lines: Line[], path: Path): [number, number] | null {
   const same = (a: Path, b: Path) => a.length === b.length && a.every((s, i) => String(s) === String(b[i]));
-  let start = -1;
-  if (!path.length) start = 0;
-  else {
+  let start = 0;
+  if (path.length) {
     const i = lines.findIndex((l) => l.header && same(l.header.path, path));
     if (i < 0) return null;
     start = i + 1;

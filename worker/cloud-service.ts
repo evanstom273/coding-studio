@@ -363,6 +363,21 @@ export class CloudService {
         let gen: { path: string; content: string }[] | undefined;
         return svc.readFilesView(params.paths, (x) => recs.get(x), (x) => (gen ??= svc.compileAll(p).files).find((f) => f.path === x)?.content);
       }
+      case 'read_config': {
+        const { project: p } = await this.resolve(params.project);
+        const path = String(params.path ?? '');
+        return svc.configView(path, this.store.readPaths(p.id, [path])[0]?.text);
+      }
+      case 'edit_config': {
+        const { project: p } = await this.resolve(params.project);
+        const path = String(params.path ?? '');
+        const before = this.store.read(p.id)!;
+        const cur = before.files.get(path);
+        const r = svc.configEdit(path, cur?.text, params.edits);
+        const w = applyWorkspaceOps(before, [{ op: 'write_file', path, content: r.content, expectedHash: cur ? cur.hash : null }]);
+        await this.commit(before, w.workspace, 'claude', { label: `Claude: edit ${path.split('/').pop()}`, source: 'claude' });
+        return { path, hash: w.workspace.files.get(path)?.hash, problems: r.problems };
+      }
       case 'search_files': {
         const { project: p } = await this.resolve(params.project);
         return svc.searchView(this.store.read(p.id, (e) => e.kind === 'text')!.files.values(), params);
