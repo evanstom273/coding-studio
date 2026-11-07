@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 import { CloudService } from '../../worker/cloud-service';
 import { GitHubVault } from '../../worker/github';
 import { FakeGitHub } from '../fixtures/fake-github';
-import { memoryBackend, memoryKv } from '../fixtures/cloud-backend';
+import { memoryBackend, memoryKv, seedFiles } from '../fixtures/cloud-backend';
 
 async function setup(name = 'x') {
   const fake = new FakeGitHub('lyra', name);
@@ -30,7 +30,7 @@ async function breakGraph(cloud: CloudService) {
   const entry = g.nodes.find((n: { type: string }) => n.type === 'core.entry');
   g.nodes.push({ id: 'n_broken', type: 'core.no_such_node', position: { x: 300, y: 0 }, props: {}, inputs: {} });
   g.edges.push({ id: 'e_broken', from: { node: entry.id, port: 'then' }, to: { node: 'n_broken', port: 'exec' } });
-  await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'main.vgraph', content: JSON.stringify(doc, null, 2) }] });
+  await seedFiles(cloud, { 'main.vgraph': JSON.stringify(doc, null, 2) });
 }
 
 const checkout = (files: Record<string, string>) => {
@@ -77,7 +77,7 @@ describe('Cloudflare deployment configuration', () => {
     // a project that is a Worker keeps its own config untouched
     const { cloud: c2 } = await setup('worker');
     await c2.handle('create_project', { name: 'Api', language: 'typescript', template: 'module' });
-    await c2.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'package.json', content: '{"name":"api","devDependencies":{"wrangler":"^4.158.0"}}' }, { op: 'write_file', path: 'wrangler.toml', content: 'name = "api"\nmain = "src/index.ts"\n' }] });
+    await seedFiles(c2, { 'package.json': '{"name":"api","devDependencies":{"wrangler":"^4.158.0"}}', 'wrangler.toml': 'name = "api"\nmain = "src/index.ts"\n' });
     r = (await c2.handle('ci_add_workflow', { template: 'cloudflare' })) as { added: string[]; files: { content: string }[] };
     expect(r.added).toEqual(['.github/workflows/deploy.yml']);
     // not a Vite app and no config: nothing is invented

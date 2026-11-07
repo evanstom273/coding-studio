@@ -5,7 +5,7 @@ import { makeRecord, type Workspace } from '@cs/workspace';
 import { CloudService } from '../../worker/cloud-service';
 import { GitHubVault } from '../../worker/github';
 import { FakeGitHub } from '../fixtures/fake-github';
-import { memoryBackend, memoryKv } from '../fixtures/cloud-backend';
+import { memoryBackend, memoryKv, seedFiles } from '../fixtures/cloud-backend';
 
 async function setup() {
   const fake = new FakeGitHub('lyra', 'x');
@@ -47,7 +47,7 @@ describe('merge → delete branch → back to main → deploy', () => {
     await cloud.handle('ci_add_workflow', { template: 'cloudflare' });
     await cloud.handle('git_commit', { message: 'Deploy workflow' });
     // work on a feature branch
-    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'src/survivor.ts', content: 'export const hp = 3;\n' }] });
+    await seedFiles(cloud, { 'src/survivor.ts': 'export const hp = 3;\n' });
     await cloud.handle('git_commit', { message: 'Neon survivor', new_branch: 'feature/neon-survivor' });
     expect(((await cloud.handle('git_branches', {})) as { current: string }).current).toBe('feature/neon-survivor');
     const pr = (await cloud.handle('git_create_pr', { title: 'Neon survivor' })) as { number: number };

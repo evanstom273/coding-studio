@@ -98,7 +98,13 @@ Inline functions (closures, TypeScript): add_function {kind:"lambda", owner:<fun
 Execution flow: connect exec output "then" (or "true"/"false", "body", "completed"…) to exec input "exec". Every function graph starts at its Entry node (output "then", plus one data output per parameter, keyed by parameter id or name).`;
 
 export function buildServer(bridge: Relay, host: ToolHost): McpServer {
-  const server = new McpServer({ name: 'coding-studio', version: SERVER_VERSION });
+  const server = new McpServer(
+    { name: 'coding-studio', version: SERVER_VERSION },
+    {
+      instructions:
+        'Coding Studio is a VISUAL programming tool: everything is built visually, by people and by AI alike. Never write source code. Build program logic as graphs (batch_edit / workspace_batch "graph" operations: nodes, wires, variables, functions); the source code is generated from them. Change settings with edit_config, packages with deps_add / deps_remove. Writing code, CSS, HTML, config text or .vgraph JSON directly is refused (E_VISUAL_ONLY); only notes (.md, .txt) and assets can be written as files.',
+    },
+  );
   const call = async (method: BridgeMethod, params: Record<string, unknown> = {}, timeout?: number) => {
     try {
       return text(await bridge.request(method, params, timeout));
@@ -288,12 +294,13 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     { title: 'Search files', description: 'Search text files in the project (literal by default; regex=true for a regular expression). Returns path, line and the matching line.', inputSchema: { project, query: z.string(), regex: z.boolean().optional(), case_sensitive: z.boolean().optional(), path: z.string().optional().describe('Only search inside this folder'), limit: z.number().int().min(1).max(2000).optional() }, annotations: ro },
     (a) => call('search_files', a),
   );
-  const WS_DOC = `Change the project's files atomically: all operations succeed or nothing changes, and the batch is ONE undo step. Operations:
-- {op:"write_file", path, content | base64, [expected_hash]}  create or replace a file. expected_hash = the hash you read (refused if the file changed since); null = must not exist yet. Parent folders are created.
+  const WS_DOC = `Change the project's files atomically: all operations succeed or nothing changes, and the batch is ONE undo step.
+VISUAL-ONLY: Coding Studio never takes hand-written code, from people or AI. You cannot write source code, CSS, HTML, JSON/YAML/TOML/XML text or .vgraph JSON. Build programs with "graph" operations (nodes and wires; the code is generated), change settings with edit_config, packages with deps_add / deps_remove. write_file is only for plain writing (.md, .txt, README) and assets (images, sounds, fonts, as base64); anything else is refused with E_VISUAL_ONLY. Operations:
+- {op:"write_file", path, content | base64, [expected_hash]}  create or replace a .md / .txt file or an asset. expected_hash = the hash you read (refused if the file changed since); null = must not exist yet. Parent folders are created.
 - {op:"create_dir", path} · {op:"delete", path, [recursive], [expected_hash]} (folders need recursive:true) · {op:"move"|"copy", from, to, [overwrite]} (files or folders)
 - {op:"graph", ops:[…batch_edit operations…], [script: "path/to.vgraph" | name | id], [graph]}  edit visual scripts in the same atomic batch (see batch_edit for the operation list). Create a new visual script with {op:"graph", ops:[{op:"add_script", name, path}]}.
 - {op:"config", patch:{name?, description?, language?, languageVersion?, compiler?}}  edit codingstudio.json.
-.vgraph files are visual scripts: prefer "graph" ops over writing their JSON. codingstudio.json can't be deleted or moved. A backup is taken before deletes and large batches.`;
+.vgraph files are visual scripts: change them only with "graph" ops. codingstudio.json can't be deleted or moved. A backup is taken before deletes and large batches.`;
   server.registerTool('read_config', { title: 'Read a config file', description: 'A JSON / YAML / TOML / XML / .properties file as data, plus what is wrong with it for known kinds (package.json, tsconfig, fabric.mod.json, neoforge.mods.toml, pom.xml, .csproj, pyproject.toml, GitHub workflows, wrangler, gradle.properties). XML elements appear as keys ("@name" = attribute; repeated elements are lists).', inputSchema: { project, path: z.string() }, annotations: ro }, (a) => call('read_config', a));
   server.registerTool(
     'edit_config',
@@ -315,7 +322,7 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
   );
   server.registerTool(
     'write_file',
-    { title: 'Write file', description: 'Create or replace one text file (folders are created). Pass expected_hash from read_files to avoid overwriting a newer version; null means the file must not exist yet.', inputSchema: { project, path: z.string(), content: z.string(), expected_hash: z.string().nullable().optional() } },
+    { title: 'Write a note', description: 'Create or replace a plain-writing file (.md, .txt, README…). Coding Studio is visual-only: code and config files can\'t be written (E_VISUAL_ONLY) — build logic with graph operations (batch_edit), settings with edit_config, packages with deps_add. Pass expected_hash from read_files to avoid overwriting a newer version; null means the file must not exist yet.', inputSchema: { project, path: z.string(), content: z.string(), expected_hash: z.string().nullable().optional() } },
     (a) => call('workspace_batch', { project: a.project, operations: [{ op: 'write_file', path: a.path, content: a.content, ...(a.expected_hash !== undefined ? { expectedHash: a.expected_hash } : {}) }] }),
   );
   server.registerTool(

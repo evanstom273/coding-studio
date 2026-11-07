@@ -135,24 +135,11 @@ describe("LocalHost (tools side)", () => {
     const r = (await host.run("test")) as { state: string; output: string };
     expect(r.state).toBe("passed");
     expect(r.output).toContain("v = 2");
-    // an edit made in the folder comes back as a workspace_batch (generated files don't)
+    // visual-only: code edited in the folder (by another editor or an AI) never comes back
     writeFileSync(join(dir, "src/app.ts"), "export const v = 3;\n");
     writeFileSync(join(dir, "src/app.gd"), "# hand edit");
-    await expect
-      .poll(() => calls.filter((c) => c.method === "workspace_batch").length, {
-        timeout: 5000,
-      })
-      .toBe(1);
-    expect(calls.find((c) => c.method === "workspace_batch")!.params).toEqual({
-      project: "p1",
-      operations: [
-        {
-          op: "write_file",
-          path: "src/app.ts",
-          content: "export const v = 3;\n",
-        },
-      ],
-    });
+    await new Promise((r) => setTimeout(r, 1500));
+    expect(calls.filter((c) => c.method === "workspace_batch")).toEqual([]);
     host.dispose();
   }, 60_000);
 });
@@ -217,9 +204,9 @@ describe("LocalHost: open a folder, live sync from the editor", () => {
       })
       .toBe("a2");
     expect(readFileSync(join(dir, "src", "b.ts"), "utf8")).toBe("b-local");
-    await expect
-      .poll(() => batches.length, { timeout: 5000 })
-      .toBeGreaterThan(0);
+    // …and that code edit isn't brought into the (visual-only) project
+    await new Promise((r) => setTimeout(r, 1000));
+    expect(batches).toEqual([]);
     host.dispose();
   }, 30_000);
 });

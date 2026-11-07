@@ -184,3 +184,18 @@ export function workspaceRevision(ws: Workspace): string {
   const lines = [...ws.files.values()].map((f) => `${f.path}\0${f.hash}`).sort();
   return gitBlobHash(lines.join('\n'));
 }
+
+/**
+ * Coding Studio is visual-only: nobody (a person or an AI) types source code into a project.
+ * Code comes from graphs; config, styles and packages are changed with visual editors that make
+ * structured edits. What can still be written directly as a file: plain writing (README, notes)
+ * and assets (images, sounds, fonts…).
+ */
+const PROSE = /\.(md|markdown|txt|text|rst)$/i;
+const PROSE_NAMES = /(^|\/)(README|LICENSE|LICENCE|NOTICE|AUTHORS|CHANGELOG|CONTRIBUTING)$/i;
+export function isDirectlyWritable(path: string): boolean {
+  if (path.endsWith(GRAPH_EXT)) return false;
+  return PROSE.test(path) || PROSE_NAMES.test(path) || kindForPath(path) === 'binary';
+}
+
+export const VISUAL_ONLY_MESSAGE = 'Coding Studio is visual-only: code and config files can\'t be written as text. Build logic with graph operations (batch_edit, or workspace_batch op "graph"); change JSON/YAML/TOML/XML settings with edit_config; packages with deps_add / deps_remove; CSS with the visual style tools. Only plain writing (.md, .txt) and assets (images, sounds, fonts) can be written directly.';

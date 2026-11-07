@@ -8,6 +8,7 @@ import { toolchainFor } from '@cs/toolchain';
 import { CONFIG_PATH, deriveProject, makeRecord, projectToWorkspace, workspaceRevision } from '@cs/workspace';
 import { CHUNK, CloudStore, diffFiles, type StoreBackend } from '../../worker/cloud-store';
 import { CloudService, type KvLike } from '../../worker/cloud-service';
+import { seedFiles } from '../fixtures/cloud-backend';
 
 function backend(): StoreBackend {
   const db = new DatabaseSync(':memory:');
@@ -216,26 +217,26 @@ describe('workspace MCP tools (cloud)', () => {
     const r = (await cloud.handle('workspace_batch', {
       operations: [
         { op: 'create_dir', path: 'assets' },
-        { op: 'write_file', path: 'src/util.ts', content: 'export const add = (a: number, b: number) => a + b;\n' },
+        { op: 'write_file', path: 'docs/plan.txt', content: 'add speed\n' },
         { op: 'write_file', path: 'README.md', content: '# Multi\nuses add()\n', expected_hash: null },
         { op: 'graph', ops: [{ op: 'add_script', ref: 'p', name: 'Player', path: 'actors/player', template: 'character2d' }] },
         { op: 'graph', script: 'actors/player.vgraph', ops: [{ op: 'add_variable', name: 'speed', type: 'float', default: 300 }] },
         { op: 'config', patch: { description: 'made by Claude' } },
       ],
     })) as Batch;
-    expect(r.changed.map((c) => c.path).sort()).toEqual(['README.md', 'actors/player.vgraph', 'assets/.gitkeep', 'codingstudio.json', 'src/util.ts']);
+    expect(r.changed.map((c) => c.path).sort()).toEqual(['README.md', 'actors/player.vgraph', 'assets/.gitkeep', 'codingstudio.json', 'docs/plan.txt']);
     expect(r.diagnostics?.errors).toBe(0);
     const tree = (await cloud.handle('read_tree', {})) as { files: { path: string }[]; folders: string[]; generated: string[]; workspace_revision: string };
-    expect(tree.folders).toEqual(['actors', 'assets', 'src']);
+    expect(tree.folders).toEqual(['actors', 'assets', 'docs']);
     expect(tree.generated).toContain('actors/player.gd');
     expect(tree.workspace_revision).toBe(r.workspace_revision);
-    const read = (await cloud.handle('read_files', { paths: ['src/util.ts', 'actors/player.gd', 'nope.txt'] })) as { files: { path: string; text?: string; hash?: string; generated?: boolean; error?: string }[] };
-    expect(read.files[0].text).toContain('export const add');
+    const read = (await cloud.handle('read_files', { paths: ['docs/plan.txt', 'actors/player.gd', 'nope.txt'] })) as { files: { path: string; text?: string; hash?: string; generated?: boolean; error?: string }[] };
+    expect(read.files[0].text).toBe('add speed\n');
     expect(read.files[1]).toMatchObject({ generated: true });
     expect(read.files[1].text).toContain('var speed: float = 300');
     expect(read.files[2].error).toBe('E_NOT_FOUND');
     const hits = (await cloud.handle('search_files', { query: 'add' })) as { matches: { path: string; line: number }[] };
-    expect(hits.matches).toEqual([{ path: 'README.md', line: 2, text: 'uses add()' }, expect.objectContaining({ path: 'src/util.ts', line: 1 })].sort((a, b) => (a.path < b.path ? -1 : 1)));
+    expect(hits.matches).toEqual([{ path: 'README.md', line: 2, text: 'uses add()' }, expect.objectContaining({ path: 'docs/plan.txt', line: 1 })]);
     // graph tools accept the file path
     expect(((await cloud.handle('list_graphs', {})) as { script: string }[]).length).toBeGreaterThan(0);
     expect(((await cloud.handle('compile_script', { script: 'actors/player.vgraph' })) as { files: { path: string }[] }).files[0].path).toBe('actors/player.gd');
@@ -243,6 +244,21 @@ describe('workspace MCP tools (cloud)', () => {
     await cloud.handle('undo', {});
     const after = (await cloud.handle('read_tree', {})) as { files: { path: string }[] };
     expect(after.files.map((f) => f.path).sort()).toEqual(['codingstudio.json', 'main.vgraph']);
+  });
+
+  it('visual-only: code, config text and graph JSON cannot be written by AI; notes and assets can', async () => {
+    const cloud = svc2();
+    await cloud.handle('create_project', { name: 'Visual', language: 'typescript', template: 'module' });
+    for (const path of ['src/util.ts', 'app.js', 'player.gd', 'style.css', 'index.html', 'package.json', 'config.yml', 'main.vgraph', 'Main.java', 'tool.py']) {
+      await expect(cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path, content: 'x' }] })).rejects.toMatchObject({ code: 'E_VISUAL_ONLY' });
+    }
+    // a refused op fails the whole batch: nothing changes
+    await expect(cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'notes.md', content: 'ok' }, { op: 'write_file', path: 'x.ts', content: 'x' }] })).rejects.toMatchObject({ code: 'E_VISUAL_ONLY' });
+    expect(((await cloud.handle('read_files', { paths: ['notes.md'] })) as { files: { error?: string }[] }).files[0].error).toBe('E_NOT_FOUND');
+    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'notes.md', content: 'ok' }, { op: 'write_file', path: 'LICENSE', content: 'MIT' }, { op: 'write_file', path: 'img/logo.png', base64: 'iVBORw0KGgo=' }] });
+    // settings still change visually (structured edits), and graphs through graph operations
+    expect(await cloud.handle('edit_config', { path: 'package.json', edits: [{ op: 'set', path: ['name'], value: 'visual' }] })).toMatchObject({ problems: [] });
+    expect(((await cloud.handle('batch_edit', { operations: [{ op: 'add_variable', name: 'score', type: 'int', default: 0 }] })) as { revision: string }).revision).toBeTruthy();
   });
 
   it('stale expected_hash / revision and invalid ops change nothing', async () => {
@@ -283,7 +299,7 @@ describe('GitHub through the cloud connector', () => {
     const cl = (await cloud.handle('git_clone', { repository: 'lyra/game' })) as { project: string; linked: boolean; changes: { path: string }[] };
     expect(cl.linked).toBe(true);
     expect(cl.changes.map((c) => c.path)).toEqual(['codingstudio.json']);
-    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'src/app.ts', content: 'export const a = 2;\n' }] });
+    await seedFiles(cloud, { 'src/app.ts': 'export const a = 2;\n' });
     const st = (await cloud.handle('git_status', {})) as { changes: { path: string; status: string }[] };
     expect(st.changes).toEqual([{ path: 'codingstudio.json', status: 'added' }, { path: 'src/app.ts', status: 'modified' }]);
     const c = (await cloud.handle('git_commit', { message: 'Claude change', new_branch: 'claude/edit' })) as { branch: string };
@@ -401,7 +417,7 @@ describe('npm dependencies through the connector', () => {
       expect(r.range).toBe('^4.0.11');
       const pkg = JSON.parse(((await cloud.handle('read_files', { paths: ['package.json'] })) as { files: { text: string }[] }).files[0].text);
       expect(pkg).toMatchObject({ name: 'todo-app', dependencies: { dexie: '^4.0.11' } });
-      await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'package-lock.json', content: JSON.stringify({ packages: { '': { dependencies: { dexie: '^4.0.11' } } } }) }] });
+      await seedFiles(cloud, { 'package-lock.json': JSON.stringify({ packages: { '': { dependencies: { dexie: '^4.0.11' } } } }) });
       expect(((await cloud.handle('deps_list', {})) as { lockfile: { status: string } }).lockfile.status).toBe('in-sync');
       await expect(cloud.handle('deps_add', { name: 'nope-not-real' })).rejects.toMatchObject({ code: 'E_NOT_FOUND' });
       await cloud.handle('deps_remove', { name: 'dexie' });
@@ -419,7 +435,7 @@ describe('config files through the connector', () => {
   it('read_config / edit_config change only the fields asked for and report schema problems', async () => {
     const cloud = new CloudService(kv(), backend(), () => undefined, 'https://site', () => 0);
     await cloud.handle('create_project', { name: 'Cfg', language: 'typescript', template: 'module' });
-    await cloud.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'mods.toml', content: '# NeoForge\nmodLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n\n[[mods]]\nmodId="examplemod"\n' }] });
+    await seedFiles(cloud, { 'mods.toml': '# NeoForge\nmodLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n\n[[mods]]\nmodId="examplemod"\n' });
     const r = (await cloud.handle('edit_config', { path: 'mods.toml', edits: [{ op: 'set', path: ['mods', 0, 'displayName'], value: 'Example' }] })) as { problems: unknown[] };
     expect(r.problems).toEqual([]);
     const text = ((await cloud.handle('read_files', { paths: ['mods.toml'] })) as { files: { text: string }[] }).files[0].text;

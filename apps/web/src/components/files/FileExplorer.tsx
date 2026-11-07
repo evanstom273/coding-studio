@@ -4,6 +4,8 @@
  * Only visible rows are rendered, so large workspaces stay fast.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { isDirectlyWritable } from '@cs/workspace';
+import { formatFor } from '@cs/structured-data';
 import { ChevronDown, ChevronRight, Cog, File, FileCode2, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Image, MoreHorizontal, Music, Upload, Workflow } from 'lucide-react';
 import { basename, CONFIG_PATH, dirname, GRAPH_EXT, joinPath, type WorkspaceOp } from '@cs/workspace';
 import { useEditor } from '@web/store/editor';
@@ -50,6 +52,15 @@ function toB64(u: Uint8Array) {
 }
 
 export async function uploadInto(dir: string, files: FileList | File[]) {
+  // Visual-only: code files aren't uploaded into a project (import a whole project instead).
+  const all = Array.from(files);
+  const refused = all.filter((f) => {
+    const rel = (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name;
+    return !isDirectlyWritable(rel) && !formatFor(rel);
+  });
+  if (refused.length) toast('warning', `Skipped ${refused.length} code file(s) (${refused.slice(0, 3).map((f) => f.name).join(', ')}${refused.length > 3 ? '…' : ''}): Coding Studio builds code from visual scripts. To bring in an existing code project, use Import project or Open from GitHub.`);
+  files = all.filter((f) => !refused.includes(f));
+  if (!files.length) return;
   const list = [...files];
   if (!list.length) return;
   const ops: WorkspaceOp[] = [];
@@ -173,6 +184,8 @@ export function FileExplorer() {
     }
     if (exists(path)) return void toast('error', `"${path}" already exists`);
     if (path.endsWith(GRAPH_EXT)) return void toast('info', 'Use "New visual script" to create a graph file.');
+    // Visual-only: a new file is a note, or a settings file filled in with the visual editor.
+    if (!isDirectlyWritable(path) && !formatFor(path)) return void toast('error', `Code can't be typed in Coding Studio. Make a visual script for program logic ("New visual script"); new files can be notes (.md, .txt) or settings files (.json, .yaml, .toml, .xml), which open in a visual editor.`);
     if (fileOps([{ op: 'write_file', path, content: '', expectedHash: null }], `New file ${name}`)) useEditor.getState().openTab(path);
   };
 

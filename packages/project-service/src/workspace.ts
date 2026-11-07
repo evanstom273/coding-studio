@@ -4,7 +4,7 @@
  */
 import type { ScriptDoc } from '@cs/graph-core';
 import type { EditOp, Project } from '@cs/project-format';
-import { GRAPH_EXT, normalizePath, searchFiles, type FileRecord, type WorkspaceOp } from '@cs/workspace';
+import { GRAPH_EXT, isDirectlyWritable, normalizePath, searchFiles, VISUAL_ONLY_MESSAGE, type FileRecord, type WorkspaceOp } from '@cs/workspace';
 import { ServiceError, str } from './index';
 import { editData, formatFor, parseData, schemaFor, validate, type Edit } from '@cs/structured-data';
 
@@ -106,6 +106,15 @@ export function searchView(files: Iterable<FileRecord>, params: Record<string, u
   return { matches: r.hits.map((h) => ({ path: h.path, line: h.line, text: h.text })), truncated: r.truncated };
 }
 
+/** Normalised path, or the raw one if it's invalid (the batch reports that itself). */
+const safeNormalize = (p: string) => {
+  try {
+    return normalizePath(p);
+  } catch {
+    return 'invalid.txt';
+  }
+};
+
 export const WORKSPACE_OPS = ['write_file', 'create_dir', 'delete', 'move', 'copy', 'graph', 'config'] as const;
 
 /**
@@ -125,6 +134,7 @@ export function prepareBatch(_p: Project, raw: unknown, active: { scriptId?: str
       if (!Array.isArray(op.ops ?? op.operations)) throw new ServiceError('E_INVALID', `Operation ${i + 1}: "graph" needs ops: [...]`);
       return { op: 'graph', ops: (op.ops ?? op.operations) as EditOp[], defaults: { scriptId: active.scriptId, functionId: active.functionId }, ...(str(op.script) ? { script: str(op.script) } : {}), ...(str(op.graph) ? { graph: str(op.graph) } : {}) };
     }
+    if (op.op === 'write_file' && !isDirectlyWritable(safeNormalize(String(op.path ?? '')))) throw new ServiceError('E_VISUAL_ONLY', `Operation ${i + 1}: "${String(op.path)}" can't be written. ${VISUAL_ONLY_MESSAGE}`, { path: op.path });
     if (String(op.path ?? op.from ?? '').endsWith(GRAPH_EXT) || String(op.to ?? '').endsWith(GRAPH_EXT)) touchesGraphs = true;
     // Accept snake_case from MCP clients.
     if (op.expected_hash !== undefined && op.expectedHash === undefined) return { ...op, expectedHash: op.expected_hash } as WorkspaceOp;
