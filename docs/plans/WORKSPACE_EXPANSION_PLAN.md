@@ -555,3 +555,9 @@ Each item should be a single session-sized change with tests. Tick only when mer
 5. **Phase order**: as revised in §D.
 
 Waiting for approval to start Phase 1.
+
+### Later — Running GDScript / Godot projects (saved idea, not scheduled)
+Three levels, cheapest first:
+1. **GitHub Actions run:** a workflow template that downloads headless Godot, checks every script (`--check-only`) and runs the main scene for a few seconds; parse/type/runtime errors and `print()` output show in Git → Actions, linked to files. Answers "does it work" from a phone, ~1 min per run.
+2. **Laptop:** the Computer panel runs the installed Godot (check, or open the game window).
+3. **In-browser preview:** load Godot's web build (single-threaded 4.3+ template, ~35–40 MB, cached per device; hosted outside the site's 25 MB file limit, e.g. a free storage tier/CDN) into the Preview tab, pack the project into a .pck in the browser and run it. Version must match the project; limited to what Godot's web export supports. A few days of work.
