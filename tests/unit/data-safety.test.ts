@@ -60,3 +60,15 @@ describe('importing a repository', () => {
     void makeRecord;
   });
 });
+
+describe('branches', () => {
+  it('lists every branch, not just the first page (main sorts after lots of feat/ and fix/ branches)', async () => {
+    const fake = new FakeGitHub();
+    fake.push('main', { 'a.txt': 'a' });
+    const sha = (await new GitHub(fake.fetch).head('lyra', 'game', 'main'));
+    for (let i = 0; i < 220; i++) (fake as unknown as { refs: Map<string, string> }).refs.set(`feat/branch-${String(i).padStart(3, '0')}`, sha);
+    const names = (await new GitHub(fake.fetch).branches('lyra', 'game')).map((b) => b.name);
+    expect(names).toHaveLength(221);
+    expect(names).toContain('main');
+  });
+});

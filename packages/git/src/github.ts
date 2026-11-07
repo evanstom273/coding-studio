@@ -64,8 +64,15 @@ export class GitHub {
   repo(owner: string, repo: string) {
     return this.req<RepoInfo>(`/repos/${enc(owner)}/${enc(repo)}`);
   }
-  branches(owner: string, repo: string) {
-    return this.req<{ name: string; commit: { sha: string } }[]>(`/repos/${enc(owner)}/${enc(repo)}/branches?per_page=100`);
+  /** Every branch (GitHub pages them 100 at a time, alphabetically: a repository with many PR branches has "main" well past the first page). */
+  async branches(owner: string, repo: string) {
+    const all: { name: string; commit: { sha: string } }[] = [];
+    for (let page = 1; page <= 50; page++) {
+      const got = await this.req<{ name: string; commit: { sha: string } }[]>(`/repos/${enc(owner)}/${enc(repo)}/branches?per_page=100&page=${page}`);
+      all.push(...got);
+      if (got.length < 100) break;
+    }
+    return all;
   }
   async head(owner: string, repo: string, branch: string): Promise<string> {
     return (await this.req<{ object: { sha: string } }>(`/repos/${enc(owner)}/${enc(repo)}/git/ref/heads/${enc(branch)}`)).object.sha;

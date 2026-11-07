@@ -150,7 +150,14 @@ export class FakeGitHub {
     }
     if (path.startsWith('/user/repos')) return ok([{ full_name: `${this.owner}/${this.name}`, name: this.name, owner: { login: this.owner }, private: true, default_branch: 'main' }]);
     if (path === base) return ok(info());
-    if (path.startsWith(`${base}/branches`)) return ok([...this.refs].map(([name, sha]) => ({ name, commit: { sha } })));
+    if (path.startsWith(`${base}/branches`)) {
+      // Like GitHub: alphabetical, in pages.
+      const q = new URLSearchParams(path.split('?')[1] ?? '');
+      const per = Number(q.get('per_page') ?? 30);
+      const page = Number(q.get('page') ?? 1);
+      const all = [...this.refs].sort(([a], [b]) => (a < b ? -1 : 1)).map(([name, sha]) => ({ name, commit: { sha } }));
+      return ok(all.slice((page - 1) * per, page * per));
+    }
     if ((m = new RegExp(`^${base}/git/ref/heads/(.+)$`).exec(path))) {
       const sha = this.refs.get(decodeURIComponent(m[1]));
       return sha ? ok({ object: { sha } }) : nf;
