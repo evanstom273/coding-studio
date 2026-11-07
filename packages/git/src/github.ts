@@ -31,6 +31,9 @@ export interface RepoInfo {
   default_branch: string;
   description?: string | null;
   updated_at?: string;
+  html_url?: string;
+  homepage?: string | null;
+  archived?: boolean;
 }
 
 const enc = (s: string) => s.split('/').map(encodeURIComponent).join('/');
@@ -98,8 +101,36 @@ export class GitHub {
   createPull(owner: string, repo: string, p: { title: string; head: string; base: string; body?: string }) {
     return this.req<{ number: number; html_url: string }>(`/repos/${enc(owner)}/${enc(repo)}/pulls`, { method: 'POST', body: p });
   }
-  pulls(owner: string, repo: string) {
-    return this.req<{ number: number; title: string; html_url: string; head: { ref: string }; base: { ref: string }; user: { login: string } }[]>(`/repos/${enc(owner)}/${enc(repo)}/pulls?state=open&per_page=50`);
+  pulls(owner: string, repo: string, state: 'open' | 'closed' | 'all' = 'open') {
+    return this.req<PullRequest[]>(`/repos/${enc(owner)}/${enc(repo)}/pulls?state=${state}&per_page=50&sort=updated&direction=desc`);
+  }
+  pull(owner: string, repo: string, n: number) {
+    return this.req<PullRequest>(`/repos/${enc(owner)}/${enc(repo)}/pulls/${n}`);
+  }
+  pullFiles(owner: string, repo: string, n: number) {
+    return this.req<{ filename: string; status: string; additions: number; deletions: number }[]>(`/repos/${enc(owner)}/${enc(repo)}/pulls/${n}/files?per_page=100`);
+  }
+  updatePull(owner: string, repo: string, n: number, p: { title?: string; body?: string; state?: 'open' | 'closed'; base?: string }) {
+    return this.req<PullRequest>(`/repos/${enc(owner)}/${enc(repo)}/pulls/${n}`, { method: 'PATCH', body: p });
+  }
+  mergePull(owner: string, repo: string, n: number, p: { merge_method?: 'merge' | 'squash' | 'rebase'; commit_title?: string; commit_message?: string; sha?: string } = {}) {
+    return this.req<{ sha: string; merged: boolean; message: string }>(`/repos/${enc(owner)}/${enc(repo)}/pulls/${n}/merge`, { method: 'PUT', body: p });
+  }
+  deleteBranch(owner: string, repo: string, branch: string) {
+    return this.req(`/repos/${enc(owner)}/${enc(repo)}/git/refs/heads/${enc(branch)}`, { method: 'DELETE' });
+  }
+
+  // --- repositories ------------------------------------------------------------------------------
+  /** Create a repository for the token's user, or in `org`. auto_init makes a first commit (a README) so it has a branch. */
+  createRepo(p: { name: string; description?: string; private?: boolean; auto_init?: boolean; org?: string; homepage?: string }) {
+    const { org, ...body } = p;
+    return this.req<RepoInfo>(org ? `/orgs/${enc(org)}/repos` : '/user/repos', { method: 'POST', body });
+  }
+  updateRepo(owner: string, repo: string, p: { name?: string; description?: string; private?: boolean; default_branch?: string; homepage?: string; has_issues?: boolean; archived?: boolean }) {
+    return this.req<RepoInfo>(`/repos/${enc(owner)}/${enc(repo)}`, { method: 'PATCH', body: p });
+  }
+  deleteRepo(owner: string, repo: string) {
+    return this.req(`/repos/${enc(owner)}/${enc(repo)}`, { method: 'DELETE' });
   }
 
   // --- Actions ---------------------------------------------------------------------------------
@@ -130,6 +161,25 @@ export class GitHub {
   artifacts(owner: string, repo: string, runId: number) {
     return this.req<{ artifacts: { id: number; name: string; size_in_bytes: number; expired: boolean }[] }>(`/repos/${enc(owner)}/${enc(repo)}/actions/runs/${runId}/artifacts`).then((r) => r.artifacts);
   }
+}
+
+export interface PullRequest {
+  number: number;
+  title: string;
+  body?: string | null;
+  html_url: string;
+  state: 'open' | 'closed';
+  draft?: boolean;
+  merged?: boolean;
+  merged_at?: string | null;
+  mergeable?: boolean | null;
+  mergeable_state?: string;
+  head: { ref: string; sha: string };
+  base: { ref: string };
+  user: { login: string };
+  updated_at?: string;
+  commits?: number;
+  changed_files?: number;
 }
 
 export interface Workflow {

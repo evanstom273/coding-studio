@@ -14,7 +14,7 @@ import { buildWebStarter } from '@cs/examples';
 import { newId } from '@cs/graph-core';
 import { CONFIG_PATH, configOf, defaultConfig, makeRecord, serializeConfig, workspaceRevision, type FileRecord, type Workspace } from '@cs/workspace';
 import { readState } from '@cs/git';
-import { cloneRepo, commitOpen, github, pullOpen } from '@web/lib/git';
+import { cloneRepo, commitOpen, github, publishOpen, pullOpen } from '@web/lib/git';
 import { saveNow } from '@web/hooks/useAutosave';
 import { useEditor } from '@web/store/editor';
 import { compileNow } from '@web/compile/store';
@@ -274,12 +274,22 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       await ensureOpen(params.project);
       return svc.pullView(await pullOpen('mcp'));
     }
-    case 'git_create_pr': {
+    case 'git_create_pr':
+    case 'git_pr_list':
+    case 'git_pr_get':
+    case 'git_pr_update':
+    case 'git_pr_merge':
+    case 'git_repo_create':
+    case 'git_repo_update':
+    case 'git_repo_delete': {
+      const ws = useEditor.getState().workspace;
+      const st = ws ? readState(ws) : null;
+      return svc.githubCall(method, github(), params, st, (full) => confirmDialog({ title: 'Delete a GitHub repository?', message: <>Claude wants to delete <b>{full}</b> on GitHub. This can't be undone: its code, issues and pull requests are gone for good.</>, confirm: 'Delete repository', danger: true }));
+    }
+    case 'git_publish': {
       await ensureOpen(params.project);
-      const st = svc.requireLinked(readState(useEditor.getState().workspace!));
-      const gh = github();
-      const r = await gh.createPull(st.owner, st.repo, { title: String(params.title ?? st.branch), head: str(params.head) ?? st.branch, base: str(params.base) ?? (await gh.repo(st.owner, st.repo)).default_branch, ...(str(params.body) ? { body: str(params.body) } : {}) });
-      return { number: r.number, url: r.html_url };
+      await saveNow();
+      return publishOpen({ name: String(params.name ?? ''), description: str(params.description), private: params.private !== false, org: str(params.org) }, str(params.message), 'mcp');
     }
     case 'git_clone': {
       const [owner, repo] = String(params.repository ?? '').split('/');

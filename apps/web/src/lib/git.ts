@@ -2,7 +2,7 @@
  * GitHub from the editor. Calls go through this site's Worker (`/github/<key>/api/...`), which
  * adds the token kept in your Durable Object — the token never lives in this browser.
  */
-import { cloneFiles, commitAndPush, GitHub, GIT_STATE_PATH, pull, readState, remoteFile, stateRecord, status, type Fetch, type GitState } from '@cs/git';
+import { cloneFiles, commitAndPush, createRepoFor, GitHub, GIT_STATE_PATH, pull, readState, remoteFile, stateRecord, status, type Fetch, type GitState } from '@cs/git';
 import { CONFIG_PATH, defaultConfig, makeRecord, serializeConfig, type FileRecord, type Workspace, type WorkspaceOp } from '@cs/workspace';
 import { newId } from '@cs/graph-core';
 import { useBridge } from '@web/bridge/client';
@@ -78,6 +78,17 @@ export async function commitOpen(message: string, opts: { paths?: string[]; newB
   const r = await commitAndPush(github(), ws, message, opts);
   useEditor.getState().applyFiles([writeOp(stateRecord(r.state))], `Commit "${message.split('\n')[0]}"`, { source });
   return r;
+}
+
+/** Create a GitHub repository for the open (unlinked) project and push everything to it. */
+export async function publishOpen(p: { name: string; description?: string; private?: boolean; org?: string }, message = 'First commit from Coding Studio', source: 'user' | 'mcp' = 'user') {
+  const ws = useEditor.getState().workspace;
+  if (!ws) throw new Error('No project is open');
+  if (readState(ws)) throw new Error('This project is already linked to a GitHub repository.');
+  const { state, url } = await createRepoFor(github(), p);
+  useEditor.getState().applyFiles([writeOp(stateRecord(state))], `Link to ${state.owner}/${state.repo}`, { source });
+  const r = await commitOpen(message, {}, source);
+  return { repository: `${state.owner}/${state.repo}`, url, branch: r.branch, commit: r.commit, files: r.files };
 }
 
 /** Pull into the open project as one undoable step. */

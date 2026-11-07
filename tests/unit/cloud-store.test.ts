@@ -298,6 +298,30 @@ describe('GitHub through the cloud connector', () => {
     const p = (await cloud.handle('git_pull', {})) as { updated: string[] };
     expect(p.updated).toEqual(['docs/x.md']);
     expect(((await cloud.handle('read_files', { paths: ['docs/x.md'] })) as { files: { text: string }[] }).files[0].text).toBe('new');
+    // merge the PR from the phone, then pull main
+    const m = (await cloud.handle('git_pr_merge', { number: pr.number, delete_branch: true })) as { merged: boolean; into: string };
+    expect(m).toMatchObject({ merged: true, into: 'main' });
+    expect(fake.files('main')['src/app.ts']).toBe('export const a = 2;\n');
+    expect(((await cloud.handle('git_pr_list', { state: 'closed' })) as { pull_requests: { state: string }[] }).pull_requests[0].state).toBe('merged');
+  });
+
+  it('publishes a new project to a new repository, and repo calls work by name without a project', async () => {
+    const { FakeGitHub } = await import('../fixtures/fake-github');
+    const { GitHubVault } = await import('../../worker/github');
+    const fake = new FakeGitHub('lyra', 'x');
+    const store = kv();
+    const cloud = new CloudService(store, backend(), () => undefined, 'https://site', () => 0);
+    cloud.github = () => new GitHubVault(store, () => fake.fetch);
+    await cloud.github().set('github_pat_1234567890abcdefghij');
+    await cloud.handle('create_project', { name: 'Phone mod', language: 'typescript', template: 'module' });
+    const r = (await cloud.handle('git_publish', { name: 'phone-mod' })) as { repository: string; files: number };
+    expect(r.repository).toBe('lyra/phone-mod');
+    expect(Object.keys(fake.files('main'))).toEqual(expect.arrayContaining(['README.md', 'codingstudio.json', 'main.vgraph']));
+    expect(((await cloud.handle('git_status', {})) as { clean: boolean; repository: string })).toMatchObject({ clean: true, repository: 'lyra/phone-mod' });
+    await expect(cloud.handle('git_publish', { name: 'again' })).rejects.toMatchObject({ code: 'E_INVALID' });
+    expect(await cloud.handle('git_repo_update', { repository: 'lyra/phone-mod', description: 'Made on a phone' })).toMatchObject({ description: 'Made on a phone' });
+    await expect(cloud.handle('git_repo_delete', { repository: 'lyra/phone-mod' })).rejects.toMatchObject({ code: 'E_CONFIRM' });
+    expect(await cloud.handle('git_repo_delete', { repository: 'lyra/phone-mod', confirm_name: 'lyra/phone-mod' })).toEqual({ deleted: 'lyra/phone-mod' });
   });
 });
 

@@ -13,14 +13,15 @@ export class FakeGitHub {
   commits = new Map<string, Commit>();
   trees = new Map<string, Map<string, { sha: string; mode: string }>>();
   refs = new Map<string, string>();
-  pullsList: { number: number; title: string; head: string; base: string }[] = [];
+  pullsList: { number: number; title: string; head: string; base: string; body?: string; state: 'open' | 'closed'; merged?: boolean; conflict?: boolean }[] = [];
+  repoInfo = { private: true, description: '' as string, deleted: false, created: [] as string[] };
   runsList: { id: number; name: string; run_number: number; workflow_id: number; head_branch: string; head_sha: string; event: string; status: string; conclusion: string | null; html_url: string; created_at: string; updated_at: string; jobs: { id: number; name: string; status: string; conclusion: string | null; steps: { name: string; status: string; conclusion: string | null; number: number }[]; log: string }[] }[] = [];
   dispatches: { workflow: string; ref: string }[] = [];
   calls: string[] = [];
   private n = 0;
   constructor(
     readonly owner = 'lyra',
-    readonly name = 'game',
+    public name = 'game',
   ) {}
 
   private id() {
@@ -94,8 +95,61 @@ export class FakeGitHub {
     const nf = { status: 404, body: { message: 'Not Found' } };
     let m: RegExpExecArray | null;
     if (path === '/user') return ok({ login: this.owner });
+    const info = () => ({ full_name: `${this.owner}/${this.name}`, name: this.name, owner: { login: this.owner }, private: this.repoInfo.private, description: this.repoInfo.description, default_branch: 'main', html_url: `https://github.com/${this.owner}/${this.name}` });
+    if (path === '/user/repos' && method === 'POST') {
+      // One repository per fake: creating replaces it (with GitHub's README commit).
+      this.name = String(body.name);
+      this.refs.clear();
+      this.pullsList = [];
+      this.repoInfo = { ...this.repoInfo, private: body.private !== false, description: String(body.description ?? ''), deleted: false, created: [...this.repoInfo.created, this.name] };
+      if (body.auto_init) this.push('main', { 'README.md': `# ${this.name}\n` }, 'Initial commit');
+      return ok(info(), 201);
+    }
+    if (this.repoInfo.deleted && path.startsWith(base)) return nf;
+    if (path === base && method === 'PATCH') {
+      if (body.name) this.name = String(body.name);
+      if (typeof body.private === 'boolean') this.repoInfo.private = body.private;
+      if (typeof body.description === 'string') this.repoInfo.description = body.description;
+      return ok(info());
+    }
+    if (path === base && method === 'DELETE') {
+      this.repoInfo.deleted = true;
+      return { status: 204, body: null };
+    }
+    if ((m = new RegExp(`^${base}/git/refs/heads/(.+)$`).exec(path)) && method === 'DELETE') {
+      this.refs.delete(decodeURIComponent(m[1]));
+      return { status: 204, body: null };
+    }
+    const prJson = (p: (typeof this.pullsList)[number]) => ({ number: p.number, title: p.title, body: p.body ?? null, html_url: `https://github.com/${this.owner}/${this.name}/pull/${p.number}`, state: p.state, merged: !!p.merged, mergeable: p.merged || p.state !== 'open' ? null : !p.conflict, mergeable_state: p.conflict ? 'dirty' : 'clean', head: { ref: p.head, sha: this.refs.get(p.head) ?? '' }, base: { ref: p.base }, user: { login: this.owner }, changed_files: 1, commits: 1 });
+    if ((m = new RegExp(`^${base}/pulls/(\\d+)/merge$`).exec(path)) && method === 'PUT') {
+      const pr = this.pullsList.find((x) => x.number === +m![1]);
+      if (!pr) return nf;
+      if (pr.conflict) return { status: 405, body: { message: 'Pull Request is not mergeable' } };
+      const head = this.refs.get(pr.head)!;
+      const parent = this.refs.get(pr.base)!;
+      const tree = new Map(this.commits.get(head)!.tree);
+      const tsha = this.id();
+      this.trees.set(tsha, tree);
+      const csha = this.id();
+      this.commits.set(csha, { tree, parents: body.merge_method === 'merge' ? [parent, head] : [parent], message: String(body.commit_title ?? `Merge pull request #${pr.number}`) });
+      this.refs.set(pr.base, csha);
+      pr.merged = true;
+      pr.state = 'closed';
+      return ok({ sha: csha, merged: true, message: 'Pull Request successfully merged' });
+    }
+    if ((m = new RegExp(`^${base}/pulls/(\\d+)/files`).exec(path))) return ok([{ filename: 'main.gd', status: 'modified', additions: 1, deletions: 0 }]);
+    if ((m = new RegExp(`^${base}/pulls/(\\d+)$`).exec(path))) {
+      const pr = this.pullsList.find((x) => x.number === +m![1]);
+      if (!pr) return nf;
+      if (method === 'PATCH') {
+        if (body.title) pr.title = String(body.title);
+        if (typeof body.body === 'string') pr.body = body.body;
+        if (body.state === 'open' || body.state === 'closed') pr.state = body.state;
+      }
+      return ok(prJson(pr));
+    }
     if (path.startsWith('/user/repos')) return ok([{ full_name: `${this.owner}/${this.name}`, name: this.name, owner: { login: this.owner }, private: true, default_branch: 'main' }]);
-    if (path === base) return ok({ full_name: `${this.owner}/${this.name}`, name: this.name, owner: { login: this.owner }, private: true, default_branch: 'main' });
+    if (path === base) return ok(info());
     if (path.startsWith(`${base}/branches`)) return ok([...this.refs].map(([name, sha]) => ({ name, commit: { sha } })));
     if ((m = new RegExp(`^${base}/git/ref/heads/(.+)$`).exec(path))) {
       const sha = this.refs.get(decodeURIComponent(m[1]));
@@ -152,7 +206,8 @@ export class FakeGitHub {
       return ok({}, 201);
     }
     if (path === `${base}/pulls` && method === 'POST') {
-      const pr = { number: this.pullsList.length + 1, title: String(body.title), head: String(body.head), base: String(body.base) };
+      if (!this.refs.has(String(body.head))) return { status: 422, body: { message: 'Validation Failed: head does not exist' } };
+      const pr = { number: this.pullsList.length + 1, title: String(body.title), head: String(body.head), base: String(body.base), body: body.body as string | undefined, state: 'open' as const };
       this.pullsList.push(pr);
       return ok({ number: pr.number, html_url: `https://github.com/${this.owner}/${this.name}/pull/${pr.number}` }, 201);
     }
@@ -188,7 +243,10 @@ export class FakeGitHub {
       const j = this.runsList.flatMap((r) => r.jobs).find((x) => x.id === +m![1]);
       return j ? ok({ text: j.log }) : nf;
     }
-    if (path.startsWith(`${base}/pulls`)) return ok(this.pullsList.map((p) => ({ number: p.number, title: p.title, html_url: '', head: { ref: p.head }, base: { ref: p.base }, user: { login: this.owner } })));
+    if (path.startsWith(`${base}/pulls`)) {
+      const state = new URL(`http://x${path}`).searchParams.get('state') ?? 'open';
+      return ok(this.pullsList.filter((p) => state === 'all' || p.state === state).map(prJson));
+    }
     return nf;
   };
 }

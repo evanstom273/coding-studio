@@ -239,3 +239,21 @@ export async function remoteFile(gh: GitHub, st: GitState, path: string, at: 'ba
   if (!sha) return null;
   return recordFrom(path, await gh.blob(st.owner, st.repo, sha), Date.now());
 }
+
+/**
+ * Make a new GitHub repository for a project that isn't linked to one: creates it (with GitHub's
+ * first commit so it has a branch), links the project, and returns the state to save. Committing
+ * then pushes every file.
+ */
+export async function createRepoFor(gh: GitHub, p: { name: string; description?: string; private?: boolean; org?: string }): Promise<{ state: GitState; url?: string }> {
+  const r = await gh.createRepo({ name: p.name, description: p.description, private: p.private !== false, auto_init: true, org: p.org });
+  const owner = r.owner.login;
+  // GitHub makes the first commit asynchronously; wait for the branch to exist.
+  let commit = '';
+  for (let i = 0; i < 20 && !commit; i++) {
+    commit = await gh.head(owner, r.name, r.default_branch).catch(() => '');
+    if (!commit) await new Promise((res) => setTimeout(res, 500));
+  }
+  if (!commit) throw new GitHubError('E_GITHUB', 'The repository was created, but its first commit did not appear. Open it with “Open from GitHub”.');
+  return { state: { provider: 'github', owner, repo: r.name, branch: r.default_branch, commit, tree: {} }, url: r.html_url };
+}

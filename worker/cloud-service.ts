@@ -19,7 +19,7 @@ import { buildWebStarter } from '@cs/examples';
 import type { BridgeMethod } from '../packages/shared-protocol/src/index';
 import { CloudStore, diffFiles, type StoreBackend } from './cloud-store';
 import { GitHubVault } from './github';
-import { cloneFiles, commitAndPush, GitHubError, pull, readState, stateRecord } from '@cs/git';
+import { cloneFiles, commitAndPush, createRepoFor, GitHubError, pull, readState, stateRecord } from '@cs/git';
 import { defaultConfig, serializeConfig } from '@cs/workspace';
 
 export interface ProjectSummary {
@@ -422,12 +422,34 @@ export class CloudService {
         }
         return svc.pullView(r);
       }
-      case 'git_create_pr': {
+      case 'git_create_pr':
+      case 'git_pr_list':
+      case 'git_pr_get':
+      case 'git_pr_update':
+      case 'git_pr_merge':
+      case 'git_repo_create':
+      case 'git_repo_update':
+      case 'git_repo_delete': {
+        // Repository-level calls work without a project; with one, they default to its repository.
+        let st: ReturnType<typeof readState> = null;
+        if (!(typeof params.repository === 'string' && params.repository.trim()) && method !== 'git_repo_create') {
+          const { project: p } = await this.resolve(params.project);
+          st = readState(this.store.read(p.id, (e) => e.path === '.codingstudio/git.json')!);
+        }
+        return svc.githubCall(method, await this.github().client(), params, st);
+      }
+      case 'git_publish': {
         const { project: p } = await this.resolve(params.project);
-        const st = svc.requireLinked(readState(this.store.read(p.id, (e) => e.path === '.codingstudio/git.json')!));
+        const ws = this.store.read(p.id)!;
+        if (readState(ws)) throw new svc.ServiceError('E_INVALID', 'This project is already linked to a GitHub repository.');
         const gh = await this.github().client();
-        const r = await gh.createPull(st.owner, st.repo, { title: String(params.title ?? st.branch), head: svc.str(params.head) ?? st.branch, base: svc.str(params.base) ?? (await gh.repo(st.owner, st.repo)).default_branch, ...(svc.str(params.body) ? { body: svc.str(params.body) } : {}) });
-        return { number: r.number, url: r.html_url };
+        const { state, url } = await createRepoFor(gh, { name: String(params.name ?? ''), description: svc.str(params.description), private: params.private !== false, org: svc.str(params.org) });
+        const linked = new Map(ws.files);
+        linked.set('.codingstudio/git.json', stateRecord(state));
+        const r = await commitAndPush(gh, { meta: ws.meta, files: linked }, svc.str(params.message) ?? 'First commit from Coding Studio');
+        linked.set('.codingstudio/git.json', stateRecord(r.state));
+        await this.commit(ws, { meta: ws.meta, files: linked }, 'claude', { label: `Claude: publish to ${state.owner}/${state.repo}`, source: 'claude' });
+        return { repository: `${state.owner}/${state.repo}`, url, branch: r.branch, commit: r.commit, files: r.files };
       }
       case 'git_clone': {
         const [owner, repo] = String(params.repository ?? '').split('/');

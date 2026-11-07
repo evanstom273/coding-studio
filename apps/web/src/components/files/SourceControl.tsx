@@ -12,6 +12,8 @@ import { useUI } from "@web/store/ui";
 import { useCompact } from "@web/hooks/useLayout";
 import {
   commitOpen,
+  publishOpen,
+  writeOp,
   forgetToken,
   github,
   gitState,
@@ -25,6 +27,8 @@ import { Button, cx, inputCls } from "../ui/primitives";
 import { iconFor } from "./FileExplorer";
 import { DIFF_PREFIX } from "@web/lib/fileTypes";
 import { ActionsPanel } from "./ActionsPanel";
+import { PullRequests, RepoSettings } from "./PullRequests";
+import { stateRecord } from "@cs/git";
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -94,7 +98,9 @@ export function SourceControl() {
     [],
   );
   const [pr, setPr] = useState<{ branch: string; url?: string } | null>(null);
-  const [view, setView] = useState<"changes" | "actions">("changes");
+  const [view, setView] = useState<"changes" | "pulls" | "actions" | "repo">("changes");
+  const [pubName, setPubName] = useState("");
+  const [pubPrivate, setPubPrivate] = useState(true);
 
   useEffect(() => {
     tokenStatus()
@@ -130,8 +136,33 @@ export function SourceControl() {
         <p>Connected to GitHub as {login}.</p>
         <p>
           This project isn't linked to a repository. Open one with “Open from
-          GitHub” on the projects page.
+          GitHub” on the projects page, or put this project in a new one:
         </p>
+        <div className="space-y-1.5 rounded border border-border p-2 text-text" data-testid="publish-form">
+          <input
+            className={inputCls}
+            placeholder="New repository name"
+            value={pubName}
+            onChange={(e) => setPubName(e.target.value)}
+            data-testid="publish-name"
+          />
+          <label className="flex items-center gap-2 text-muted">
+            <input type="checkbox" checked={pubPrivate} onChange={(e) => setPubPrivate(e.target.checked)} /> Private
+          </label>
+          <Button
+            className="h-8 w-full"
+            disabled={!!busy || !/^[\w.-]+$/.test(pubName.trim())}
+            data-testid="publish-create"
+            onClick={() =>
+              run("publish", async () => {
+                const r = await publishOpen({ name: pubName.trim(), private: pubPrivate });
+                toast("success", `Created ${r.repository} and pushed ${r.files} file(s)`);
+              })
+            }
+          >
+            {busy === "publish" ? "Creating…" : "Create repository and push"}
+          </Button>
+        </div>
         <button
           className="text-accent hover:underline"
           onClick={() => void forgetToken().then(() => setLogin(null))}
@@ -185,7 +216,7 @@ export function SourceControl() {
         </Button>
       </div>
       <div className="flex shrink-0 border-b border-border" role="tablist">
-        {(["changes", "actions"] as const).map((v) => (
+        {(["changes", "pulls", "actions", "repo"] as const).map((v) => (
           <button
             key={v}
             role="tab"
@@ -199,11 +230,24 @@ export function SourceControl() {
             onClick={() => setView(v)}
             data-testid={`git-view-${v}`}
           >
-            {v === "changes" ? `Changes (${changes.length})` : "Actions"}
+            {v === "changes" ? `Changes (${changes.length})` : v === "pulls" ? "PRs" : v === "repo" ? "Repo" : "Actions"}
           </button>
         ))}
       </div>
       {view === "actions" && <ActionsPanel st={st} />}
+      {view === "pulls" && <PullRequests st={st} />}
+      {view === "repo" && (
+        <RepoSettings
+          st={st}
+          onRenamed={(owner, repo) => {
+            // Renamed: keep the link pointing at the new name. Deleted: unlink.
+            const ed = useEditor.getState();
+            if (!owner) ed.applyFiles([{ op: "delete", path: ".codingstudio/git.json" }], "Unlink from GitHub");
+            else ed.applyFiles([writeOp(stateRecord({ ...st, owner, repo }))], `Repository renamed to ${owner}/${repo}`);
+            setView("changes");
+          }}
+        />
+      )}
       {view === "changes" && conflicts.length > 0 && (
         <div
           className="border-b border-amber-400/30 bg-amber-400/10 px-3 py-2"

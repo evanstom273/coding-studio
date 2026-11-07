@@ -71,3 +71,98 @@ export function workflowTemplateFile(id: unknown, files: { get(p: string): { tex
   if (!t) throw new ServiceError('E_INVALID', `Unknown template "${String(id)}". Available: ${WORKFLOW_TEMPLATES.map((x) => `${x.id} (${x.title})`).join(', ')}`);
   return { path: t.path, content: t.build({ packageJson: files.get('package.json')?.text, hasLockfile: { npm: files.has('package-lock.json'), pnpm: files.has('pnpm-lock.yaml'), yarn: files.has('yarn.lock') } }) };
 }
+
+/** Which repository a repo/PR call is about: `repository: "owner/name"`, or the linked one. */
+export function targetRepo(params: Record<string, unknown>, st: GitState | null): { owner: string; repo: string } {
+  const r = typeof params.repository === 'string' ? params.repository.trim() : '';
+  if (r) {
+    const [owner, repo] = r.split('/');
+    if (!owner || !repo) throw new ServiceError('E_INVALID', 'repository must be "owner/name"');
+    return { owner, repo };
+  }
+  if (!st) throw new ServiceError('E_NOT_LINKED', 'This project is not linked to a GitHub repository; pass repository: "owner/name".');
+  return { owner: st.owner, repo: st.repo };
+}
+
+const prView = (p: { number: number; title: string; html_url: string; state: string; draft?: boolean; merged?: boolean; mergeable?: boolean | null; mergeable_state?: string; head: { ref: string }; base: { ref: string }; user: { login: string }; body?: string | null; changed_files?: number; commits?: number }) => ({
+  number: p.number,
+  title: p.title,
+  url: p.html_url,
+  state: p.merged ? 'merged' : p.state,
+  ...(p.draft ? { draft: true } : {}),
+  head: p.head.ref,
+  base: p.base.ref,
+  author: p.user.login,
+  ...(p.mergeable !== undefined ? { mergeable: p.mergeable, mergeable_state: p.mergeable_state } : {}),
+  ...(p.body ? { body: p.body } : {}),
+  ...(p.changed_files !== undefined ? { changed_files: p.changed_files, commits: p.commits } : {}),
+});
+
+/**
+ * Repository and pull-request tool calls. `confirmDelete` asks the user (the editor shows a
+ * dialog; the cloud service has none, so deleting there relies on confirm_name alone).
+ */
+export async function githubCall(method: string, gh: GitHub, params: Record<string, unknown>, st: GitState | null, confirmDelete?: (fullName: string) => Promise<boolean>) {
+  const s = (k: string) => (typeof params[k] === 'string' && (params[k] as string).trim() ? (params[k] as string).trim() : undefined);
+  const b = (k: string) => (typeof params[k] === 'boolean' ? (params[k] as boolean) : undefined);
+  switch (method) {
+    case 'git_pr_list': {
+      const { owner, repo } = targetRepo(params, st);
+      const state = s('state') === 'closed' || s('state') === 'all' ? (s('state') as 'closed' | 'all') : 'open';
+      return { repository: `${owner}/${repo}`, pull_requests: (await gh.pulls(owner, repo, state)).map(prView) };
+    }
+    case 'git_pr_get': {
+      const { owner, repo } = targetRepo(params, st);
+      const n = Number(params.number);
+      const [p, files] = await Promise.all([gh.pull(owner, repo, n), gh.pullFiles(owner, repo, n)]);
+      return { ...prView(p), files: files.map((f) => ({ path: f.filename, status: f.status, additions: f.additions, deletions: f.deletions })) };
+    }
+    case 'git_create_pr': {
+      const { owner, repo } = targetRepo(params, st);
+      const head = s('head') ?? st?.branch;
+      if (!head) throw new ServiceError('E_INVALID', 'head (the branch with the changes) is required');
+      const base = s('base') ?? (await gh.repo(owner, repo)).default_branch;
+      if (head === base) throw new ServiceError('E_INVALID', `head and base are both "${base}". Commit to a new branch first (git_commit with new_branch), then open the PR from it.`);
+      const r = await gh.createPull(owner, repo, { title: s('title') ?? head.replace(/[-_/]+/g, ' '), head, base, ...(s('body') ? { body: s('body') } : {}), ...(b('draft') ? { draft: true } : {}) } as never);
+      return { number: r.number, url: r.html_url, head, base };
+    }
+    case 'git_pr_update': {
+      const { owner, repo } = targetRepo(params, st);
+      const p = await gh.updatePull(owner, repo, Number(params.number), { ...(s('title') ? { title: s('title') } : {}), ...(typeof params.body === 'string' ? { body: params.body } : {}), ...(s('base') ? { base: s('base') } : {}), ...(s('state') === 'closed' || s('state') === 'open' ? { state: s('state') as 'open' | 'closed' } : {}) });
+      return prView(p);
+    }
+    case 'git_pr_merge': {
+      const { owner, repo } = targetRepo(params, st);
+      const n = Number(params.number);
+      const method = s('method') === 'squash' || s('method') === 'rebase' ? (s('method') as 'squash' | 'rebase') : 'merge';
+      const pr = await gh.pull(owner, repo, n);
+      if (pr.merged) return { merged: true, already: true, number: n };
+      if (pr.state !== 'open') throw new ServiceError('E_INVALID', `Pull request #${n} is closed.`);
+      if (pr.mergeable === false) throw new ServiceError('E_MERGE_CONFLICT', `#${n} has conflicts with ${pr.base.ref}. Pull ${pr.base.ref} into ${pr.head.ref}, fix the conflicts, commit, then merge.`, { mergeable_state: pr.mergeable_state });
+      const r = await gh.mergePull(owner, repo, n, { merge_method: method, ...(s('commit_title') ? { commit_title: s('commit_title') } : {}), sha: pr.head.sha });
+      let deleted = false;
+      if (b('delete_branch') && pr.head.ref !== (await gh.repo(owner, repo)).default_branch) deleted = await gh.deleteBranch(owner, repo, pr.head.ref).then(() => true, () => false);
+      return { merged: r.merged, sha: r.sha, method, number: n, into: pr.base.ref, ...(deleted ? { deleted_branch: pr.head.ref } : {}) };
+    }
+    case 'git_repo_create': {
+      const name = s('name');
+      if (!name || !/^[\w.-]{1,100}$/.test(name)) throw new ServiceError('E_INVALID', 'name is required (letters, digits, - _ .)');
+      const r = await gh.createRepo({ name, description: s('description'), private: b('private') !== false, auto_init: b('auto_init') !== false, org: s('org') });
+      return { repository: r.full_name, url: r.html_url, private: r.private, default_branch: r.default_branch };
+    }
+    case 'git_repo_update': {
+      const { owner, repo } = targetRepo(params, st);
+      const r = await gh.updateRepo(owner, repo, { ...(s('name') ? { name: s('name') } : {}), ...(typeof params.description === 'string' ? { description: params.description } : {}), ...(b('private') !== undefined ? { private: b('private') } : {}), ...(s('default_branch') ? { default_branch: s('default_branch') } : {}), ...(typeof params.homepage === 'string' ? { homepage: params.homepage } : {}), ...(b('archived') !== undefined ? { archived: b('archived') } : {}) });
+      return { repository: r.full_name, url: r.html_url, private: r.private, default_branch: r.default_branch, description: r.description ?? '' };
+    }
+    case 'git_repo_delete': {
+      const { owner, repo } = targetRepo(params, st);
+      const full = `${owner}/${repo}`;
+      if (s('confirm_name') !== full) throw new ServiceError('E_CONFIRM', `Deleting a repository can't be undone. Pass confirm_name: "${full}" to confirm (and the user will be asked in the editor when it's open).`);
+      if (confirmDelete && !(await confirmDelete(full))) throw new ServiceError('E_DECLINED', 'The user declined deleting the repository. Nothing was deleted.');
+      await gh.deleteRepo(owner, repo);
+      return { deleted: full };
+    }
+  }
+  throw new ServiceError('E_INVALID', `Unknown GitHub call ${method}`);
+}

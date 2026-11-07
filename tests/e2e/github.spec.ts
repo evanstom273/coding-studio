@@ -109,3 +109,63 @@ test('Actions: add a workflow, commit, follow a failing run, jump from the log t
   await page.getByTestId('run-workflow').click();
   await expect.poll(() => fake.dispatches.length).toBe(1);
 });
+
+test('pull requests: open one from the PR tab, merge it; repository settings: rename and delete', async ({ page }) => {
+  const fake = new FakeGitHub();
+  fake.push('main', { 'README.md': '# Game\n' });
+  fake.push('feature', { 'README.md': '# Game\nnew feature\n' });
+  await freshStart(page);
+  await serveGitHub(page, fake);
+  await page.getByTestId('open-github').click();
+  await page.getByTestId('github-token').fill('github_pat_1234567890abcdefghij');
+  await page.getByTestId('github-token-save').click();
+  await page.getByTestId('repo-row').filter({ hasText: 'lyra/game' }).click();
+  await page.getByTestId('clone-repo').click();
+  await expect(page.getByTestId('project-title')).toHaveText('game');
+  await page.getByTestId('left-tab-git').click();
+  await page.getByTestId('git-view-pulls').click();
+  await page.getByTestId('pr-new').click();
+  await expect(page.getByTestId('pr-head')).toHaveValue('feature');
+  await expect(page.getByTestId('pr-base')).toHaveValue('main');
+  await page.getByTestId('pr-title').fill('Add the feature');
+  await page.getByTestId('pr-create').click();
+  await expect(page.getByTestId('pr-row')).toContainText('Add the feature');
+  await page.getByTestId('pr-merge').click();
+  await expect(page.getByTestId('pr-row')).toHaveCount(0);
+  expect(fake.files('main')['README.md']).toBe('# Game\nnew feature\n');
+  expect(fake.refs.has('feature')).toBe(false);
+  // pull brings the merge into the project
+  await page.getByTestId('git-view-changes').click();
+  await page.getByTestId('git-pull').click();
+  await expect.poll(() => page.evaluate(() => (window as never as { codingStudio: { editor: { getState(): { workspace: { files: Map<string, { text?: string }> } } } } }).codingStudio.editor.getState().workspace.files.get('README.md')?.text)).toBe('# Game\nnew feature\n');
+
+  await page.getByTestId('git-view-repo').click();
+  await page.getByTestId('repo-name').fill('game-2');
+  await page.getByTestId('repo-save').click();
+  await expect(page.getByTestId('git-branch')).toContainText('lyra/game-2');
+  expect(fake.name).toBe('game-2');
+  await page.getByTestId('git-view-repo').click();
+  await expect(page.getByTestId('repo-delete')).toBeDisabled();
+  await page.getByTestId('repo-delete-confirm').fill('lyra/game-2');
+  await page.getByTestId('repo-delete').click();
+  await expect(page.getByTestId('git-not-linked')).toBeVisible();
+  expect(fake.repoInfo.deleted).toBe(true);
+});
+
+test('create a GitHub repository from a project that has none', async ({ page }) => {
+  const fake = new FakeGitHub('lyra', 'unused');
+  await freshStart(page);
+  await serveGitHub(page, fake);
+  await page.getByTestId('new-project').click();
+  await page.getByTestId('project-name').fill('Fresh');
+  await page.getByTestId('create-project').click();
+  await page.getByTestId('left-tab-git').click();
+  await page.getByTestId('github-token').fill('github_pat_1234567890abcdefghij');
+  await page.getByTestId('github-token-save').click();
+  await page.getByTestId('publish-name').fill('fresh-game');
+  await page.getByTestId('publish-create').click();
+  await expect(page.getByTestId('git-branch')).toContainText('lyra/fresh-game · main');
+  await expect.poll(() => Object.keys(fake.files('main')).sort()).toEqual(expect.arrayContaining(['README.md', 'codingstudio.json', 'main.vgraph']));
+  expect(fake.files('main')['.codingstudio/git.json']).toBeUndefined();
+  await expect(page.getByTestId('git-change')).toHaveCount(0);
+});

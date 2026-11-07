@@ -37,6 +37,7 @@ const fail = (e: unknown) => ({ isError: true, content: [{ type: 'text' as const
 
 const project = z.string().optional().describe('Project id or exact name. Omit to use the project open in Coding Studio.');
 const revision = z.string().optional().describe('Revision returned by get_graph / get_project / a previous edit. If the project changed since (e.g. the user edited it), the edit is rejected with E_REVISION_CONFLICT and nothing changes.');
+const repository = z.string().optional().describe('GitHub repository "owner/name". Omit to use the project\'s linked repository.');
 const graph = z.string().optional().describe('Function/graph id (or function name). Omit to use the graph open in the editor.');
 const script = z.string().optional().describe('Script id, name or graph file path (e.g. "player/player.vgraph"). Omit for the active script.');
 const nodeRef = z.string().describe('Node id, or "$ref" of a node created earlier in the same batch');
@@ -335,9 +336,21 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
   );
   server.registerTool(
     'git_create_pr',
-    { title: 'Open a pull request', description: 'Open a pull request from the current branch (or "head") into the default branch (or "base").', inputSchema: { project, title: z.string(), body: z.string().optional(), head: z.string().optional(), base: z.string().optional() } },
+    { title: 'Open a pull request', description: 'Open a pull request from the current branch (or "head") into the default branch (or "base"). repository "owner/name" targets any repository instead of the project\'s.', inputSchema: { project, repository, title: z.string(), body: z.string().optional(), head: z.string().optional(), base: z.string().optional(), draft: z.boolean().optional() } },
     (a) => call('git_create_pr', a, 60_000),
   );
+  server.registerTool('git_pr_list', { title: 'List pull requests', description: `Pull requests of the project's repository (or "repository"). ${gitNote}`, inputSchema: { project, repository, state: z.enum(['open', 'closed', 'all']).optional() }, annotations: ro }, (a) => call('git_pr_list', a, 60_000));
+  server.registerTool('git_pr_get', { title: 'Pull request details', description: 'One pull request: description, whether it can be merged, and the files it changes.', inputSchema: { project, repository, number: z.number() }, annotations: ro }, (a) => call('git_pr_get', a, 60_000));
+  server.registerTool('git_pr_update', { title: 'Edit / close a pull request', description: 'Change a pull request\'s title, description or base branch, or close / reopen it (state).', inputSchema: { project, repository, number: z.number(), title: z.string().optional(), body: z.string().optional(), base: z.string().optional(), state: z.enum(['open', 'closed']).optional() } }, (a) => call('git_pr_update', a, 60_000));
+  server.registerTool(
+    'git_pr_merge',
+    { title: 'Merge a pull request', description: 'Merge a pull request on GitHub (method merge, squash or rebase; delete_branch removes its branch afterwards). Refused with E_MERGE_CONFLICT if it conflicts with its base. After merging, git_pull brings the result into the project.', inputSchema: { project, repository, number: z.number(), method: z.enum(['merge', 'squash', 'rebase']).optional(), commit_title: z.string().optional(), delete_branch: z.boolean().optional() } },
+    (a) => call('git_pr_merge', a, 120_000),
+  );
+  server.registerTool('git_repo_create', { title: 'Create a repository', description: `Create a new GitHub repository (private unless private=false; org to create it in an organisation). To put the open project into a new repository instead, use git_publish. ${gitNote}`, inputSchema: { name: z.string(), description: z.string().optional(), private: z.boolean().optional(), org: z.string().optional(), auto_init: z.boolean().optional().describe('Start with a README commit (default true)') } }, (a) => call('git_repo_create', a, 60_000));
+  server.registerTool('git_publish', { title: 'Publish project to a new repository', description: 'Create a GitHub repository for the open project (which must not be linked yet), link it, and push every file as the first commit.', inputSchema: { project, name: z.string(), description: z.string().optional(), private: z.boolean().optional(), org: z.string().optional(), message: z.string().optional() } }, (a) => call('git_publish', a, 300_000));
+  server.registerTool('git_repo_update', { title: 'Edit a repository', description: 'Rename a repository, change its description, homepage, visibility (private), default branch, or archive it. Defaults to the project\'s repository.', inputSchema: { project, repository, name: z.string().optional(), description: z.string().optional(), homepage: z.string().optional(), private: z.boolean().optional(), default_branch: z.string().optional(), archived: z.boolean().optional() } }, (a) => call('git_repo_update', a, 60_000));
+  server.registerTool('git_repo_delete', { title: 'Delete a repository', description: 'Permanently delete a GitHub repository. confirm_name must be exactly "owner/name"; when the editor is open the user is asked too. Needs the token\'s Administration permission.', inputSchema: { project, repository, confirm_name: z.string() }, annotations: { destructiveHint: true } }, (a) => call('git_repo_delete', a, 300_000));
 
   // --- CI (GitHub Actions) -------------------------------------------------------------------------
   server.registerTool('ci_status', { title: 'CI status', description: 'Workflows of the linked repository and the latest runs on the current branch (state: running / passed / failed …).', inputSchema: { project, branch: z.string().optional() }, annotations: ro }, (a) => call('ci_status', a, 60_000));
