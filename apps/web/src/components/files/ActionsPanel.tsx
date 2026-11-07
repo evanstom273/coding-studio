@@ -6,7 +6,8 @@ import { useEditor } from '@web/store/editor';
 import { toast } from '@web/store/toasts';
 import { useUI } from '@web/store/ui';
 import { useCompact } from '@web/hooks/useLayout';
-import { github } from '@web/lib/git';
+import { cloudflareStatus, github, setCloudflareSecrets } from '@web/lib/git';
+import { CloudflareCard } from './CloudflareCard';
 import { LOG_PREFIX } from '@web/lib/fileTypes';
 import { Button, cx } from '../ui/primitives';
 
@@ -74,6 +75,11 @@ export function ActionsPanel({ st }: { st: GitState }) {
       useEditor.getState().applyFiles(fs.map((f) => ({ op: 'write_file' as const, path: f.path, content: f.content, expectedHash: null })), `Add workflow ${t.path}`);
       useEditor.getState().openTab(t.path);
       toast('info', `${fs.length > 1 ? `Added ${fs.map((f) => f.path).join(' and ')}` : 'Workflow added'}. Commit & push to turn it on.`);
+      // The deploy needs the Cloudflare secrets on the repository: set them now if Cloudflare is connected.
+      if (id === 'cloudflare')
+        void cloudflareStatus()
+          .then((c) => (c.configured ? setCloudflareSecrets(st.owner, st.repo).then((r) => toast('success', `Deploy secrets set on ${r.repository}`)) : toast('info', 'Connect Cloudflare below (once) and the deploy secrets are set for you.')))
+          .catch((e) => toast('error', errMsg(e)));
     } catch (e) {
       toast('error', errMsg(e));
     }
@@ -138,6 +144,7 @@ export function ActionsPanel({ st }: { st: GitState }) {
         </details>
       )}
 
+      <CloudflareCard st={st} usesCloudflare={localWorkflows.some((p) => /deploy/i.test(p)) || ws.files.has('wrangler.jsonc') || ws.files.has('wrangler.toml') || ws.files.has('wrangler.json')} />
       <div className="flex items-center px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
         Runs on {st.branch}
         <button className="ml-auto font-normal normal-case text-accent hover:underline" onClick={() => void refresh()}>

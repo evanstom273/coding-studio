@@ -13,6 +13,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { BRIDGE_MAX_PAYLOAD, BRIDGE_PROTOCOL_VERSION } from '../packages/shared-protocol/src/index';
 import { buildServer, type ToolHost } from '../mcp/server/tools';
 import { CloudService, type KvLike } from './cloud-service';
+import { CloudflareVault } from './cloudflare';
 import { GitHubVault } from './github';
 import type { SqlLike } from './cloud-store';
 
@@ -93,6 +94,23 @@ export class BridgeRoom extends DurableObject<Env> {
           if (request.method === 'PUT') return json(200, await vault.set(String(((await request.json()) as { token?: unknown }).token ?? '')));
         } catch (e) {
           return json(400, { error: { code: (e as { code?: string }).code ?? 'E_GITHUB', message: e instanceof Error ? e.message : String(e) } });
+        }
+      }
+      if (url.pathname === '/github/cloudflare' || url.pathname === '/github/cloudflare/secrets') {
+        const cf = new CloudflareVault(this.ctx.storage as unknown as KvLike);
+        try {
+          if (url.pathname === '/github/cloudflare/secrets' && request.method === 'POST') {
+            const b = (await request.json()) as { owner?: string; repo?: string };
+            return json(200, await cf.setRepoSecrets(await vault.client(), String(b.owner ?? ''), String(b.repo ?? '')));
+          }
+          if (request.method === 'GET') return json(200, await cf.status());
+          if (request.method === 'DELETE') return json(200, await cf.clear());
+          if (request.method === 'PUT') {
+            const b = (await request.json()) as { token?: unknown; accountId?: unknown };
+            return json(200, await cf.set(String(b.token ?? ''), String(b.accountId ?? '')));
+          }
+        } catch (e) {
+          return json(400, { error: { code: (e as { code?: string }).code ?? 'E_CLOUDFLARE', message: e instanceof Error ? e.message : String(e) } });
         }
       }
       if (url.pathname.startsWith('/github/api/')) {

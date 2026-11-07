@@ -47,6 +47,7 @@ export class GitHub {
     const msg = (r.body as { message?: string } | null)?.message ?? `HTTP ${r.status}`;
     if (r.status === 401) throw new GitHubError('E_GITHUB_AUTH', 'GitHub rejected the token (expired or revoked?). Paste a new one with Git → Change token.', 401);
     if (r.status === 403 && /rate limit/i.test(msg)) throw new GitHubError('E_GITHUB_RATE_LIMIT', `GitHub rate limit: ${msg}`, 403);
+    if ((r.status === 403 || r.status === 404) && /\/actions\/secrets/.test(path)) throw new GitHubError('E_GITHUB_PERMISSION', `The GitHub token can't set repository secrets. Give it "Secrets: Read and write" on GitHub (Settings → Developer settings → your token), then try again. GitHub said: ${msg}`, r.status);
     if ((r.status === 403 || r.status === 404 || r.status === 422) && /workflow/i.test(msg)) throw new GitHubError('E_GITHUB_PERMISSION', `The token works, but it isn't allowed to change GitHub Actions workflow files (.github/workflows). Give it "Workflows: Read and write" on GitHub (Settings → Developer settings → your token), or paste a new token with Git → Change token. GitHub said: ${msg}`, r.status);
     if (r.status === 403) throw new GitHubError('E_GITHUB_PERMISSION', `The token works, but it doesn't have permission for this (${path.split('?')[0]}). Check its repository access and permissions on GitHub, or paste a new token with Git → Change token. GitHub said: ${msg}`, 403);
     if (r.status === 404) throw new GitHubError('E_NOT_FOUND', `Not found on GitHub (${path}). Check the name, and that the token can access this repository.`, 404);
@@ -120,6 +121,14 @@ export class GitHub {
   }
   deleteBranch(owner: string, repo: string, branch: string) {
     return this.req(`/repos/${enc(owner)}/${enc(repo)}/git/refs/heads/${enc(branch)}`, { method: 'DELETE' });
+  }
+
+  // --- Actions secrets (values are sealed by the caller with the repository's public key) -------
+  actionsPublicKey(owner: string, repo: string) {
+    return this.req<{ key_id: string; key: string }>(`/repos/${enc(owner)}/${enc(repo)}/actions/secrets/public-key`);
+  }
+  putActionsSecret(owner: string, repo: string, name: string, encryptedValue: string, keyId: string) {
+    return this.req(`/repos/${enc(owner)}/${enc(repo)}/actions/secrets/${encodeURIComponent(name)}`, { method: 'PUT', body: { encrypted_value: encryptedValue, key_id: keyId } });
   }
 
   // --- repositories ------------------------------------------------------------------------------

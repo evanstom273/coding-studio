@@ -36,6 +36,19 @@ export async function tokenStatus(): Promise<{ connected: boolean; login?: strin
   return r.json();
 }
 
+// --- Cloudflare deploy credentials (kept in the cloud vault, written into repository secrets) -------
+async function cf<T>(path: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(`${base()}/cloudflare${path}`, { ...init, headers: { 'Content-Type': 'application/json' } });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(body?.error?.message ?? `Failed (${r.status})`), { code: body?.error?.code });
+  return body as T;
+}
+export const cloudflareStatus = () => cf<{ configured: boolean; accountId?: string }>('');
+export const saveCloudflare = (token: string, accountId: string) => cf<{ configured: boolean; accountId: string }>('', { method: 'PUT', body: JSON.stringify({ token, accountId }) });
+export const forgetCloudflare = () => cf<{ configured: boolean }>('', { method: 'DELETE' });
+/** Put the saved Cloudflare credentials into a repository's Actions secrets. */
+export const setCloudflareSecrets = (owner: string, repo: string) => cf<{ repository: string; secrets: string[] }>('/secrets', { method: 'POST', body: JSON.stringify({ owner, repo }) });
+
 export async function saveToken(token: string) {
   const r = await fetch(`${base()}/token`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
   const body = await r.json();

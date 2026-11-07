@@ -18,6 +18,7 @@ import { newId } from '@cs/graph-core';
 import { buildWebStarter } from '@cs/examples';
 import type { BridgeMethod } from '../packages/shared-protocol/src/index';
 import { CloudStore, diffFiles, type StoreBackend } from './cloud-store';
+import { CloudflareVault } from './cloudflare';
 import { GitHubVault } from './github';
 import { cloneFiles, commitAndPush, createRepoFor, switchBranch, GitHubError, pull, readState, stateRecord } from '@cs/git';
 import { defaultConfig, serializeConfig } from '@cs/workspace';
@@ -66,6 +67,7 @@ export class CloudService {
 
   /** GitHub (token in this Durable Object). Overridable for tests. */
   github = () => new GitHubVault(this.kv);
+  cloudflare = () => new CloudflareVault(this.kv);
 
   // --- meta ----------------------------------------------------------------------------------
 
@@ -207,6 +209,12 @@ export class CloudService {
   }
 
   // --- MCP methods ---------------------------------------------------------------------------------
+
+  /** Put the saved Cloudflare credentials into the project's repository secrets. */
+  private async cloudflareSecrets(ws: Workspace) {
+    const st = svc.requireLinked(readState(ws));
+    return this.cloudflare().setRepoSecrets(await this.github().client(), st.owner, st.repo);
+  }
 
   /** Switch a project to another branch (unchanged files take that branch's version; changes are kept). */
   private async switchTo(project: unknown, branch: string) {
@@ -527,7 +535,13 @@ export class CloudService {
         const fs = svc.workflowTemplateFiles(params.template, before.files, p.name);
         const r = applyWorkspaceOps(before, fs.map((f) => ({ op: 'write_file' as const, path: f.path, content: f.content, expectedHash: null })));
         await this.commit(before, r.workspace, 'claude', { label: `Claude: add workflow ${fs[0].path}`, source: 'claude' });
-        return { added: fs.map((f) => f.path), files: fs, note: 'Commit them with git_commit to turn the workflow on.' };
+        // The Cloudflare deploy needs its two repository secrets: set them from the saved credentials.
+        const secrets = params.template === 'cloudflare' ? await this.cloudflareSecrets(before).catch((e: Error & { code?: string }) => ({ not_set: e.code ?? 'E_CLOUDFLARE', reason: e.message })) : undefined;
+        return { added: fs.map((f) => f.path), files: fs, ...(secrets ? { secrets } : {}), note: 'Commit them with git_commit to turn the workflow on.' };
+      }
+      case 'ci_cloudflare_secrets': {
+        const { project: p } = await this.resolve(params.project);
+        return this.cloudflareSecrets(this.store.read(p.id, (e) => e.path === '.codingstudio/git.json')!);
       }
       case 'deps_list':
       case 'deps_search':

@@ -14,7 +14,7 @@ import { buildWebStarter } from '@cs/examples';
 import { newId } from '@cs/graph-core';
 import { CONFIG_PATH, configOf, defaultConfig, makeRecord, serializeConfig, workspaceRevision, type FileRecord, type Workspace } from '@cs/workspace';
 import { readState } from '@cs/git';
-import { cloneRepo, commitOpen, github, openOutputs, publishOpen, pullOpen, switchOpen } from '@web/lib/git';
+import { cloneRepo, commitOpen, github, openOutputs, publishOpen, pullOpen, setCloudflareSecrets, switchOpen } from '@web/lib/git';
 import { saveNow } from '@web/hooks/useAutosave';
 import { useEditor } from '@web/store/editor';
 import { compileNow } from '@web/compile/store';
@@ -344,7 +344,14 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       const ws = useEditor.getState().workspace!;
       const fs = svc.workflowTemplateFiles(params.template, ws.files, p.name);
       useEditor.getState().applyFiles(fs.map((f) => ({ op: 'write_file' as const, path: f.path, content: f.content, expectedHash: null })), `Claude: add workflow ${fs[0].path}`, { source: 'mcp' });
-      return { added: fs.map((f) => f.path), files: fs, note: 'Commit them with git_commit to turn the workflow on.' };
+      const linked = readState(useEditor.getState().workspace!);
+      const secrets = params.template === 'cloudflare' && linked ? await setCloudflareSecrets(linked.owner, linked.repo).catch((e: Error & { code?: string }) => ({ not_set: e.code ?? 'E_CLOUDFLARE', reason: e.message })) : undefined;
+      return { added: fs.map((f) => f.path), files: fs, ...(secrets ? { secrets } : {}), note: 'Commit them with git_commit to turn the workflow on.' };
+    }
+    case 'ci_cloudflare_secrets': {
+      await ensureOpen(params.project);
+      const st = svc.requireLinked(readState(useEditor.getState().workspace!));
+      return setCloudflareSecrets(st.owner, st.repo);
     }
     case 'deps_list':
     case 'deps_search':

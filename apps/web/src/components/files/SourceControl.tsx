@@ -53,7 +53,8 @@ export function TokenForm({ onDone }: { onDone: (login: string) => void }) {
         for <b>All repositories</b>, with these set to “Read and write”:{" "}
         <b>Contents</b> and <b>Pull requests</b> (commit, push, PRs),{" "}
         <b>Workflows</b> (GitHub Actions / Cloudflare deploy files),{" "}
-        <b>Actions</b> (run and re-run builds) and <b>Administration</b>{" "}
+        <b>Actions</b> (run and re-run builds), <b>Secrets</b> (set the
+        Cloudflare deploy secrets for you) and <b>Administration</b>{" "}
         (create, rename and delete repositories). It's kept in your own Coding Studio cloud
         storage, never in this browser or in your projects.
       </p>
