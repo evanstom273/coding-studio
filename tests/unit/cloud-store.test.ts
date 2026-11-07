@@ -298,6 +298,10 @@ describe('GitHub through the cloud connector', () => {
     const p = (await cloud.handle('git_pull', {})) as { updated: string[] };
     expect(p.updated).toEqual(['docs/x.md']);
     expect(((await cloud.handle('read_files', { paths: ['docs/x.md'] })) as { files: { text: string }[] }).files[0].text).toBe('new');
+    // the editor's proxy passes every method the client uses (merge = PUT, delete = DELETE) on to GitHub
+    expect((await vault.proxy('/repos/lyra/game/pulls/999/merge', 'PUT', { merge_method: 'squash' })).status).toBe(404);
+    expect((await vault.proxy('/repos/lyra/game/git/refs/heads/nope', 'DELETE', undefined)).status).toBe(204);
+    expect((await vault.proxy('/repos/lyra/game', 'TRACE', undefined)).status).toBe(405);
     // merge the PR from the phone, then pull main
     const m = (await cloud.handle('git_pr_merge', { number: pr.number, delete_branch: true })) as { merged: boolean; into: string };
     expect(m).toMatchObject({ merged: true, into: 'main' });

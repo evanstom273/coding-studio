@@ -68,7 +68,7 @@ export class GitHubVault {
   /** Proxy one REST call for the browser (paths under /user and /repos only). */
   async proxy(path: string, method: string, body: unknown) {
     if (!/^\/(user|repos)(\/|\?|$)/.test(path)) return { status: 400, body: { message: 'Only /user and /repos endpoints are proxied' } };
-    if (!['GET', 'POST', 'PATCH'].includes(method)) return { status: 405, body: { message: 'Method not allowed' } };
+    if (!['GET', 'POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) return { status: 405, body: { message: 'Method not allowed' } };
     const t = await this.token();
     if (!t) return { status: 401, body: { message: 'GitHub is not connected', code: 'E_GITHUB_NOT_CONNECTED' } };
     return this.makeFetch(t)(path, { method, ...(body !== undefined ? { body } : {}) });

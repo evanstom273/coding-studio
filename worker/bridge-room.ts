@@ -99,7 +99,8 @@ export class BridgeRoom extends DurableObject<Env> {
         const text = request.method === 'GET' ? '' : await request.text();
         if (text.length > 48 * 1024 * 1024) return json(413, { message: 'Request too large' });
         const r = await vault.proxy(url.pathname.slice('/github/api'.length) + url.search, request.method, text ? JSON.parse(text) : undefined);
-        return json(r.status, r.body);
+        // A 204 (e.g. after a delete) can't carry a body; the client treats 200 + null the same.
+        return json(r.status === 204 ? 200 : r.status, r.body ?? null);
       }
     }
 
