@@ -1,5 +1,5 @@
 /** Source control: GitHub token, changes, commit & push (optionally to a new branch), pull, PRs. */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ExternalLink,
   GitBranch,
@@ -19,6 +19,8 @@ import {
   gitState,
   gitStatus,
   pullOpen,
+  recoverDeletedBranch,
+  switchOpen,
   saveToken,
   takeTheirs,
   tokenStatus,
@@ -115,6 +117,35 @@ export function SourceControl() {
       .catch(() => setLogin(null));
   }, []);
 
+  // Branches on GitHub (for the selector), and recovery when the tracked one was deleted
+  // (e.g. after its pull request was merged): move to the default branch, keeping changes.
+  const [branches, setBranches] = useState<string[] | null>(null);
+  const repoKey = st ? `${st.owner}/${st.repo}` : "";
+  const loadBranches = useCallback(async () => {
+    if (!st) return;
+    try {
+      setBranches((await github().branches(st.owner, st.repo)).map((b) => b.name));
+    } catch {
+      setBranches(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repoKey]);
+  useEffect(() => {
+    if (!login || !st) return;
+    void loadBranches();
+    void recoverDeletedBranch()
+      .then((r) => {
+        if (!r) return;
+        toast(
+          "warning",
+          `"${r.deleted}" no longer exists on GitHub (merged and deleted?), so this project is now on ${r.state.branch}.${r.kept.length ? ` Your changes to ${r.kept.length} file(s) were kept.` : ""}`,
+        );
+        void loadBranches();
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [login, repoKey]);
+
   const run = async (what: string, fn: () => Promise<void>) => {
     setBusy(what);
     try {
@@ -194,10 +225,40 @@ export function SourceControl() {
       data-testid="source-control"
     >
       <div className="flex items-center gap-1.5 border-b border-border px-3 py-2">
-        <GitBranch size={13} className="text-muted" />
-        <span className="truncate font-medium" data-testid="git-branch">
+        <GitBranch size={13} className="shrink-0 text-muted" />
+        <span className="sr-only" data-testid="git-branch">
           {st.owner}/{st.repo} · {st.branch}
         </span>
+        <span className="truncate font-medium" title={`${st.owner}/${st.repo}`}>
+          {st.repo}
+        </span>
+        <select
+          className="h-7 max-w-[11rem] min-w-0 truncate rounded border border-border bg-[#0f1218] px-1 font-mono text-[11.5px] text-text"
+          value={st.branch}
+          disabled={!!busy}
+          aria-label="Branch"
+          data-testid="git-branch-select"
+          onFocus={() => void loadBranches()}
+          onChange={(e) => {
+            const to = e.target.value;
+            if (to === st.branch) return;
+            void run("switch", async () => {
+              const r = await switchOpen(to);
+              setPr(null);
+              toast(
+                r.kept.length ? "warning" : "success",
+                `Switched to ${to}${r.updates.size ? ` (${r.updates.size} file(s) updated)` : ""}${r.kept.length ? `. Kept your changes to ${r.kept.join(", ")}` : changes.length ? ". Your changes came with you" : ""}`,
+              );
+            });
+          }}
+        >
+          {[...new Set([st.branch, ...(branches ?? [])])].map((b) => (
+            <option key={b} value={b}>
+              {b}
+              {branches && !branches.includes(b) ? " (deleted on GitHub)" : ""}
+            </option>
+          ))}
+        </select>
         <Button
           className="ml-auto h-6"
           variant="ghost"
@@ -253,7 +314,19 @@ export function SourceControl() {
         ))}
       </div>
       {view === "actions" && <ActionsPanel st={st} />}
-      {view === "pulls" && <PullRequests st={st} />}
+      {view === "pulls" && (
+        <PullRequests
+          st={st}
+          onMerged={async (m) => {
+            // The branch this project was on was merged and deleted: go back to where it went.
+            if (m.deletedBranch === st.branch || (m.head === st.branch && m.deletedBranch)) {
+              const r = await switchOpen(m.into);
+              toast("success", `Merged into ${m.into} and switched this project to ${m.into}${r.kept.length ? ` (kept your changes to ${r.kept.length} file(s))` : ""}.`);
+            } else if (m.into === st.branch) toast("info", `Merged into ${m.into}: Pull to bring it into this project.`);
+            void loadBranches();
+          }}
+        />
+      )}
       {view === "repo" && (
         <RepoSettings
           st={st}

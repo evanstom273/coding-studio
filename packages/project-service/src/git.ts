@@ -190,3 +190,7 @@ export function stripGenerated(ws: Workspace): Workspace {
 export function workspaceOutputs(ws: Workspace, strict = true) {
   return generatedOutputs(deriveProject(ws).project, { strict });
 }
+
+export function switchView(r: { updates: Map<string, unknown>; state: GitState; kept: string[]; from: string }) {
+  return { from: r.from, branch: r.state.branch, commit: r.state.commit, updated: [...r.updates.keys()], ...(r.kept.length ? { kept_your_changes: r.kept, note: 'These files were changed here and differ on the new branch too: your version was kept and shows as a change.' } : {}) };
+}

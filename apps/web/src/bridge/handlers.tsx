@@ -14,7 +14,7 @@ import { buildWebStarter } from '@cs/examples';
 import { newId } from '@cs/graph-core';
 import { CONFIG_PATH, configOf, defaultConfig, makeRecord, serializeConfig, workspaceRevision, type FileRecord, type Workspace } from '@cs/workspace';
 import { readState } from '@cs/git';
-import { cloneRepo, commitOpen, github, openOutputs, publishOpen, pullOpen } from '@web/lib/git';
+import { cloneRepo, commitOpen, github, openOutputs, publishOpen, pullOpen, switchOpen } from '@web/lib/git';
 import { saveNow } from '@web/hooks/useAutosave';
 import { useEditor } from '@web/store/editor';
 import { compileNow } from '@web/compile/store';
@@ -296,7 +296,24 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
     case 'git_repo_delete': {
       const ws = useEditor.getState().workspace;
       const st = ws ? readState(ws) : null;
+      if (method === 'git_pr_merge') {
+        const r = (await svc.githubCall(method, github(), params, st)) as { into: string; deleted_branch?: string };
+        // The project's branch was merged and deleted: move it to the branch it went into.
+        if (st && r.deleted_branch === st.branch && !str(params.repository)) return { ...r, switched_project_to: svc.switchView(await switchOpen(r.into, 'mcp')) };
+        return r;
+      }
       return svc.githubCall(method, github(), params, st, (full) => confirmDialog({ title: 'Delete a GitHub repository?', message: <>Claude wants to delete <b>{full}</b> on GitHub. This can't be undone: its code, issues and pull requests are gone for good.</>, confirm: 'Delete repository', danger: true }));
+    }
+    case 'git_branches': {
+      await ensureOpen(params.project);
+      const st = svc.requireLinked(readState(useEditor.getState().workspace!));
+      const [bs, info] = await Promise.all([github().branches(st.owner, st.repo), github().repo(st.owner, st.repo)]);
+      return { current: st.branch, default: info.default_branch, current_exists: bs.some((b) => b.name === st.branch), branches: bs.map((b) => b.name) };
+    }
+    case 'git_switch_branch': {
+      await ensureOpen(params.project);
+      await saveNow();
+      return svc.switchView(await switchOpen(String(params.branch ?? ''), 'mcp'));
     }
     case 'git_publish': {
       await ensureOpen(params.project);

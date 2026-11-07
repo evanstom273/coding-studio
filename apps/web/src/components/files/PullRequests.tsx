@@ -23,7 +23,7 @@ interface PR {
 const err = (e: unknown) => toast('error', e instanceof Error ? e.message : String(e));
 const call = <T,>(method: string, st: GitState, params: Record<string, unknown> = {}) => githubCall(method, github(), params, st) as Promise<T>;
 
-export function PullRequests({ st }: { st: GitState }) {
+export function PullRequests({ st, onMerged }: { st: GitState; onMerged?: (m: { number: number; head: string; into: string; deletedBranch?: string }) => Promise<void> | void }) {
   const [state, setState] = useState<'open' | 'closed'>('open');
   const [list, setList] = useState<PR[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -111,8 +111,9 @@ export function PullRequests({ st }: { st: GitState }) {
                 data-testid="pr-merge"
                 onClick={() =>
                   act(`m${p.number}`, async () => {
-                    const r = await call<{ merged: boolean; into: string }>('git_pr_merge', st, { number: p.number, method, delete_branch: deleteBranch });
-                    toast('success', `Merged #${p.number} into ${r.into}${r.into === st.branch ? ' — pull to get it here' : ''}`);
+                    const r = await call<{ merged: boolean; into: string; deleted_branch?: string }>('git_pr_merge', st, { number: p.number, method, delete_branch: deleteBranch });
+                    if (onMerged) await onMerged({ number: p.number, head: p.head, into: r.into, deletedBranch: r.deleted_branch });
+                    else toast('success', `Merged #${p.number} into ${r.into}`);
                   })
                 }
               >

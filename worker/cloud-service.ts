@@ -19,7 +19,7 @@ import { buildWebStarter } from '@cs/examples';
 import type { BridgeMethod } from '../packages/shared-protocol/src/index';
 import { CloudStore, diffFiles, type StoreBackend } from './cloud-store';
 import { GitHubVault } from './github';
-import { cloneFiles, commitAndPush, createRepoFor, GitHubError, pull, readState, stateRecord } from '@cs/git';
+import { cloneFiles, commitAndPush, createRepoFor, switchBranch, GitHubError, pull, readState, stateRecord } from '@cs/git';
 import { defaultConfig, serializeConfig } from '@cs/workspace';
 
 export interface ProjectSummary {
@@ -207,6 +207,21 @@ export class CloudService {
   }
 
   // --- MCP methods ---------------------------------------------------------------------------------
+
+  /** Switch a project to another branch (unchanged files take that branch's version; changes are kept). */
+  private async switchTo(project: unknown, branch: string) {
+    const { project: p } = await this.resolve(project);
+    const ws = this.store.read(p.id)!;
+    const r = await switchBranch(await this.github().client(), ws, branch, new Set(svc.generatedOutputs(p).map((g) => g.path)));
+    const files = new Map(ws.files);
+    for (const [path, f] of r.updates) {
+      if (f) files.set(path, f);
+      else files.delete(path);
+    }
+    files.set('.codingstudio/git.json', stateRecord(r.state));
+    await this.commit(ws, { meta: ws.meta, files }, 'claude', { label: `Claude: switch to branch ${branch}`, source: 'claude' });
+    return svc.switchView(r);
+  }
 
   async handle(method: BridgeMethod, params: Record<string, unknown>): Promise<unknown> {
     try {
@@ -451,8 +466,23 @@ export class CloudService {
           const { project: p } = await this.resolve(params.project);
           st = readState(this.store.read(p.id, (e) => e.path === '.codingstudio/git.json')!);
         }
-        return svc.githubCall(method, await this.github().client(), params, st);
+        const gh = await this.github().client();
+        if (method === 'git_pr_merge') {
+          const r = (await svc.githubCall(method, gh, params, st)) as { into: string; deleted_branch?: string };
+          if (st && r.deleted_branch === st.branch && !svc.str(params.repository)) return { ...r, switched_project_to: await this.switchTo(params.project, r.into) };
+          return r;
+        }
+        return svc.githubCall(method, gh, params, st);
       }
+      case 'git_branches': {
+        const { project: p } = await this.resolve(params.project);
+        const st = svc.requireLinked(readState(this.store.read(p.id, (e) => e.path === '.codingstudio/git.json')!));
+        const gh = await this.github().client();
+        const [bs, info] = await Promise.all([gh.branches(st.owner, st.repo), gh.repo(st.owner, st.repo)]);
+        return { current: st.branch, default: info.default_branch, current_exists: bs.some((b) => b.name === st.branch), branches: bs.map((b) => b.name) };
+      }
+      case 'git_switch_branch':
+        return this.switchTo(params.project, String(params.branch ?? ''));
       case 'git_publish': {
         const { project: p } = await this.resolve(params.project);
         const ws = this.store.read(p.id)!;

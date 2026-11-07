@@ -220,3 +220,71 @@ test('a visual React project is pushed with its generated code; graph edits show
   await expect(page.getByRole('button', { name: /Not pushed: \d+ errors? in the visual scripts/ })).toContainText('Unknown node type');
   expect(fake.refs.get('main')).toBe(head);
 });
+
+test('branches: merge a PR and delete its branch → the project returns to main; commit and Run use main; selector switches; a deleted branch recovers', async ({ page }) => {
+  const fake = new FakeGitHub();
+  fake.push('main', { 'README.md': '# Game\n', '.github/workflows/deploy.yml': 'on: [push, workflow_dispatch]\n' });
+  await freshStart(page);
+  await serveGitHub(page, fake);
+  await page.getByTestId('open-github').click();
+  await page.getByTestId('github-token').fill('github_pat_1234567890abcdefghij');
+  await page.getByTestId('github-token-save').click();
+  await page.getByTestId('repo-row').filter({ hasText: 'lyra/game' }).click();
+  await page.getByTestId('clone-repo').click();
+  await expect(page.getByTestId('project-title')).toHaveText('game');
+  const write = (path: string, content: string) => page.evaluate(([p, c]) => (window as never as { codingStudio: { editor: { getState(): { applyFiles(o: unknown[], l: string): void } } } }).codingStudio.editor.getState().applyFiles([{ op: 'write_file', path: p, content: c }], 'test'), [path, content]);
+  const file = (path: string) => page.evaluate((p) => (window as never as { codingStudio: { editor: { getState(): { workspace: { files: Map<string, { text?: string }> } } } } }).codingStudio.editor.getState().workspace.files.get(p)?.text ?? null, path);
+
+  // commit to a feature branch
+  await page.getByTestId('left-tab-git').click();
+  await write('src/survivor.ts', 'export const hp = 3;\n');
+  await page.getByTestId('commit-message').fill('Neon survivor');
+  await page.getByTestId('commit-new-branch').check();
+  await page.getByTestId('commit-branch-name').fill('feature/neon-survivor');
+  await page.getByTestId('commit-push').click();
+  await expect(page.getByTestId('git-branch-select')).toHaveValue('feature/neon-survivor');
+  // open the PR and merge it (deleting the branch) from the PRs tab, with an uncommitted change around
+  await write('notes.md', 'todo\n');
+  await page.getByTestId('git-view-pulls').click();
+  await page.getByTestId('pr-new').click();
+  await expect(page.getByTestId('pr-head')).toHaveValue('feature/neon-survivor');
+  await page.getByTestId('pr-create').click();
+  await page.getByTestId('pr-merge').click();
+  await expect(page.getByTestId('git-branch-select')).toHaveValue('main');
+  expect(fake.refs.has('feature/neon-survivor')).toBe(false);
+  expect(fake.files('main')['src/survivor.ts']).toBe('export const hp = 3;\n');
+  expect(await file('notes.md')).toBe('todo\n');
+  expect(await file('src/survivor.ts')).toBe('export const hp = 3;\n');
+  // commit goes to main
+  await page.getByTestId('git-view-changes').click();
+  await expect(page.locator('[data-testid="git-change"]')).toHaveCount(1);
+  await page.getByTestId('commit-message').fill('Notes');
+  await page.getByTestId('commit-push').click();
+  await expect.poll(() => fake.files('main')['notes.md']).toBe('todo\n');
+  // Run workflow runs on main
+  await page.getByTestId('git-view-actions').click();
+  await page.getByTestId('run-workflow').first().click();
+  await expect.poll(() => fake.dispatches.at(-1)?.ref).toBe('main');
+
+  // switch with the selector
+  fake.refs.set('release', fake.refs.get('main')!);
+  fake.push('release', { 'CHANGELOG.md': 'v1\n' });
+  await page.getByTestId('git-view-changes').click();
+  await page.getByTestId('git-branch-select').focus();
+  await expect(page.locator('[data-testid="git-branch-select"] option[value="release"]')).toHaveCount(1);
+  await page.getByTestId('git-branch-select').selectOption('release');
+  await expect.poll(() => file('CHANGELOG.md')).toBe('v1\n');
+  await page.getByTestId('git-branch-select').selectOption('main');
+  await expect.poll(() => file('CHANGELOG.md')).toBeNull();
+
+  // the tracked branch is deleted on GitHub elsewhere: opening the Git tab moves the project to main, keeping changes
+  await page.getByTestId('git-branch-select').selectOption('release');
+  await expect.poll(() => file('CHANGELOG.md')).toBe('v1\n');
+  await write('wip.txt', 'unsaved idea\n');
+  fake.refs.delete('release');
+  await page.getByTestId('left-tab-files').click();
+  await page.getByTestId('left-tab-git').click();
+  await expect(page.getByTestId('git-branch-select')).toHaveValue('main');
+  expect(await file('wip.txt')).toBe('unsaved idea\n');
+  expect(await file('CHANGELOG.md')).toBeNull();
+});

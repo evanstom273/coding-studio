@@ -277,3 +277,66 @@ export async function createRepoFor(gh: GitHub, p: { name: string; description?:
   if (!commit) throw new GitHubError('E_GITHUB', 'The repository was created, but its first commit did not appear. Open it with “Open from GitHub”.');
   return { state: { provider: 'github', owner, repo: r.name, branch: r.default_branch, commit, tree: {} }, url: r.html_url };
 }
+
+export interface SwitchResult {
+  /** Records to apply (null = delete), like a pull. */
+  updates: Map<string, FileRecord | null>;
+  state: GitState;
+  /** Files changed here that the other branch also has differently: your version was kept. */
+  kept: string[];
+  from: string;
+}
+
+/**
+ * Switch a linked project to another branch on GitHub. Files you haven't changed become that
+ * branch's version (added, changed or removed); files you have changed keep your version, so
+ * nothing is lost (they show as changes against the new branch). Generated code is never pulled
+ * in as editable files.
+ */
+export async function switchBranch(gh: GitHub, ws: Workspace, branch: string, generatedPaths: Set<string> = new Set()): Promise<SwitchResult> {
+  const st = readState(ws);
+  if (!st) throw new GitHubError('E_NOT_LINKED', 'This project is not linked to a GitHub repository.');
+  const { owner, repo } = st;
+  const head = await gh.head(owner, repo, branch).catch((e) => {
+    if (e instanceof GitHubError && e.code === 'E_NOT_FOUND') throw new GitHubError('E_NOT_FOUND', `There is no branch "${branch}" on GitHub.`);
+    throw e;
+  });
+  const tree = (await gh.tree(owner, repo, (await gh.commit(owner, repo, head)).tree.sha)).filter(trackable).filter((e) => !isInternal(e.path));
+  const theirs = new Map(tree.map((e) => [e.path, e.sha]));
+  const updates = new Map<string, FileRecord | null>();
+  const kept: string[] = [];
+  const need: TreeEntry[] = [];
+  const paths = new Set([...Object.keys(st.tree), ...theirs.keys(), ...[...ws.files.keys()].filter((p) => !isInternal(p))]);
+  const plan = new Map<string, 'take' | 'delete'>();
+  for (const p of paths) {
+    const base = st.tree[p];
+    const t = theirs.get(p);
+    const local = ws.files.get(p);
+    if (generatedPaths.has(p) && !local) continue;
+    if (local?.hash === t) continue; // already the same
+    const localChanged = (local?.hash ?? undefined) !== base;
+    if (localChanged) {
+      if (t !== base) kept.push(p); // both differ: keep yours
+      continue;
+    }
+    if (t) {
+      plan.set(p, 'take');
+      need.push(tree.find((e) => e.path === p)!);
+    } else plan.set(p, 'delete');
+  }
+  const fetched = new Map((await download(gh, owner, repo, need)).map((f) => [f.path, f]));
+  for (const [p, a] of plan) updates.set(p, a === 'take' ? fetched.get(p)! : null);
+  const modes = Object.fromEntries(tree.filter((e) => e.mode !== '100644').map((e) => [e.path, e.mode]));
+  return { updates, state: { ...st, branch, commit: head, tree: Object.fromEntries(theirs), modes }, kept: kept.sort(), from: st.branch };
+}
+
+/** Does the branch the project tracks still exist on GitHub? (e.g. deleted after its PR was merged) */
+export async function branchExists(gh: GitHub, st: GitState): Promise<boolean> {
+  return gh.head(st.owner, st.repo, st.branch).then(
+    () => true,
+    (e) => {
+      if (e instanceof GitHubError && e.code === 'E_NOT_FOUND') return false;
+      throw e;
+    },
+  );
+}

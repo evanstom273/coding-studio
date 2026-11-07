@@ -2,7 +2,7 @@
  * GitHub from the editor. Calls go through this site's Worker (`/github/<key>/api/...`), which
  * adds the token kept in your Durable Object — the token never lives in this browser.
  */
-import { cloneFiles, commitAndPush, createRepoFor, type GeneratedFile, GitHub, GIT_STATE_PATH, pull, readState, remoteFile, stateRecord, status, type Fetch, type GitState } from '@cs/git';
+import { branchExists, cloneFiles, commitAndPush, createRepoFor, switchBranch, type GeneratedFile, GitHub, GIT_STATE_PATH, pull, readState, remoteFile, stateRecord, status, type Fetch, type GitState } from '@cs/git';
 import { CONFIG_PATH, defaultConfig, makeRecord, serializeConfig, type FileRecord, type Workspace, type WorkspaceOp } from '@cs/workspace';
 import { newId } from '@cs/graph-core';
 import { useBridge } from '@web/bridge/client';
@@ -99,6 +99,29 @@ export async function publishOpen(p: { name: string; description?: string; priva
   useEditor.getState().applyFiles([writeOp(stateRecord(state))], `Link to ${state.owner}/${state.repo}`, { source });
   const r = await commitOpen(message, {}, source);
   return { repository: `${state.owner}/${state.repo}`, url, branch: r.branch, commit: r.commit, files: r.files };
+}
+
+/**
+ * Switch the open project to another GitHub branch as one undoable step. Unchanged files become
+ * that branch's version; your changed files are kept (nothing is lost).
+ */
+export async function switchOpen(branch: string, source: 'user' | 'mcp' = 'user') {
+  const ws = useEditor.getState().workspace;
+  if (!ws) throw new Error('No project is open');
+  const r = await switchBranch(github(), ws, branch, new Set(openOutputs(false).map((g) => g.path)));
+  const ops: WorkspaceOp[] = [...r.updates].map(([p, f]) => (f ? writeOp(f) : { op: 'delete', path: p }));
+  ops.push(writeOp(stateRecord(r.state)));
+  useEditor.getState().applyFiles(ops, `Switch to branch ${branch}`, { source });
+  return r;
+}
+
+/** If the tracked branch was deleted on GitHub (e.g. after its PR was merged), move to the repository's default branch. */
+export async function recoverDeletedBranch(source: 'user' | 'mcp' = 'user') {
+  const ws = useEditor.getState().workspace;
+  const st = ws && readState(ws);
+  if (!st || (await branchExists(github(), st))) return null;
+  const def = (await github().repo(st.owner, st.repo)).default_branch;
+  return { deleted: st.branch, ...(await switchOpen(def, source)) };
 }
 
 /** Pull into the open project as one undoable step. */
