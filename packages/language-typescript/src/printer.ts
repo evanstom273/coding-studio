@@ -44,7 +44,13 @@ export class ImportManager {
   private named = new Map<string, Map<string, string>>(); // module → imported name → local name
   private defaults = new Map<string, string>(); // module → local
   private namespaces = new Map<string, string>(); // module → local
+  private sideEffects = new Set<string>(); // import './x.css';
   constructor(private readonly taken: Set<string>) {}
+
+  /** `import 'module';` (a stylesheet, for its effect only). */
+  sideEffect(module: string) {
+    this.sideEffects.add(module);
+  }
 
   private local(want: string) {
     let n = IDENT.test(want) ? want : want.replace(/[^A-Za-z0-9_$]/g, '_').replace(/^(\d)/, '_$1');
@@ -72,6 +78,7 @@ export class ImportManager {
       if (named?.size) parts.push(`{ ${[...named].map(([n, l]) => (n === l ? n : `${n} as ${l}`)).join(', ')} }`);
       if (parts.length) out.push(`import ${parts.join(', ')} from ${q};`);
     }
+    for (const m of [...this.sideEffects].sort()) out.push(`import ${JSON.stringify(m).replace(/^"|"$/g, "'")};`);
     return out;
   }
 }
@@ -467,6 +474,28 @@ export class TSPrinter {
     return `${open}>\n${kids.map((k) => `${this.unit}${k.split('\n').join(`\n${this.unit}`)}`).join('\n')}\n</${tag}>`;
   }
 
+  /** CSS the module's elements need (animations): written next to it and imported. */
+  css(): string {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const m of this.module.members) {
+      if (m.k !== 'function') continue;
+      walkStmts(m.body, (st) =>
+        stmtExprs(st).forEach((x) =>
+          walkExpr(x, (y) => {
+            if (y.k === 'jsx' && y.css)
+              for (const c of y.css) {
+                if (seen.has(c)) continue;
+                seen.add(c);
+                out.push(c);
+              }
+          }),
+        ),
+      );
+    }
+    return out.join('\n\n');
+  }
+
   /** Whether the module contains JSX (written to .tsx / .jsx). */
   usesJsx(): boolean {
     let found = false;
@@ -491,6 +520,7 @@ export class TSPrinter {
   render(ctx: CompilationContext, header: string): ReturnType<CodeWriter['result']> {
     const unit = ctx.settings.indent === 'tab' ? '\t' : ' '.repeat(ctx.settings.indentSize);
     this.unit = unit;
+    if (this.css()) this.imports.sideEffect(`./${this.module.path.split('/').pop()}.anim.css`);
     // Print the body first, so the import manager knows every import before the header is written.
     const body = new CodeWriter(unit, this.module.scriptId);
     const { members } = this.module;

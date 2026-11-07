@@ -80,7 +80,9 @@ export type PropKind =
   | 'function'
   | 'signal'
   | 'enum'
-  | 'string_list';
+  | 'string_list'
+  /** Structured data edited by a dedicated panel (e.g. an element's animations); the node's check validates it. */
+  | 'json';
 
 export interface PropSchema {
   key: string;

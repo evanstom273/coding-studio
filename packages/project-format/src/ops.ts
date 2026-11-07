@@ -350,6 +350,9 @@ function validateProps(ctx: OpContext, s: ScriptDoc, f: FunctionDecl, schema: Pr
       case 'string_list':
         if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) throw bad('an array of strings');
         break;
+      case 'json':
+        if (JSON.stringify(v).length > 200_000) throw bad('smaller');
+        break;
       case 'variable': {
         if (typeof v !== 'string') throw bad('a variable id or name');
         if (v === '') break;

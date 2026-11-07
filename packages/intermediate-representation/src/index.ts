@@ -99,7 +99,7 @@ export type IRExpr =
   /** An inline function (closure): (params) => { body } */
   | { k: 'lambda'; params: IRParam[]; returnType: TypeRef; body: IRStmt[]; isAsync?: boolean; src?: SourceRef }
   /** A JSX element: <tag attr={…}>children</tag>. `tag` is an HTML tag name or a component expression. */
-  | { k: 'jsx'; tag: string | IRExpr; attrs: { name: string; value: IRExpr }[]; children: IRExpr[] }
+  | { k: 'jsx'; tag: string | IRExpr; attrs: { name: string; value: IRExpr }[]; children: IRExpr[]; /** CSS this element needs (its animations' @keyframes and rules), written to the module's stylesheet. */ css?: string[] }
   /** A function of this module used as a value (callbacks). */
   | { k: 'func_ref'; name: string }
   /** Property access that yields undefined instead of failing on null (`a?.b`). */

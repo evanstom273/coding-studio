@@ -7,6 +7,8 @@ import type { FunctionDecl, GraphNode } from '@cs/graph-core';
 import { fromTailwind, mergeClasses, type StyleSpec } from '@cs/styling';
 import { useEditor } from '@web/store/editor';
 import { StyleEditor } from '../fields/StyleEditor';
+import { AnimationEditor } from '../fields/AnimationEditor';
+import type { AnimationSpec } from '@cs/styling';
 
 const tailwindVersion = (pkg: string | undefined) => pkg?.match(/"tailwindcss"\s*:\s*"[\^~]?(\d+)/)?.[1];
 
@@ -50,6 +52,21 @@ export function ElementStyle({ node, fn }: { node: GraphNode; fn: FunctionDecl }
       <div className="mt-1 break-all font-mono text-[10.5px] text-[#7d8696]" data-testid="style-classes">
         {current || '(no classes)'}
       </div>
+    </div>
+  );
+}
+
+/** Animations on a React element node (ts.element props.animations). */
+export function ElementAnimations({ node, fn }: { node: GraphNode; fn: FunctionDecl }) {
+  const list = Array.isArray(node.props.animations) ? (node.props.animations as unknown as AnimationSpec[]) : [];
+  return (
+    <div className="mt-3" data-testid="element-animations">
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Animations</div>
+      <AnimationEditor
+        value={list}
+        onChange={(v, mergeKey) => useEditor.getState().tryDispatch([{ op: 'update_node', graph: fn.id, node: node.id, props: { animations: v as never } }], 'Animation', { mergeKey: mergeKey ? `anim:${node.id}:${mergeKey}` : undefined })}
+        previewText={String(node.props.tag ?? 'div') === 'button' ? 'Button' : 'Text'}
+      />
     </div>
   );
 }

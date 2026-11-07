@@ -5,7 +5,8 @@
  */
 import { T, type TypeRef } from '@cs/type-system';
 import type { GraphNode, JsonValue } from '@cs/graph-core';
-import type { IRExpr } from '@cs/intermediate-representation';
+import type { IRExpr, IRStmt } from '@cs/intermediate-representation';
+import { animationName, animationValue, checkAnimation, keyframesCss, waapi, type AnimationSpec } from '@cs/styling';
 import { data, exec, type NodeContext, type NodeDefinition, type PropSchema } from '@cs/node-registry';
 import { IDENT } from './printer';
 
@@ -427,6 +428,60 @@ const classRef: NodeDefinition = {
 
 const isTag = (t: string) => /^[a-z][a-z0-9-]*$/.test(t) || /^[A-Z][\w$]*(\.[A-Z][\w$]*)*$/.test(t);
 
+/** An element's animations (props.animations), ignoring anything that isn't one. */
+const anims = (v: unknown): AnimationSpec[] => (Array.isArray(v) ? (v.filter((a) => a && typeof a === 'object') as unknown as AnimationSpec[]) : []);
+
+/**
+ * Animations on an element: CSS classes + @keyframes for load / hover / focus / change (a change
+ * replays by giving the element a key from the watched value, so React re-creates it), and the Web
+ * Animations API from onClick for click (before the element's own click handler).
+ */
+function animate(nodeId: string, list_: AnimationSpec[], attrs: { name: string; value: IRExpr }[], children: IRExpr[], tag: string | IRExpr, watched: (i: number) => IRExpr): IRExpr {
+  const id = nodeId.replace(/[^A-Za-z0-9]/g, '').slice(-8);
+  const cls = `cs-anim-${id}`;
+  const css: string[] = [];
+  const byTrigger = new Map<string, string[]>();
+  const clicks: AnimationSpec[] = [];
+  const keys: IRExpr[] = [];
+  list_.forEach((a, i) => {
+    if (checkAnimation(a).length) return;
+    if (a.trigger === 'click') return void clicks.push(a);
+    const name = animationName(a, `${id}${i}`);
+    css.push(keyframesCss(name, a));
+    const sel = a.trigger === 'hover' ? `.${cls}:hover` : a.trigger === 'focus' ? `.${cls}:focus-visible` : `.${cls}`;
+    byTrigger.set(sel, [...(byTrigger.get(sel) ?? []), animationValue(name, a)]);
+    if (a.trigger === 'change') keys.push({ k: 'invoke', callee: { k: 'ref', name: 'String' }, args: [watched(i)] });
+  });
+  for (const [sel, values] of byTrigger) css.push(`${sel} {\n  animation: ${values.join(', ')};\n}`);
+  const out = attrs.filter((a) => a.name !== 'className' && a.name !== 'onClick' && a.name !== 'key');
+  if (byTrigger.size) {
+    const cur = attrs.find((a) => a.name === 'className')?.value;
+    const value: IRExpr = !cur ? { k: 'lit', value: cls, type: T.string } : cur.k === 'lit' && typeof cur.value === 'string' ? { k: 'lit', value: `${cur.value} ${cls}`.trim(), type: T.string } : { k: 'bin', op: '+', left: cur, right: { k: 'lit', value: ` ${cls}`, type: T.string } };
+    out.unshift({ name: 'className', value });
+  } else {
+    const cur = attrs.find((a) => a.name === 'className');
+    if (cur) out.unshift(cur);
+  }
+  const userKey = attrs.find((a) => a.name === 'key')?.value;
+  const allKeys = [...(userKey ? [userKey] : []), ...keys];
+  if (allKeys.length) out.push({ name: 'key', value: allKeys.slice(1).reduce<IRExpr>((acc, k) => ({ k: 'bin', op: '+', left: { k: 'bin', op: '+', left: acc, right: { k: 'lit', value: '|', type: T.string } }, right: k }), allKeys[0]) });
+  const userClick = attrs.find((a) => a.name === 'onClick')?.value;
+  if (clicks.length) {
+    const ev: IRExpr = { k: 'ref', name: 'event' };
+    const body: IRStmt[] = clicks.map((a) => {
+      const w = waapi(a);
+      if (w.options.iterations === Infinity) w.options.iterations = 1e9;
+      return { k: 'expr', expr: { k: 'invoke', callee: { k: 'prop', target: { k: 'prop', target: ev, name: 'currentTarget' }, name: 'animate' }, args: [{ k: 'lit', value: w.keyframes as JsonValue, type: T.any }, { k: 'lit', value: w.options as JsonValue, type: T.any }] } };
+    });
+    // Then the element's own click handler: an inline function's steps follow directly (it may take no event).
+    if (userClick?.k === 'lambda' && userClick.params.length === 0) body.push(...userClick.body);
+    else if (userClick) body.push({ k: 'expr', expr: { k: 'invoke', callee: userClick, args: [ev] } });
+    const isAsync = userClick?.k === 'lambda' && userClick.params.length === 0 && !!userClick.isAsync;
+    out.push({ name: 'onClick', value: { k: 'lambda', params: [{ name: 'event', type: T.any }], returnType: T.void, body, ...(isAsync ? { isAsync: true } : {}) } });
+  } else if (userClick) out.push({ name: 'onClick', value: userClick });
+  return { k: 'jsx', tag, attrs: out, children, ...(css.length ? { css } : {}) };
+}
+
 const element: NodeDefinition = {
   type: 'ts.element',
   title: 'Element',
@@ -442,14 +497,17 @@ const element: NodeDefinition = {
     { key: 'children', label: 'Children', kind: 'int', default: 1, min: 0, max: 32 },
     { key: 'scriptPath', label: 'Component from script', kind: 'string', default: '', description: 'A component exported by another script of this project.' },
     { key: 'module', label: 'Component from package', kind: 'string', default: '', description: 'A component from an npm package (e.g. react-router-dom).' },
+    { key: 'animations', label: 'Animations', kind: 'json', default: [], description: 'Edited in the Animations section.' },
   ],
-  displayTitle: (n) => `<${str(n.props.tag, 'div')}>`,
+  displayTitle: (n) => `<${str(n.props.tag, 'div')}>${anims(n.props.animations).length ? ' ✦' : ''}`,
   ports: (n) => {
     const attrs = list(n.props.attributes);
     const count = typeof n.props.children === 'number' ? Math.max(0, Math.min(32, Math.trunc(n.props.children))) : 1;
     return [
       ...attrs.map((a) => data.in(`attr_${a}`, a, a === 'className' || a === 'id' || a === 'placeholder' || a === 'href' ? T.string : T.any, a === 'className' ? { default: '' } : { required: false })),
       ...Array.from({ length: count }, (_, i) => data.in(`child_${i}`, count === 1 ? 'Children' : `Child ${i + 1}`, T.any, { default: '' })),
+      // "On change" animations replay whenever the value wired here changes.
+      ...anims(n.props.animations).flatMap((a, i) => (a.trigger === 'change' ? [data.in(`anim_${i}`, `Replay ${a.name} when this changes`, T.any, { required: true })] : [])),
       data.out('element', 'Element', T.any),
     ];
   },
@@ -458,6 +516,11 @@ const element: NodeDefinition = {
     const attrs = list(n.props.attributes);
     if (attrs.some((a) => !/^[A-Za-z_$][\w$-]*$/.test(a))) report('E_INVALID_ATTRIBUTE', 'Attribute names must be identifiers (className, onClick, aria-label…).');
     if (new Set(attrs).size !== attrs.length) report('E_DUPLICATE_ATTRIBUTE', 'An attribute is listed twice.');
+    if (n.props.animations !== undefined && !Array.isArray(n.props.animations)) report('E_INVALID_ANIMATION', 'Animations must be a list.');
+    anims(n.props.animations).forEach((a, i) => {
+      const problems = checkAnimation(a);
+      if (problems.length) report('E_INVALID_ANIMATION', `Animation ${i + 1} (${a?.name ?? '?'}): ${problems.join('; ')}.`);
+    });
   },
   lowerExpr: (_p, lc) => {
     const n = lc.node;
@@ -471,7 +534,9 @@ const element: NodeDefinition = {
       .filter((a) => !(a.name === 'className' && a.value.k === 'lit' && a.value.value === ''));
     const count = typeof n.props.children === 'number' ? Math.max(0, Math.min(32, Math.trunc(n.props.children))) : 1;
     const children = Array.from({ length: count }, (_, i) => lc.input(`child_${i}`)).filter((c) => !(c.k === 'lit' && (c.value === '' || c.value === null)) && c.k !== 'null');
-    return { k: 'jsx', tag, attrs, children };
+    const list_ = anims(n.props.animations);
+    if (!list_.length) return { k: 'jsx', tag, attrs, children };
+    return animate(n.id, list_, attrs, children, tag, (i) => lc.input(`anim_${i}`));
   },
   presets: [
     { title: '<div>', category: 'React', props: { tag: 'div', attributes: ['className'], children: 2 } },

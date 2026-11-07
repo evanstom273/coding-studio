@@ -18,6 +18,7 @@ import {
   type FinalConnectionState,
   type Node as RFNode,
   type NodeChange,
+  type EdgeChange,
   type NodeTypes,
 } from '@xyflow/react';
 import type { Diagnostic, FunctionDecl, GraphNode, ScriptDoc } from '@cs/graph-core';
@@ -99,6 +100,15 @@ function buildEdges(fn: FunctionDecl, infos: Map<string, NodeInfo>, selected: Se
   });
 }
 
+// Settings handed to React Flow must keep the same identity between renders: it copies changed
+// ones into its store, and a new array/object each render can loop (seen on phone layouts).
+const MULTI_SELECT_KEYS = ['Shift', 'Control', 'Meta'];
+const PAN_BUTTONS = [1, 2];
+const SNAP_GRID: [number, number] = [16, 16];
+const EDGE_OPTIONS = { type: 'default' };
+const CONNECTION_LINE = { stroke: '#cbd5e1', strokeWidth: 2 };
+const PRO_OPTIONS = { hideAttribution: false };
+
 function Canvas() {
   const project = useEditor((s) => s.project)!;
   const activeScriptId = useEditor((s) => s.activeScriptId);
@@ -126,8 +136,15 @@ function Canvas() {
   const selEdges = useMemo(() => new Set(selection.edges), [selection.edges]);
   const derived = useMemo(() => (script && fn ? buildNodes(script, fn, project.language, selNodes, diagMap) : { nodes: [], infos: new Map<string, NodeInfo>() }), [script, fn, project.language, selNodes, diagMap]);
   const edges = useMemo(() => (fn ? buildEdges(fn, derived.infos, selEdges) : []), [fn, derived.infos, selEdges]);
+  // React Flow keeps its own copy of the nodes (drag positions, measured sizes). When the project
+  // changes, replace that copy in the same render (not in an effect): rendering once with a stale
+  // copy made React Flow report the old selection back, and the selection flipped forever.
   const [nodes, setNodes] = useState<FlowNode[]>(derived.nodes);
-  useEffect(() => setNodes(derived.nodes), [derived.nodes]);
+  const [synced, setSynced] = useState(derived.nodes);
+  if (synced !== derived.nodes) {
+    setSynced(derived.nodes);
+    setNodes(derived.nodes);
+  }
 
   const [menu, setMenu] = useState<null | { screen: { x: number; y: number }; flow: { x: number; y: number }; pending?: PendingConnection }>(null);
   const [nodeMenu, setNodeMenu] = useState<null | { x: number; y: number; nodeId: string }>(null);
@@ -153,15 +170,36 @@ function Canvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusRequest?.seq]);
 
+  // The editor owns the selection. React Flow's clicks / box-selects arrive as "select" changes and
+  // become editor selections; React Flow then just shows what the editor says. (Letting both keep
+  // a selection made them report each other's old state back forever on phone layouts.)
   const onNodesChange = useCallback((changes: NodeChange<FlowNode>[]) => {
-    setNodes((nds) => applyNodeChanges(changes, nds));
+    const sel = changes.filter((c) => c.type === 'select');
+    const rest = changes.filter((c) => c.type !== 'select');
+    if (rest.length) setNodes((nds) => applyNodeChanges(rest, nds));
+    if (sel.length) {
+      const st = useEditor.getState();
+      const next = new Set(st.selection.nodes);
+      for (const c of sel) {
+        if (c.type !== 'select') continue;
+        if (c.selected) next.add(c.id);
+        else next.delete(c.id);
+      }
+      st.select([...next], st.selection.edges);
+    }
   }, []);
 
-  const onSelectionChange = useCallback(({ nodes: ns, edges: es }: { nodes: RFNode[]; edges: RFEdge[] }) => {
-    useEditor.getState().select(
-      ns.map((n) => n.id),
-      es.map((e) => e.id),
-    );
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    const sel = changes.filter((c) => c.type === 'select');
+    if (!sel.length) return;
+    const st = useEditor.getState();
+    const next = new Set(st.selection.edges);
+    for (const c of sel) {
+        if (c.type !== 'select') continue;
+        if (c.selected) next.add(c.id);
+        else next.delete(c.id);
+      }
+    st.select(st.selection.nodes, [...next]);
   }, []);
 
   const onNodeDragStop = useCallback((_e: unknown, _n: RFNode, dragged: RFNode[]) => {
@@ -282,7 +320,7 @@ function Canvas() {
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
-        onSelectionChange={onSelectionChange}
+        onEdgesChange={onEdgesChange}
         onNodeDragStop={onNodeDragStop}
         onConnect={onConnect}
         onConnectStart={onConnectStart}
@@ -311,19 +349,19 @@ function Canvas() {
         }}
         deleteKeyCode={null}
         selectionKeyCode="Shift"
-        multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
+        multiSelectionKeyCode={MULTI_SELECT_KEYS}
         // Touch: one finger pans, pinch zooms. Mouse: drag box-selects, middle/right-drag pans.
-        panOnDrag={touch ? true : [1, 2]}
+        panOnDrag={touch ? true : PAN_BUTTONS}
         selectionOnDrag={!touch}
         panActivationKeyCode="Space"
         snapToGrid={snapToGrid}
-        snapGrid={[16, 16]}
+        snapGrid={SNAP_GRID}
         minZoom={0.1}
         maxZoom={2.5}
         connectionRadius={touch ? 44 : 24}
-        defaultEdgeOptions={{ type: 'default' }}
-        connectionLineStyle={{ stroke: '#cbd5e1', strokeWidth: 2 }}
-        proOptions={{ hideAttribution: false }}
+        defaultEdgeOptions={EDGE_OPTIONS}
+        connectionLineStyle={CONNECTION_LINE}
+        proOptions={PRO_OPTIONS}
         colorMode="dark"
         elevateEdgesOnSelect
       >

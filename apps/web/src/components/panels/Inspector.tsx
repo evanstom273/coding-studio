@@ -9,7 +9,7 @@ import { useEditor } from '@web/store/editor';
 import { useUI } from '@web/store/ui';
 import { useCompile } from '@web/compile/store';
 import { IconButton, inputCls } from '../ui/primitives';
-import { ElementStyle } from './ElementStyle';
+import { ElementAnimations, ElementStyle } from './ElementStyle';
 
 const d = (ops: EditOp[], label: string, mergeKey?: string) => useEditor.getState().tryDispatch(ops, label, { mergeKey });
 
@@ -167,13 +167,14 @@ function NodeInspector({ nodeId, script, fn }: { nodeId: string; script: ScriptD
           {x.suggestion && <div className="mt-0.5 opacity-80">→ {x.suggestion}</div>}
         </div>
       ))}
-      {info.def?.props.map((p) => (
+      {info.def?.props.filter((p) => p.kind !== 'json').map((p) => (
         <Row key={p.key} label={p.label} hint={p.description}>
           <PropEditor prop={p} value={node.props[p.key]} script={script} fn={fn} onChange={(v, merge) => d([{ op: 'update_node', node: node.id, props: { [p.key]: v } }], `Set ${p.label}`, merge ? `prop:${node.id}:${p.key}` : undefined)} />
           {p.description && <div className="mt-0.5 text-[10.5px] text-muted">{p.description}</div>}
         </Row>
       ))}
       {(node.type === 'ts.element' || node.type === 'ts.classes') && <ElementStyle node={node} fn={fn} />}
+      {node.type === 'ts.element' && <ElementAnimations node={node} fn={fn} />}
       {info.ports.length > 0 && (
         <div className="mt-3">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Pins</div>
