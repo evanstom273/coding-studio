@@ -5,7 +5,7 @@ import { connectorUrl, useBridge } from '@web/bridge/client';
 import { confirmDialog } from '../ui/primitives';
 import { Button, Dialog, Field, inputCls } from '../ui/primitives';
 
-function CopyLine({ text, testId }: { text: string; testId?: string }) {
+export function CopyLine({ text, testId }: { text: string; testId?: string }) {
   const [done, setDone] = useState(false);
   return (
     <div className="flex items-stretch gap-1">

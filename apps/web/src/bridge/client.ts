@@ -46,6 +46,8 @@ interface BridgeState {
   /** New secret link; the old one stops working. */
   saveRemoteKey(): void;
   resetRemoteKey(): void;
+  /** Use another device's sync space (its projects and this device's are merged). */
+  adoptRemoteKey(key: string): void;
   takeOverRemote(): void;
   clearLog(): void;
 }
@@ -84,6 +86,18 @@ function loadRemote() {
   const v = readJson(REMOTE_KEY);
   const key = typeof v.key === 'string' && /^[A-Za-z0-9_-]{32,128}$/.test(v.key) ? v.key : randomId(32);
   return { remoteEnabled: v.enabled === true, remoteKey: key };
+}
+
+/** The link another device opens (or scans) to share this device's projects. */
+export function pairUrl(key = useBridge.getState().remoteKey) {
+  return `${window.location.origin}/#/pair/${key}`;
+}
+
+/** A sync key from a pairing link, a connector link or the bare key. */
+export function keyFromLink(text: string): string | null {
+  const t = text.trim();
+  const m = /(?:#\/pair\/|\/mcp\/|\/bridge\/)([A-Za-z0-9_-]{32,128})/.exec(t) ?? /^([A-Za-z0-9_-]{32,128})$/.exec(t);
+  return m ? m[1] : null;
 }
 
 /** The link to paste into Claude → Settings → Connectors → Add custom connector. */
@@ -127,6 +141,12 @@ export const useBridge = create<BridgeState>()((set, get) => ({
     const remoteKey = randomId(32);
     set({ remoteKey });
     writeJson(REMOTE_KEY, { enabled: get().remoteEnabled, key: remoteKey });
+    remote.restart(false);
+  },
+  adoptRemoteKey(key) {
+    if (!/^[A-Za-z0-9_-]{32,128}$/.test(key)) throw new Error('That is not a Coding Studio sync link.');
+    set({ remoteKey: key, remoteEnabled: true });
+    writeJson(REMOTE_KEY, { enabled: true, key });
     remote.restart(false);
   },
   takeOverRemote() {

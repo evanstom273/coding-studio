@@ -11,7 +11,9 @@ import { Button, confirmDialog, IconButton } from '../ui/primitives';
 import { NewProjectDialog } from '../dialogs/NewProjectDialog';
 import { McpDialog } from '../dialogs/McpDialog';
 import { GitHubDialog } from '../dialogs/GitHubDialog';
-import { GitBranch as Github } from 'lucide-react';
+import { GitBranch as Github, Smartphone } from 'lucide-react';
+import { DevicesDialog } from '../dialogs/DevicesDialog';
+import { useBridge } from '@web/bridge/client';
 import { McpIndicator } from '../panels/McpIndicator';
 
 function ago(t: number) {
@@ -25,6 +27,8 @@ function ago(t: number) {
 export function Dashboard() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
   const [githubOpen, setGithubOpen] = useState(false);
+  const [devicesOpen, setDevicesOpen] = useState(false);
+  const syncing = useBridge((s) => s.remoteEnabled);
   const dialog = useUI((s) => s.dialog);
   const setUI = useUI((s) => s.set);
   const refresh = useCallback(() => void listProjects().then(setProjects), []);
@@ -64,7 +68,10 @@ export function Dashboard() {
             <Button onClick={() => setGithubOpen(true)} data-testid="open-github">
               <Github size={14} /> Open from GitHub
             </Button>
-            <span className="ml-2 text-[12px] text-muted">Languages: {languages.all().map((l) => l.name).join(', ')} · projects are stored in this browser</span>
+            <Button onClick={() => setDevicesOpen(true)} data-testid="open-devices">
+              <Smartphone size={14} /> {syncing ? 'Devices' : 'Use on other devices'}
+            </Button>
+            <span className="ml-2 text-[12px] text-muted">Languages: {languages.all().map((l) => l.name).join(', ')} · {syncing ? 'projects sync across your linked devices' : 'projects are stored in this browser'}</span>
           </div>
 
           <h2 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Recent projects</h2>
@@ -134,6 +141,7 @@ export function Dashboard() {
       {dialog === 'new-project' && <NewProjectDialog onClose={() => setUI({ dialog: null })} />}
       {dialog === 'mcp' && <McpDialog onClose={() => setUI({ dialog: null })} />}
       {githubOpen && <GitHubDialog onClose={() => setGithubOpen(false)} />}
+      {devicesOpen && <DevicesDialog onClose={() => setDevicesOpen(false)} />}
     </div>
   );
 }
