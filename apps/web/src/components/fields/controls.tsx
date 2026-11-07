@@ -140,13 +140,14 @@ export function SegmentedControl<T extends string>({ value, options, onChange, t
 const SWATCHES = ['#000000', '#ffffff', '#64748b', '#ef4444', '#f97316', '#f59e0b', '#eab308', '#22c55e', '#10b981', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', 'transparent'];
 
 /** Colour: swatch (the system picker), text (any CSS colour), quick swatches and opacity. */
-export function ColorControl({ value, onChange, testId, swatches = SWATCHES }: { value: string | undefined; onChange: (v: string | undefined) => void; testId?: string; swatches?: string[] }) {
+export function ColorControl({ value, onChange, testId, swatches = SWATCHES, display = (c) => c, palette }: { value: string | undefined; onChange: (v: string | undefined) => void; testId?: string; swatches?: string[]; display?: (c: string) => string; palette?: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const hex = toHex(value);
+  const shown = value ? display(value) : undefined;
+  const hex = toHex(shown);
   return (
     <div className="min-w-0 space-y-1" data-testid={testId}>
       <div className="flex min-w-0 items-center gap-1">
-        <label className="relative h-[36px] w-[36px] shrink-0 cursor-pointer overflow-hidden rounded border border-border sm:h-[28px] sm:w-[28px]" style={{ background: value ?? 'transparent' }} title="Pick a colour">
+        <label className="relative h-[36px] w-[36px] shrink-0 cursor-pointer overflow-hidden rounded border border-border sm:h-[28px] sm:w-[28px]" style={{ background: shown ?? 'transparent' }} title="Pick a colour">
           {!value && <span className="absolute inset-0 bg-[repeating-conic-gradient(#1b1f27_0%_25%,#12151b_0%_50%)] bg-[length:8px_8px]" />}
           <input type="color" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" value={hex ?? '#000000'} onChange={(e) => onChange(e.target.value)} data-testid={testId ? `${testId}-picker` : undefined} />
         </label>
@@ -160,7 +161,8 @@ export function ColorControl({ value, onChange, testId, swatches = SWATCHES }: {
           </button>
         )}
       </div>
-      {open && (
+      {open && palette}
+      {open && !palette && (
         <div className="grid grid-cols-8 gap-1">
           {swatches.map((c) => (
             <button key={c} type="button" title={c} onClick={() => (onChange(c), setOpen(false))} className="h-[32px] rounded border border-border sm:h-[24px]" style={{ background: c === 'transparent' ? 'repeating-conic-gradient(#1b1f27 0% 25%, #12151b 0% 50%) 0 0/8px 8px' : c }} data-testid="swatch" data-color={c} />

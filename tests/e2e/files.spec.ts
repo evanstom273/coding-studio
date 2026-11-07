@@ -36,41 +36,45 @@ test('folders, files, editing, rename/move with tabs following, undo across file
   await expect(row(page, 'main.vgraph')).toBeVisible();
   await newEntry(page, 'folder', 'src');
   await expect(row(page, 'src')).toBeVisible();
-  await newEntry(page, 'file', 'app.ts', 'src');
-  await expect(tab(page, 'src/app.ts')).toHaveAttribute('aria-selected', 'true');
-  await typeInEditor(page, 'export const answer = 42;');
-  await expect.poll(() => fileText(page, 'src/app.ts')).toBe('export const answer = 42;');
+  // visual-only: code files can't be made by typing
+  await newEntry(page, 'file', 'code.ts', 'src');
+  await expect(row(page, 'src/code.ts')).toHaveCount(0);
+  await newEntry(page, 'file', 'app.md', 'src');
+  await expect(tab(page, 'src/app.md')).toHaveAttribute('aria-selected', 'true');
+  await typeInEditor(page, 'the answer is 42');
+  await expect.poll(() => fileText(page, 'src/app.md')).toBe('the answer is 42');
 
+  // a stylesheet is created empty and opens in the visual style editor
   await newEntry(page, 'file', 'styles/site.css');
-  await typeInEditor(page, 'body { color: red; }');
+  await expect(page.getByTestId('css-view')).toBeVisible();
   await newEntry(page, 'file', 'README.md');
   await typeInEditor(page, '# Hello');
   await expect.poll(() => fileText(page, 'README.md')).toBe('# Hello');
   await expect(row(page, 'styles')).toBeVisible();
 
   // rename a file with its tab open: the tab follows
-  await tab(page, 'src/app.ts').click();
-  await row(page, 'src/app.ts').click({ button: 'right' });
+  await tab(page, 'src/app.md').click();
+  await row(page, 'src/app.md').click({ button: 'right' });
   await page.getByTestId('menu-rename').click();
-  await page.getByTestId('file-name-input').fill('main.ts');
+  await page.getByTestId('file-name-input').fill('main.md');
   await page.getByTestId('file-name-input').press('Enter');
-  await expect(tab(page, 'src/main.ts')).toBeVisible();
-  await expect(tab(page, 'src/app.ts')).toHaveCount(0);
-  await expect.poll(() => fileText(page, 'src/main.ts')).toBe('export const answer = 42;');
+  await expect(tab(page, 'src/main.md')).toBeVisible();
+  await expect(tab(page, 'src/app.md')).toHaveCount(0);
+  await expect.poll(() => fileText(page, 'src/main.md')).toBe('the answer is 42');
 
   // move a folder by dragging it into another: open tabs follow
   await newEntry(page, 'folder', 'lib');
   await row(page, 'src').dragTo(row(page, 'lib'));
   await expect(row(page, 'lib/src')).toBeVisible();
-  await expect(tab(page, 'lib/src/main.ts')).toBeVisible();
+  await expect(tab(page, 'lib/src/main.md')).toBeVisible();
 
   // undo across files: the move, then the rename
   await page.locator('.react-flow__pane, [data-testid="tab-bar"]').first().click();
   await page.getByTestId('undo').click();
-  await expect(tab(page, 'src/main.ts')).toBeVisible();
-  await expect.poll(() => fileText(page, 'src/main.ts')).toBe('export const answer = 42;');
+  await expect(tab(page, 'src/main.md')).toBeVisible();
+  await expect.poll(() => fileText(page, 'src/main.md')).toBe('the answer is 42');
   await page.getByTestId('redo').click();
-  await expect(tab(page, 'lib/src/main.ts')).toBeVisible();
+  await expect(tab(page, 'lib/src/main.md')).toBeVisible();
 
   // delete a folder (confirmed), undo brings it back
   await row(page, 'styles').click({ button: 'right' });
@@ -87,7 +91,7 @@ test('folders, files, editing, rename/move with tabs following, undo across file
   await page.getByTestId('left-tab-files').click();
   await expect(row(page, 'lib')).toBeVisible();
   await expect(tab(page, 'README.md')).toBeVisible();
-  await expect.poll(() => fileText(page, 'styles/site.css')).toBe('body { color: red; }');
+  await expect.poll(() => fileText(page, 'styles/site.css')).toBe('');
 });
 
 test('graph tabs, generated files, uploads with previews, and search', async ({ page }) => {

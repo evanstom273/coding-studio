@@ -9,6 +9,7 @@ import { useEditor } from '@web/store/editor';
 import { useUI } from '@web/store/ui';
 import { useCompile } from '@web/compile/store';
 import { IconButton, inputCls } from '../ui/primitives';
+import { ElementStyle } from './ElementStyle';
 
 const d = (ops: EditOp[], label: string, mergeKey?: string) => useEditor.getState().tryDispatch(ops, label, { mergeKey });
 
@@ -172,6 +173,7 @@ function NodeInspector({ nodeId, script, fn }: { nodeId: string; script: ScriptD
           {p.description && <div className="mt-0.5 text-[10.5px] text-muted">{p.description}</div>}
         </Row>
       ))}
+      {(node.type === 'ts.element' || node.type === 'ts.classes') && <ElementStyle node={node} fn={fn} />}
       {info.ports.length > 0 && (
         <div className="mt-3">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Pins</div>

@@ -338,6 +338,13 @@ VISUAL-ONLY: Coding Studio never takes hand-written code, from people or AI. You
     },
     (a) => call('edit_config', a),
   );
+  const STYLE_DOC = 'A style is {variant: properties}. Variants: "" (always), "hover", "focus", "active", "disabled", breakpoints "sm" "md" "lg" "xl" "2xl", or both ("md:hover"). Properties (px numbers unless noted): display (block|flex|grid|inline-block|none), flexDirection (row|column), justifyContent (start|center|end|between|around|evenly), alignItems (start|center|end|stretch|baseline), gap, gridCols, flexWrap, flexGrow (bool), padding / margin / inset ({top,right,bottom,left}; margin may use "auto"), width / height / minWidth / maxWidth / minHeight / maxHeight (CSS lengths like "320px", "100%"), color / backgroundColor / borderColor (CSS colour or a Tailwind name like "indigo-600"), gradient {dir: t|tr|r|br|b|bl|l|tl, from, via?, to}, fontFamily (sans|serif|mono|any), fontSize, fontWeight (100-900), lineHeight (multiplier), letterSpacing (em), textAlign, italic, underline, uppercase, borderWidth, borderStyle, borderRadius (px or "full"), shadow (none|sm|md|lg|xl|2xl|inner), opacity (0-100), position, zIndex, translateX, translateY, rotate (deg), scale (percent), transition (all|colors|opacity|transform|none), duration (ms), easing (linear|in|out|in-out), cursor, overflow. null removes a property. For React elements, the same styles are Tailwind classes in the element\'s className.';
+  server.registerTool('css_styles', { title: 'Read CSS styles', description: `The styles in a .css file: each selector with its style (and declarations the style model doesn't cover, which are kept). ${STYLE_DOC}`, inputSchema: { project, path: z.string() }, annotations: ro }, (a) => call('css_styles', a));
+  server.registerTool(
+    'css_set_style',
+    { title: 'Set a CSS style', description: `Set a selector's style in a .css file without rewriting it: only the declarations the style covers change; comments, other rules and unknown properties stay. Merges into the current style unless replace=true; remove=true deletes the selector's rules. Creates the file if missing. One undo step. ${STYLE_DOC}`, inputSchema: { project, path: z.string(), selector: z.string(), style: z.record(z.string(), z.record(z.string(), z.unknown())).optional(), replace: z.boolean().optional(), remove: z.boolean().optional() } },
+    (a) => call('css_set_style', a),
+  );
   server.registerTool(
     'workspace_batch',
     { title: 'Edit files (batch)', description: WS_DOC, inputSchema: { project, expected_revision: wsRevision, operations: z.array(z.looseObject({ op: z.enum(['write_file', 'create_dir', 'delete', 'move', 'copy', 'graph', 'config']) })).min(1).max(2000) } },

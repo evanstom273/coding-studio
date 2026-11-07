@@ -7,6 +7,7 @@ import type { EditOp, Project } from '@cs/project-format';
 import { GRAPH_EXT, isDirectlyWritable, normalizePath, searchFiles, VISUAL_ONLY_MESSAGE, type FileRecord, type WorkspaceOp } from '@cs/workspace';
 import { ServiceError, str } from './index';
 import { editData, formatFor, parseData, schemaFor, validate, type Edit } from '@cs/structured-data';
+import { listStyles, readStyle, removeStyle, writeStyle, type StyleSpec } from '@cs/styling';
 
 /** A script by id, name, path ("player/player") or graph file ("player/player.vgraph"). */
 export function matchScript(s: ScriptDoc, ref: unknown): boolean {
@@ -186,4 +187,29 @@ export function configEdit(path: string, text: string | undefined, edits: unknow
   const content = editData(format, text ?? '', edits as Edit[]);
   const issues = validate(parseData(format, content).value, schemaFor(path));
   return { content, problems: issues.map((i) => ({ field: i.path.join('.'), message: i.message, severity: i.severity })) };
+}
+
+/** css_styles: the styles in a CSS file, each as a style spec (variants: "", "hover", "md", "md:hover"…). */
+export function cssStylesView(path: string, text: string | undefined) {
+  if (!/\.css$/i.test(path)) throw new ServiceError('E_INVALID', `${path} isn't a .css file.`);
+  if (text === undefined) throw new ServiceError('E_NOT_FOUND', `${path} does not exist.`);
+  try {
+    return { path, styles: listStyles(text).map((s) => ({ selector: s.selector, ...readStyle(text, s.selector) })) };
+  } catch (e) {
+    throw new ServiceError('E_INVALID', `${path} can't be parsed as CSS: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+/** css_set_style: set (merge) or remove a selector's style; only owned declarations change. */
+export function cssSetStyle(path: string, text: string | undefined, selector: unknown, style: unknown, opts: { remove?: boolean; replace?: boolean }): string {
+  if (!/\.css$/i.test(path)) throw new ServiceError('E_INVALID', `${path} isn't a .css file.`);
+  const sel = str(selector);
+  if (!sel) throw new ServiceError('E_INVALID', 'selector is required, e.g. ".card" or "button"');
+  const cur = text ?? '';
+  if (opts.remove) return removeStyle(cur, sel);
+  if (!style || typeof style !== 'object') throw new ServiceError('E_INVALID', 'style must be an object of variants, e.g. {"": {"padding": {"top": 8, "right": 8, "bottom": 8, "left": 8}}, "hover": {"backgroundColor": "indigo-500"}}');
+  const base = opts.replace ? {} : readStyle(cur, sel).spec;
+  const next: StyleSpec = { ...base };
+  for (const [v, d] of Object.entries(style as StyleSpec)) next[v] = Object.fromEntries(Object.entries({ ...(base[v] ?? {}), ...d }).filter(([, x]) => x !== null)) as StyleSpec[string];
+  return writeStyle(cur, sel, next);
 }

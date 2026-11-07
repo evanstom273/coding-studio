@@ -185,7 +185,7 @@ export function FileExplorer() {
     if (exists(path)) return void toast('error', `"${path}" already exists`);
     if (path.endsWith(GRAPH_EXT)) return void toast('info', 'Use "New visual script" to create a graph file.');
     // Visual-only: a new file is a note, or a settings file filled in with the visual editor.
-    if (!isDirectlyWritable(path) && !formatFor(path)) return void toast('error', `Code can't be typed in Coding Studio. Make a visual script for program logic ("New visual script"); new files can be notes (.md, .txt) or settings files (.json, .yaml, .toml, .xml), which open in a visual editor.`);
+    if (!isDirectlyWritable(path) && !formatFor(path) && !/\.css$/i.test(path)) return void toast('error', `Code can't be typed in Coding Studio. Make a visual script for program logic ("New visual script"); new files can be notes (.md, .txt), settings files (.json, .yaml, .toml, .xml) or stylesheets (.css), which open in visual editors.`);
     if (fileOps([{ op: 'write_file', path, content: '', expectedHash: null }], `New file ${name}`)) useEditor.getState().openTab(path);
   };
 

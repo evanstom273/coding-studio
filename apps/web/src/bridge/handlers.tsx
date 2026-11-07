@@ -332,6 +332,19 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       await saveNow();
       return svc.checkProject(p, useEditor.getState().workspace!.files, await editorTypeCheck(p));
     }
+    case 'css_styles': {
+      await ensureOpen(params.project);
+      const path = String(params.path ?? '');
+      return svc.cssStylesView(path, useEditor.getState().workspace!.files.get(path)?.text);
+    }
+    case 'css_set_style': {
+      await ensureOpen(params.project);
+      const path = String(params.path ?? '');
+      const cur = useEditor.getState().workspace!.files.get(path);
+      const content = svc.cssSetStyle(path, cur?.text, params.selector, params.style, { remove: params.remove === true, replace: params.replace === true });
+      useEditor.getState().applyFiles([{ op: 'write_file', path, content, expectedHash: cur ? cur.hash : null }], `Claude: style ${String(params.selector)}`, { source: 'mcp' });
+      return { path, content };
+    }
     case 'search_files': {
       await ensureOpen(params.project);
       return svc.searchView(useEditor.getState().workspace!.files.values(), params);

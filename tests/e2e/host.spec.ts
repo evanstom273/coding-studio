@@ -12,6 +12,15 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { freshStart } from "./helpers";
 
 const PORT = 47996;
+/** Put files into the open project like an imported project has them (AI tools can't write code). */
+const seed = (page: import("@playwright/test").Page, files: Record<string, string>) =>
+  page.evaluate(
+    (f) =>
+      (window as never as { codingStudio: { editor: { getState(): { applyFiles(o: unknown[], l: string): void } } } }).codingStudio.editor
+        .getState()
+        .applyFiles(Object.entries(f).map(([path, content]) => ({ op: "write_file", path, content })), "seed"),
+    files,
+  );
 type ToolResult = {
   isError?: boolean;
   content: { type: string; text?: string }[];
@@ -83,24 +92,12 @@ test("link a project to a folder, run its tests and dev server there, and get fo
     version: "1.0.0",
     scripts: { test: "node check.cjs", dev: "node server.cjs" },
   };
-  const w = await tool("workspace_batch", {
-    operations: [
-      { op: "write_file", path: "package.json", content: JSON.stringify(pkg) },
-      {
-        op: "write_file",
-        path: "check.cjs",
-        content:
-          "const s=require('fs').readFileSync('main.ts','utf8');if(!s.includes('export'))process.exit(1);console.log('generated code is here')",
-      },
-      {
-        op: "write_file",
-        path: "server.cjs",
-        content:
-          "require('http').createServer((q,r)=>r.end('served')).listen(0,'127.0.0.1',function(){console.log('Local: http://localhost:'+this.address().port+'/')})",
-      },
-    ],
+  await seed(page, {
+    "package.json": JSON.stringify(pkg),
+    "check.cjs": "const s=require('fs').readFileSync('main.ts','utf8');if(!s.includes('export'))process.exit(1);console.log('generated code is here')",
+    "server.cjs": "require('http').createServer((q,r)=>r.end('served')).listen(0,'127.0.0.1',function(){console.log('Local: http://localhost:'+this.address().port+'/')})",
+    "notes.md": "plan\n",
   });
-  expect(w.isError).toBeFalsy();
 
   const dir = mkdtempSync(join(tmpdir(), "cs-e2e-host-"));
   const linked = data(await tool("link_folder", { folder: dir }));
@@ -122,15 +119,17 @@ test("link a project to a folder, run its tests and dev server there, and get fo
     dev.id,
   ]);
 
-  // edited in the folder (e.g. in VS Code) → appears in the editor
+  // a note edited in the folder (e.g. in VS Code) → appears in the editor; code edited there does not (visual-only)
   writeFileSync(join(dir, "check.cjs"), "console.log('edited outside')");
+  writeFileSync(join(dir, "notes.md"), "plan, edited outside\n");
   await expect
     .poll(
       async () =>
-        data(await tool("read_files", { paths: ["check.cjs"] })).files[0].text,
+        data(await tool("read_files", { paths: ["notes.md"] })).files[0].text,
       { timeout: 10_000 },
     )
-    .toBe("console.log('edited outside')");
+    .toBe("plan, edited outside\n");
+  expect(data(await tool("read_files", { paths: ["check.cjs"] })).files[0].text).toContain("generated code is here");
   expect(readFileSync(join(dir, "package.json"), "utf8")).toBe(
     JSON.stringify(pkg),
   );
@@ -179,10 +178,7 @@ test("open an existing folder as a project; editor edits reach the folder by the
     tree.files.some((f: { path: string }) => f.path.startsWith("node_modules")),
   ).toBe(false);
   // an edit in the editor (here via Claude, same path as typing) shows up on disk without any tool call
-  await tool("write_file", {
-    path: "src/util.ts",
-    content: "export const answer = 43;\n",
-  });
+  await seed(page, { "src/util.ts": "export const answer = 43;\n" });
   await expect
     .poll(() => readFileSync(join(dir, "src", "util.ts"), "utf8"), {
       timeout: 10_000,
@@ -272,7 +268,7 @@ test('Computer panel: link a folder, run a script and see its output, commit wit
   await page.reload();
   await expect(page.getByTestId('mcp-indicator')).toContainText('Claude connected');
   data(await tool('create_project', { name: 'Panel', language: 'typescript', template: 'module' }));
-  await tool('write_file', { path: 'package.json', content: JSON.stringify({ name: 'panel', private: true, scripts: { hello: 'node -e "console.log(\'hello from the computer\')"' } }) });
+  await seed(page, { 'package.json': JSON.stringify({ name: 'panel', private: true, scripts: { hello: 'node -e "console.log(\'hello from the computer\')"' } }) });
   const dir = mkdtempSync(join(tmpdir(), 'cs-e2e-panel-'));
   await page.getByTestId('left-tab-computer').click();
   await page.getByTestId('computer-folder').fill(dir);

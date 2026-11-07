@@ -403,6 +403,21 @@ export class CloudService {
         await this.commit(before, w.workspace, 'claude', { label: `Claude: edit ${path.split('/').pop()}`, source: 'claude' });
         return { path, hash: w.workspace.files.get(path)?.hash, problems: r.problems };
       }
+      case 'css_styles': {
+        const { project: p } = await this.resolve(params.project);
+        const path = String(params.path ?? '');
+        return svc.cssStylesView(path, this.store.readPaths(p.id, [path])[0]?.text);
+      }
+      case 'css_set_style': {
+        const { project: p } = await this.resolve(params.project);
+        const path = String(params.path ?? '');
+        const before = this.store.read(p.id)!;
+        const cur = before.files.get(path);
+        const content = svc.cssSetStyle(path, cur?.text, params.selector, params.style, { remove: params.remove === true, replace: params.replace === true });
+        const w = applyWorkspaceOps(before, [{ op: 'write_file', path, content, expectedHash: cur ? cur.hash : null }]);
+        await this.commit(before, w.workspace, 'claude', { label: `Claude: style ${String(params.selector)}`, source: 'claude' });
+        return { path, content };
+      }
       case 'search_files': {
         const { project: p } = await this.resolve(params.project);
         return svc.searchView(this.store.read(p.id, (e) => e.kind === 'text')!.files.values(), params);

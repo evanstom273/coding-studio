@@ -63,6 +63,8 @@ export const BRIDGE_METHODS = [
   'library_nodes',
   'read_config',
   'edit_config',
+  'css_styles',
+  'css_set_style',
   'ci_status',
   'ci_run',
   'ci_run_details',
