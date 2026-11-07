@@ -88,7 +88,7 @@ describe('web app starter', () => {
     const { buildWebStarter } = await import('@cs/examples');
     const { deriveProject } = await import('@cs/workspace');
     const ws = buildWebStarter(tc, 'Todo Demo');
-    expect([...ws.files.keys()].sort()).toEqual(['README.md', 'codingstudio.json', 'index.html', 'package.json', 'src/App.vgraph', 'src/TodoList.tsx', 'src/db.ts', 'src/index.css', 'src/main.tsx', 'tsconfig.json', 'vite.config.ts']);
+    expect([...ws.files.keys()].sort()).toEqual(['.gitignore', 'README.md', 'codingstudio.json', 'index.html', 'package.json', 'src/App.vgraph', 'src/TodoList.tsx', 'src/db.ts', 'src/index.css', 'src/main.tsx', 'tsconfig.json', 'vite.config.ts', 'wrangler.jsonc']);
     expect(JSON.parse(ws.files.get('package.json')!.text!).name).toBe('todo-demo');
     const r = compileProject(tc, deriveProject(ws).project);
     expect(r.diagnostics.filter((d) => d.severity !== 'info')).toEqual([]);

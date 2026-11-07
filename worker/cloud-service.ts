@@ -494,10 +494,10 @@ export class CloudService {
       case 'ci_add_workflow': {
         const { project: p } = await this.resolve(params.project);
         const before = this.store.read(p.id)!;
-        const f = svc.workflowTemplateFile(params.template, before.files);
-        const r = applyWorkspaceOps(before, [{ op: 'write_file', path: f.path, content: f.content, expectedHash: null }]);
-        await this.commit(before, r.workspace, 'claude', { label: `Claude: add workflow ${f.path}`, source: 'claude' });
-        return { added: f.path, content: f.content, note: 'Commit it with git_commit to turn it on.' };
+        const fs = svc.workflowTemplateFiles(params.template, before.files, p.name);
+        const r = applyWorkspaceOps(before, fs.map((f) => ({ op: 'write_file' as const, path: f.path, content: f.content, expectedHash: null })));
+        await this.commit(before, r.workspace, 'claude', { label: `Claude: add workflow ${fs[0].path}`, source: 'claude' });
+        return { added: fs.map((f) => f.path), files: fs, note: 'Commit them with git_commit to turn the workflow on.' };
       }
       case 'deps_list':
       case 'deps_search':

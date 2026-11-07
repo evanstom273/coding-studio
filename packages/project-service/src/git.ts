@@ -1,5 +1,5 @@
 /** Shapes of the git MCP results (shared by the editor handlers and the cloud service). */
-import { cleanLogLine, parseLogProblems, readState, runState, status, summarizeRun, WORKFLOW_TEMPLATES, type GitHub, type GitState, type PullResult } from '@cs/git';
+import { cleanLogLine, parseLogProblems, readState, runState, status, summarizeRun, WORKFLOW_TEMPLATES, workflowTemplateFiles as workflowTemplateFiles_, type GitHub, type GitState, type PullResult } from '@cs/git';
 import { deriveProject, type Workspace } from '@cs/workspace';
 import { generatedOutputs, ServiceError } from './index';
 
@@ -67,10 +67,10 @@ export async function ciCall(method: string, gh: GitHub, st: GitState, params: R
 }
 
 /** The file a workflow template would add (written by the caller as a normal file change). */
-export function workflowTemplateFile(id: unknown, files: { get(p: string): { text?: string } | undefined; has(p: string): boolean }) {
+export function workflowTemplateFiles(id: unknown, files: { get(p: string): { text?: string } | undefined; has(p: string): boolean }, projectName = 'app') {
   const t = WORKFLOW_TEMPLATES.find((x) => x.id === id);
   if (!t) throw new ServiceError('E_INVALID', `Unknown template "${String(id)}". Available: ${WORKFLOW_TEMPLATES.map((x) => `${x.id} (${x.title})`).join(', ')}`);
-  return { path: t.path, content: t.build({ packageJson: files.get('package.json')?.text, hasLockfile: { npm: files.has('package-lock.json'), pnpm: files.has('pnpm-lock.yaml'), yarn: files.has('yarn.lock') } }) };
+  return workflowTemplateFiles_(t, files, projectName);
 }
 
 /** Which repository a repo/PR call is about: `repository: "owner/name"`, or the linked one. */

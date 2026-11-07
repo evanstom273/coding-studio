@@ -340,9 +340,9 @@ describe('CI through the cloud connector', () => {
     cloud.github = () => new GitHubVault(store, () => fake.fetch);
     await cloud.github().set('github_pat_1234567890abcdefghij');
     await cloud.handle('git_clone', { repository: 'lyra/game' });
-    const add = (await cloud.handle('ci_add_workflow', { template: 'ci' })) as { added: string; content: string };
-    expect(add.added).toBe('.github/workflows/ci.yml');
-    expect(add.content).toContain('npm ci');
+    const add = (await cloud.handle('ci_add_workflow', { template: 'ci' })) as { added: string[]; files: { content: string }[] };
+    expect(add.added).toEqual(['.github/workflows/ci.yml']);
+    expect(add.files[0].content).toContain('npm ci');
     await cloud.handle('git_commit', { message: 'Add CI' });
     expect(fake.files('main')['.github/workflows/ci.yml']).toContain('run: npm run test');
     fake.addRun('main', { conclusion: 'failure', log: '2026-01-01T00:00:00.0000000Z src/app.ts(1,14): error TS2322: nope\n##[error]Process completed with exit code 2.' });

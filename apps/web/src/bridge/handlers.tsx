@@ -323,11 +323,11 @@ export async function handleRequest(method: BridgeMethod, params: Params): Promi
       return svc.ciCall(method, github(), svc.requireLinked(readState(ws)), params, (p) => ws.files.has(p));
     }
     case 'ci_add_workflow': {
-      await ensureOpen(params.project);
+      const p = await ensureOpen(params.project);
       const ws = useEditor.getState().workspace!;
-      const f = svc.workflowTemplateFile(params.template, ws.files);
-      useEditor.getState().applyFiles([{ op: 'write_file', path: f.path, content: f.content, expectedHash: null }], `Claude: add workflow ${f.path}`, { source: 'mcp' });
-      return { added: f.path, content: f.content, note: 'Commit it with git_commit to turn it on.' };
+      const fs = svc.workflowTemplateFiles(params.template, ws.files, p.name);
+      useEditor.getState().applyFiles(fs.map((f) => ({ op: 'write_file' as const, path: f.path, content: f.content, expectedHash: null })), `Claude: add workflow ${fs[0].path}`, { source: 'mcp' });
+      return { added: fs.map((f) => f.path), files: fs, note: 'Commit them with git_commit to turn the workflow on.' };
     }
     case 'deps_list':
     case 'deps_search':

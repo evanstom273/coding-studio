@@ -1,7 +1,7 @@
 /** GitHub Actions for the linked repository: add a workflow, run it, follow runs, read logs. */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, CircleDashed, ExternalLink, Play, RotateCcw, XCircle } from 'lucide-react';
-import { runState, summarizeRun, WORKFLOW_DIR, WORKFLOW_TEMPLATES, type GitState, type Job, type Workflow, type WorkflowRun } from '@cs/git';
+import { runState, summarizeRun, WORKFLOW_DIR, WORKFLOW_TEMPLATES, workflowTemplateFiles, type GitState, type Job, type Workflow, type WorkflowRun } from '@cs/git';
 import { useEditor } from '@web/store/editor';
 import { toast } from '@web/store/toasts';
 import { useUI } from '@web/store/ui';
@@ -69,11 +69,11 @@ export function ActionsPanel({ st }: { st: GitState }) {
 
   const addTemplate = (id: string) => {
     const t = WORKFLOW_TEMPLATES.find((x) => x.id === id)!;
-    const content = t.build({ packageJson: ws.files.get('package.json')?.text, hasLockfile: { npm: ws.files.has('package-lock.json'), pnpm: ws.files.has('pnpm-lock.yaml'), yarn: ws.files.has('yarn.lock') } });
+    const fs = workflowTemplateFiles(t, ws.files, useEditor.getState().project?.name ?? 'app');
     try {
-      useEditor.getState().applyFiles([{ op: 'write_file', path: t.path, content, expectedHash: null }], `Add workflow ${t.path}`);
+      useEditor.getState().applyFiles(fs.map((f) => ({ op: 'write_file' as const, path: f.path, content: f.content, expectedHash: null })), `Add workflow ${t.path}`);
       useEditor.getState().openTab(t.path);
-      toast('info', 'Workflow added. Commit & push it to turn it on.');
+      toast('info', `${fs.length > 1 ? `Added ${fs.map((f) => f.path).join(' and ')}` : 'Workflow added'}. Commit & push to turn it on.`);
     } catch (e) {
       toast('error', errMsg(e));
     }

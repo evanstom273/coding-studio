@@ -6,6 +6,7 @@
 import type { Toolchain } from '@cs/compiler-core';
 import { applyOps, createProject, type EditOp } from '@cs/project-format';
 import { makeRecord, projectToWorkspace, type Workspace } from '@cs/workspace';
+import { staticSiteWranglerConfig, WRANGLER_VERSION } from '@cs/git';
 
 const FILES: Record<string, string> = {
   'package.json': JSON.stringify(
@@ -14,9 +15,9 @@ const FILES: Record<string, string> = {
       private: true,
       version: '0.1.0',
       type: 'module',
-      scripts: { dev: 'vite', build: 'tsc --noEmit && vite build', preview: 'vite preview', typecheck: 'tsc --noEmit' },
+      scripts: { dev: 'vite', build: 'tsc --noEmit && vite build', preview: 'vite preview', typecheck: 'tsc --noEmit', deploy: 'npm run build && wrangler deploy' },
       dependencies: { dexie: '^4.0.11', 'dexie-react-hooks': '^1.1.7', react: '^19.1.0', 'react-dom': '^19.1.0' },
-      devDependencies: { '@tailwindcss/vite': '^4.1.0', '@types/react': '^19.1.0', '@types/react-dom': '^19.1.0', '@vitejs/plugin-react': '^4.4.0', tailwindcss: '^4.1.0', typescript: '^5.8.0', vite: '^6.3.0' },
+      devDependencies: { '@tailwindcss/vite': '^4.1.0', '@types/react': '^19.1.0', '@types/react-dom': '^19.1.0', '@vitejs/plugin-react': '^4.4.0', tailwindcss: '^4.1.0', typescript: '^5.8.0', vite: '^6.3.0', wrangler: `^${WRANGLER_VERSION}` },
     },
     null,
     2,
@@ -91,11 +92,13 @@ export function TodoList() {
   );
 }
 `,
+  '.gitignore': 'node_modules\ndist\n.wrangler\n.dev.vars\n*.local\n',
   'README.md': `# Web app
 
 - \`src/App\` is a **visual script** (open \`src/App.vgraph\`): React state, a click handler and the page layout as nodes.
 - \`src/db.ts\` and \`src/TodoList.tsx\` are ordinary TypeScript.
 - Press **Preview** to run it here. On a computer: \`npm install\` then \`npm run dev\`.
+- Deploying: it's a static site, so Cloudflare serves the built \`dist/\` folder (see \`wrangler.jsonc\`). Add the "Deploy to Cloudflare" workflow in Git → Actions (with the repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID), or run \`npm run deploy\` on a computer.
 `,
 };
 
@@ -136,6 +139,8 @@ export function buildWebStarter(tc: Toolchain, name: string): Workspace {
   const ws = projectToWorkspace(project);
   const files = new Map(ws.files);
   const now = Date.now();
-  for (const [path, content] of Object.entries(FILES)) files.set(path, makeRecord(path, path === 'package.json' ? content.replace('"web-app"', JSON.stringify(name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'web-app')) : content, now));
+  const slug = name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'web-app';
+  for (const [path, content] of Object.entries(FILES)) files.set(path, makeRecord(path, path === 'package.json' ? content.replace('"web-app"', JSON.stringify(slug)) : content, now));
+  files.set('wrangler.jsonc', makeRecord('wrangler.jsonc', staticSiteWranglerConfig(slug), now));
   return { meta: ws.meta, files };
 }

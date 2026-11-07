@@ -376,7 +376,7 @@ export function buildServer(bridge: Relay, host: ToolHost): McpServer {
     (a) => call('ci_logs', a, 120_000),
   );
   server.registerTool('ci_rerun', { title: 'Re-run CI', description: 'Re-run the failed jobs of a run (all=true re-runs everything).', inputSchema: { project, run_id: z.number().int(), all: z.boolean().optional() } }, (a) => call('ci_rerun', a, 60_000));
-  server.registerTool('ci_add_workflow', { title: 'Add a CI workflow', description: 'Add a workflow file from a template: "ci" (install + typecheck/lint/test/build scripts from package.json) or "cloudflare" (deploy with wrangler; needs repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID). Commit it with git_commit to turn it on.', inputSchema: { project, template: z.enum(['ci', 'cloudflare']) } }, (a) => call('ci_add_workflow', a));
+  server.registerTool('ci_add_workflow', { title: 'Add a CI workflow', description: 'Add a workflow file from a template: "ci" (install + typecheck/lint/test/build scripts from package.json) or "cloudflare" (build, then deploy with Wrangler 4; a static Vite app with no wrangler config also gets wrangler.jsonc serving dist/ as static assets; needs repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID). Commit the added files with git_commit to turn it on.', inputSchema: { project, template: z.enum(['ci', 'cloudflare']) } }, (a) => call('ci_add_workflow', a));
 
   // --- npm dependencies ----------------------------------------------------------------------------
   server.registerTool('deps_list', { title: 'List dependencies', description: 'Dependencies, devDependencies and scripts from package.json, and whether the lockfile is in sync.', inputSchema: { project }, annotations: ro }, (a) => call('deps_list', a));

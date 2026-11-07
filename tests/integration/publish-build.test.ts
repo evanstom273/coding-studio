@@ -42,6 +42,52 @@ const checkout = (files: Record<string, string>) => {
   return dir;
 };
 
+describe('Cloudflare deployment configuration', () => {
+  it('the web starter is a static Vite app: wrangler.jsonc serves dist/ as assets with Wrangler 4, and the deploy workflow uses it', async () => {
+    const { fake, cloud } = await setup('site');
+    await cloud.handle('create_project', { name: 'My Site', language: 'typescript', template: 'web-app' });
+    const wr = ((await cloud.handle('read_config', { path: 'wrangler.jsonc' })) as { value: Record<string, unknown>; problems: unknown[] });
+    expect(wr.value).toEqual({ $schema: 'node_modules/wrangler/config-schema.json', name: 'my-site', compatibility_date: '2026-09-01', assets: { directory: './dist', not_found_handling: 'single-page-application' } });
+    expect(wr.value).not.toHaveProperty('main');
+    expect(wr.problems).toEqual([]);
+    const pkg = ((await cloud.handle('read_config', { path: 'package.json' })) as { value: { devDependencies: Record<string, string>; scripts: Record<string, string> } }).value;
+    expect(pkg.devDependencies.wrangler).toBe('^4.158.0');
+    expect(pkg.scripts.deploy).toBe('npm run build && wrangler deploy');
+    const added = (await cloud.handle('ci_add_workflow', { template: 'cloudflare' })) as { added: string[]; files: { content: string }[] };
+    expect(added.added).toEqual(['.github/workflows/deploy.yml']); // the config is already there
+    const yml = added.files[0].content;
+    expect(yml).toContain('run: npm run build');
+    expect(yml).toContain('run: npx wrangler deploy');
+    expect(yml).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}');
+    expect(yml).not.toContain('wrangler-action');
+    await cloud.handle('git_publish', { name: 'site' });
+    expect(Object.keys(fake.files('main'))).toEqual(expect.arrayContaining(['wrangler.jsonc', '.github/workflows/deploy.yml', 'src/App.tsx']));
+  });
+
+  it('an existing static Vite project without a config gets one with the workflow; Workers and non-Vite projects get no invented config', async () => {
+    const { cloud } = await setup('older');
+    await cloud.handle('create_project', { name: 'Older', language: 'typescript', template: 'web-app' });
+    // as made before this fix: no wrangler config, no wrangler dependency
+    await cloud.handle('workspace_batch', { operations: [{ op: 'delete', path: 'wrangler.jsonc' }] });
+    await cloud.handle('edit_config', { path: 'package.json', edits: [{ op: 'delete', path: ['devDependencies', 'wrangler'] }, { op: 'delete', path: ['scripts', 'deploy'] }] });
+    let r = (await cloud.handle('ci_add_workflow', { template: 'cloudflare' })) as { added: string[]; files: { content: string }[] };
+    expect(r.added).toEqual(['.github/workflows/deploy.yml', 'wrangler.jsonc']);
+    expect(r.files[0].content).toContain('npx --yes wrangler@4.158.0 deploy'); // no wrangler in package.json: pinned Wrangler 4
+    expect(r.files[1].content).toContain('"directory": "./dist"');
+    // a project that is a Worker keeps its own config untouched
+    const { cloud: c2 } = await setup('worker');
+    await c2.handle('create_project', { name: 'Api', language: 'typescript', template: 'module' });
+    await c2.handle('workspace_batch', { operations: [{ op: 'write_file', path: 'package.json', content: '{"name":"api","devDependencies":{"wrangler":"^4.158.0"}}' }, { op: 'write_file', path: 'wrangler.toml', content: 'name = "api"\nmain = "src/index.ts"\n' }] });
+    r = (await c2.handle('ci_add_workflow', { template: 'cloudflare' })) as { added: string[]; files: { content: string }[] };
+    expect(r.added).toEqual(['.github/workflows/deploy.yml']);
+    // not a Vite app and no config: nothing is invented
+    const { cloud: c3 } = await setup('plain');
+    await c3.handle('create_project', { name: 'Plain', language: 'typescript', template: 'module' });
+    r = (await c3.handle('ci_add_workflow', { template: 'cloudflare' })) as { added: string[]; files: { content: string }[] };
+    expect(r.added).toEqual(['.github/workflows/deploy.yml']);
+  });
+});
+
 describe('publishing a visual React project', () => {
   it('pushes the graphs AND their generated code; later graph edits update the generated files', async () => {
     const { fake, cloud } = await setup();
@@ -119,5 +165,10 @@ describe('publishing a visual React project', () => {
     execSync('npm install --no-audit --no-fund --loglevel=error', { cwd: dir, stdio: 'pipe', timeout: 300_000 });
     const out = execSync('npm run build 2>&1', { cwd: dir, encoding: 'utf8', timeout: 300_000 });
     expect(out).toMatch(/built in/);
+    // the deployment config is valid for Wrangler 4: a static-assets upload of dist/, no Worker entry
+    const dry = execSync('npx wrangler deploy --dry-run 2>&1', { cwd: dir, encoding: 'utf8', timeout: 300_000 });
+    expect(dry).toMatch(/wrangler 4\./);
+    expect(dry).not.toMatch(/Missing entry-point/);
+    expect(dry).toMatch(/--dry-run: exiting now/);
   }, 600_000);
 });
