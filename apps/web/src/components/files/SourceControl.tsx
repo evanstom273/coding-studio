@@ -47,8 +47,11 @@ export function TokenForm({ onDone }: { onDone: (login: string) => void }) {
         >
           fine-grained personal access token
         </a>{" "}
-        with <b>Contents</b> and <b>Pull requests</b> set to “Read and write”
-        for the repositories you want. It's kept in your own Coding Studio cloud
+        for <b>All repositories</b>, with these set to “Read and write”:{" "}
+        <b>Contents</b> and <b>Pull requests</b> (commit, push, PRs),{" "}
+        <b>Workflows</b> (GitHub Actions / Cloudflare deploy files),{" "}
+        <b>Actions</b> (run and re-run builds) and <b>Administration</b>{" "}
+        (create, rename and delete repositories). It's kept in your own Coding Studio cloud
         storage, never in this browser or in your projects.
       </p>
       <input
@@ -192,6 +195,16 @@ export function SourceControl() {
         </span>
         <Button
           className="ml-auto h-6"
+          variant="ghost"
+          disabled={!!busy}
+          title={`Connected as ${login}. Paste a different GitHub token.`}
+          data-testid="git-change-token"
+          onClick={() => void forgetToken().then(() => setLogin(null))}
+        >
+          Change token
+        </Button>
+        <Button
+          className="h-6"
           variant="ghost"
           disabled={!!busy}
           data-testid="git-pull"
